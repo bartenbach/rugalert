@@ -1,5 +1,8 @@
 {
   "crons": [
-    { "path": "/api/snapshot", "schedule": "0 */2 * * *", "headers": { "x-cron-secret": "@CRON_SECRET" } }
+    {
+      "path": "/api/snapshot",
+      "schedule": "0 */2 * * *"
+    }
   ]
 }
