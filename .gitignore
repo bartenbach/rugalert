@@ -49,3 +49,4 @@ test.sh
 test2.sh
 dump-validator-info.js
 DESIGN_UPGRADE.md
+*.md
