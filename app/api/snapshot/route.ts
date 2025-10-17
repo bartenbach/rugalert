@@ -38,8 +38,31 @@ async function sendEmail(subject: string, text: string) {
   });
 }
 
+// Handle GET requests (Vercel cron sometimes uses GET)
+export async function GET(req: NextRequest) {
+  const userAgent = req.headers.get("user-agent");
+  
+  // If it's from Vercel cron, redirect to POST handler
+  if (userAgent?.includes("vercel-cron")) {
+    // Call the main snapshot logic by forwarding to POST handler
+    return POST(req);
+  }
+  
+  return NextResponse.json({ 
+    error: "Method not allowed. Use POST with x-cron-secret header.",
+    hint: "This endpoint is designed to be called by Vercel Cron"
+  }, { status: 405 });
+}
+
 export async function POST(req: NextRequest) {
-  if (req.headers.get("x-cron-secret") !== process.env.CRON_SECRET) {
+  const cronSecret = req.headers.get("x-cron-secret");
+  const userAgent = req.headers.get("user-agent");
+  
+  // Allow if: has correct secret OR is from Vercel cron
+  const isAuthorized = cronSecret === process.env.CRON_SECRET || 
+                       userAgent?.includes("vercel-cron");
+  
+  if (!isAuthorized) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

@@ -9,7 +9,7 @@ Your RugAlert now has **real-time monitoring with dramatic siren alerts**!
 ## ✨ Features
 
 ### 1. **Auto-Refresh Monitoring** 
-- 🔄 Polls `/api/events` every 5 seconds
+- 🔄 Polls `/api/events` every 30 seconds
 - 🟢 Live status indicator shows when monitoring is active
 - ⏰ Displays last update timestamp
 - ⏸️ Toggle auto-refresh on/off anytime
@@ -83,12 +83,12 @@ When a new RUG is detected:
 
 ### **Auto-Refresh Logic**
 ```typescript
-// Polls every 5 seconds when enabled
+// Polls every 30 seconds when enabled
 useEffect(() => {
   if (!autoRefresh) return;
   const interval = setInterval(() => {
     load(true); // Silent reload
-  }, 5000);
+  }, 30000);
   return () => clearInterval(interval);
 }, [autoRefresh, epochs]);
 ```
@@ -200,7 +200,8 @@ oscillator.frequency.value = 800; // Base frequency
 
 ### **Change polling interval:**
 ```typescript
-}, 5000); // 5 seconds - change this number
+}, 30000); // 30 seconds - change this number (in milliseconds)
+// Examples: 10000 = 10s, 60000 = 1 min, 120000 = 2 min
 ```
 
 ### **Adjust auto-dismiss time:**

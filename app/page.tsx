@@ -239,7 +239,7 @@ export default function Page() {
 
     const interval = setInterval(() => {
       load(true);
-    }, 5000); // Poll every 5 seconds
+    }, 30000); // Poll every 30 seconds (reasonable for backend cron every 15 min)
 
     return () => clearInterval(interval);
   }, [autoRefresh, epochs]);

@@ -109,11 +109,11 @@ Once you deploy with the updated `vercel.json`, the new schedule takes effect au
 
 ## 🎯 Real-Time Monitoring
 
-Remember, your dashboard also has **auto-refresh every 5 seconds**! 
+Remember, your dashboard also has **auto-refresh every 30 seconds**! 
 
 So you get:
 - 🔄 **Background cron:** Every 15 minutes (catches changes)
-- 🔄 **Dashboard refresh:** Every 5 seconds (when page is open)
+- 🔄 **Dashboard refresh:** Every 30 seconds (when page is open)
 - 🚨 **Instant alerts:** When new RUG detected (with that awesome siren! 😄)
 
 ---
@@ -141,7 +141,7 @@ You can adjust in `vercel.json`:
 
 Your RugAlert now:
 - ✅ Checks every **15 minutes** (96 times per day)
-- ✅ Dashboard refreshes every **5 seconds** (when open)
+- ✅ Dashboard refreshes every **30 seconds** (when open)
 - ✅ **Instant siren alerts** with flashing lights and sound 🚨
 - ✅ Multi-channel notifications (Discord, Telegram, Email)
 - ✅ Real-time monitoring with live status indicator
