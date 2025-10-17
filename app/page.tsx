@@ -180,15 +180,16 @@ export default function Page() {
               <span className="text-sm text-gray-500">epochs</span>
             </div>
             <div className="relative flex-1 min-w-[300px]">
+              <span className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none text-base">
+                🔍
+              </span>
               <input
                 placeholder="Search validator name or pubkey..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="input-modern w-full bg-white/5 text-white pl-10"
+                className="input-modern w-full bg-white/5 text-white pl-11"
+                style={{ paddingLeft: "2.75rem" }}
               />
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                🔍
-              </span>
             </div>
           </div>
           <a href="/api/export" className="btn-secondary whitespace-nowrap">
