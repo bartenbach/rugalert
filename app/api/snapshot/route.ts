@@ -23,11 +23,30 @@ async function sendDiscord(msg: string) {
   });
 }
 
-async function sendEmail(subject: string, text: string) {
+async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUTION" | "INFO") {
   if (!process.env.RESEND_API_KEY || !process.env.ALERTS_FROM) return;
+  
   const subs = await tb.subs.select().firstPage();
-  const to = subs.map((s) => String(s.get("email"))).filter(Boolean);
+  
+  // Filter subscribers based on their preferences
+  const eligibleSubs = subs.filter((s) => {
+    const email = s.get("email");
+    if (!email) return false;
+    
+    const prefs = s.get("preferences") as string | undefined;
+    const preference = prefs || "rugs_only"; // Default to rugs_only
+    
+    // Determine if this subscriber should get this type of alert
+    if (preference === "all") return true; // All events
+    if (preference === "rugs_and_cautions" && (eventType === "RUG" || eventType === "CAUTION")) return true;
+    if (preference === "rugs_only" && eventType === "RUG") return true;
+    
+    return false;
+  });
+  
+  const to = eligibleSubs.map((s) => String(s.get("email"))).filter(Boolean);
   if (!to.length) return;
+  
   await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -188,11 +207,17 @@ export async function POST(req: NextRequest) {
             fields: { votePubkey: v.votePubkey, epoch, type, fromCommission: from, toCommission: to, delta }
           }]);
 
-          // Send notifications only for RUG events
+          // Send notifications based on event type
           if (type === "RUG") {
             const msg = `RUG: ${v.votePubkey} ${from}% → 100% at epoch ${epoch} (slot ${slot})`;
             await sendDiscord(msg);
-            await sendEmail("Solana RUG detected", `${msg}\n${process.env.BASE_URL || ""}/history`);
+            await sendEmail("Solana Validator Commission RUG detected", `${msg}\n${process.env.BASE_URL || ""}/history`, "RUG");
+          } else if (type === "CAUTION") {
+            const msg = `CAUTION: ${v.votePubkey} ${from}% → ${to}% (+${delta}pp) at epoch ${epoch}`;
+            await sendEmail("Solana Validator Commission Jump", `${msg}\n${process.env.BASE_URL || ""}/history`, "CAUTION");
+          } else if (type === "INFO") {
+            const msg = `INFO: ${v.votePubkey} ${from}% → ${to}% at epoch ${epoch}`;
+            await sendEmail("Solana Validator Commission Change", `${msg}\n${process.env.BASE_URL || ""}/history`, "INFO");
           }
         }
       }
