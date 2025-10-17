@@ -24,6 +24,7 @@ export default function Page() {
 
   // Real-time monitoring state
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false); // Default to OFF
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [sirenActive, setSirenActive] = useState(false);
   const [newRugDetected, setNewRugDetected] = useState<Row | null>(null);
@@ -32,6 +33,19 @@ export default function Page() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const oscillatorsRef = useRef<OscillatorNode[]>([]);
   const sirenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load sound preference from localStorage on mount
+  useEffect(() => {
+    const savedSoundPref = localStorage.getItem("rugalert-sound-enabled");
+    if (savedSoundPref !== null) {
+      setSoundEnabled(savedSoundPref === "true");
+    }
+  }, []);
+
+  // Save sound preference to localStorage when changed
+  useEffect(() => {
+    localStorage.setItem("rugalert-sound-enabled", soundEnabled.toString());
+  }, [soundEnabled]);
 
   async function load(isAutoRefresh = false) {
     if (!isAutoRefresh) setLoading(true);
@@ -159,8 +173,10 @@ export default function Page() {
     setNewRugDetected(rug);
     setSirenActive(true);
 
-    // Play sound immediately (don't await - let it start in parallel)
-    playSirenSound();
+    // Play sound only if enabled
+    if (soundEnabled) {
+      playSirenSound();
+    }
 
     // Auto-dismiss after 15 seconds
     if (sirenTimeoutRef.current) clearTimeout(sirenTimeoutRef.current);
@@ -483,16 +499,33 @@ export default function Page() {
             🚨 Test Alert
           </button>
         </div>
-        <button
-          onClick={() => setAutoRefresh(!autoRefresh)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            autoRefresh
-              ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
-              : "bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30"
-          }`}
-        >
-          {autoRefresh ? "⏸ Pause" : "▶ Start"} Auto-refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              soundEnabled
+                ? "bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30"
+                : "bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30"
+            }`}
+            title={
+              soundEnabled
+                ? "Sound ON - Click to mute"
+                : "Sound OFF - Click to enable"
+            }
+          >
+            {soundEnabled ? "🔊 Sound ON" : "🔇 Sound OFF"}
+          </button>
+          <button
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              autoRefresh
+                ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
+                : "bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30"
+            }`}
+          >
+            {autoRefresh ? "⏸ Pause" : "▶ Start"} Auto-refresh
+          </button>
+        </div>
       </div>
 
       {/* Controls */}
