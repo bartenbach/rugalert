@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Row = {
   id: string;
@@ -22,12 +22,188 @@ export default function Page() {
   const [subscribing, setSubscribing] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
 
-  async function load() {
-    setLoading(true);
-    const res = await fetch(`/api/events?epochs=${epochs}`);
-    const json = await res.json();
-    setItems(json.items || []);
-    setLoading(false);
+  // Real-time monitoring state
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [sirenActive, setSirenActive] = useState(false);
+  const [newRugDetected, setNewRugDetected] = useState<Row | null>(null);
+  const previousRugsRef = useRef<Set<string>>(new Set());
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const oscillatorsRef = useRef<OscillatorNode[]>([]);
+  const sirenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  async function load(isAutoRefresh = false) {
+    if (!isAutoRefresh) setLoading(true);
+    try {
+      const res = await fetch(`/api/events?epochs=${epochs}`);
+      const json = await res.json();
+      const newItems = json.items || [];
+
+      // Detect new RUG events
+      if (autoRefresh && previousRugsRef.current.size > 0) {
+        const currentRugs = newItems.filter((it: Row) => it.type === "RUG");
+        const newRug = currentRugs.find(
+          (rug: Row) => !previousRugsRef.current.has(rug.id)
+        );
+
+        if (newRug) {
+          triggerSirenAlert(newRug);
+        }
+      }
+
+      // Update previous rugs set
+      previousRugsRef.current = new Set(
+        newItems.filter((it: Row) => it.type === "RUG").map((it: Row) => it.id)
+      );
+
+      setItems(newItems);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error("Failed to load events:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function playSirenSound() {
+    // Always use Web Audio API for immediate sound generation
+    // (HTML5 audio has loading delays)
+    await generateSirenWithWebAudio();
+  }
+
+  async function generateSirenWithWebAudio() {
+    try {
+      console.log("🔊 Starting siren sound generation...");
+
+      // Stop any existing oscillators first
+      stopAllOscillators();
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext ||
+          (window as any).webkitAudioContext)();
+      }
+
+      const ctx = audioContextRef.current;
+      console.log("🔊 Audio context state:", ctx.state);
+
+      // Resume audio context if suspended (required by browser security)
+      if (ctx.state === "suspended") {
+        console.log("🔊 Resuming suspended audio context...");
+        await ctx.resume();
+        console.log("🔊 Audio context resumed:", ctx.state);
+      }
+
+      const oscillator1 = ctx.createOscillator();
+      const oscillator2 = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator1.type = "sine";
+      oscillator2.type = "sine";
+      oscillator1.frequency.value = 800;
+      oscillator2.frequency.value = 800;
+
+      // Create alternating siren effect
+      const now = ctx.currentTime;
+      for (let i = 0; i < 30; i++) {
+        // Loop for 15 seconds (30 * 0.5s)
+        const time = now + i * 0.5;
+        const freq = i % 2 === 0 ? 800 : 1200;
+        oscillator1.frequency.setValueAtTime(freq, time);
+        oscillator2.frequency.setValueAtTime(freq + 5, time); // Slight detune for richer sound
+      }
+
+      gainNode.gain.value = 0.15; // Lower volume
+
+      oscillator1.connect(gainNode);
+      oscillator2.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      console.log("🔊 Starting oscillators at time:", now);
+      oscillator1.start(now);
+      oscillator2.start(now);
+
+      // Store references so we can stop them later
+      oscillatorsRef.current = [oscillator1, oscillator2];
+
+      // Schedule stop after 15 seconds
+      oscillator1.stop(now + 15);
+      oscillator2.stop(now + 15);
+
+      console.log("✅ Siren sound started successfully!");
+    } catch (error) {
+      console.error("❌ Web Audio API failed:", error);
+    }
+  }
+
+  function stopAllOscillators() {
+    try {
+      console.log("🛑 Stopping", oscillatorsRef.current.length, "oscillators");
+      oscillatorsRef.current.forEach((osc, index) => {
+        try {
+          osc.stop();
+          osc.disconnect();
+          console.log("🛑 Stopped oscillator", index);
+        } catch (e) {
+          console.log("⚠️ Oscillator", index, "already stopped or error:", e);
+        }
+      });
+      oscillatorsRef.current = [];
+    } catch (error) {
+      console.error("❌ Failed to stop oscillators:", error);
+    }
+  }
+
+  function triggerSirenAlert(rug: Row) {
+    console.log("🚨 Triggering siren alert for:", rug.name || rug.vote_pubkey);
+    setNewRugDetected(rug);
+    setSirenActive(true);
+
+    // Play sound immediately (don't await - let it start in parallel)
+    playSirenSound();
+
+    // Auto-dismiss after 15 seconds
+    if (sirenTimeoutRef.current) clearTimeout(sirenTimeoutRef.current);
+    sirenTimeoutRef.current = setTimeout(() => {
+      console.log("⏰ Auto-dismissing alert after 15 seconds");
+      dismissSiren();
+    }, 15000);
+  }
+
+  // Test function to trigger alert manually
+  function testSirenAlert() {
+    const testRug: Row = {
+      id: "test-" + Date.now(),
+      vote_pubkey: "TEST123ABC456DEF789",
+      name: "Test Validator",
+      icon_url: null,
+      type: "RUG",
+      from_commission: 5,
+      to_commission: 100,
+      delta: 95,
+      epoch: 999,
+    };
+    triggerSirenAlert(testRug);
+  }
+
+  function dismissSiren() {
+    console.log("❌ Dismissing siren alert");
+    setSirenActive(false);
+    setNewRugDetected(null);
+
+    // Stop HTML5 audio if playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    // Stop Web Audio oscillators
+    stopAllOscillators();
+
+    // Clear auto-dismiss timer
+    if (sirenTimeoutRef.current) {
+      clearTimeout(sirenTimeoutRef.current);
+    }
   }
 
   async function handleSubscribe(e: React.FormEvent) {
@@ -52,9 +228,21 @@ export default function Page() {
     }
   }
 
+  // Initial load
   useEffect(() => {
     load();
   }, [epochs]);
+
+  // Auto-refresh polling
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      load(true);
+    }, 5000); // Poll every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, epochs]);
 
   const filtered = items.filter((it) =>
     `${it.vote_pubkey} ${it.name ?? ""} ${it.type}`
@@ -67,6 +255,114 @@ export default function Page() {
 
   return (
     <div className="space-y-8">
+      {/* Hidden audio element for siren */}
+      <audio ref={audioRef} loop>
+        <source src="/siren.mp3" type="audio/mpeg" />
+      </audio>
+
+      {/* Siren Alert Overlay */}
+      {sirenActive && newRugDetected && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-pulse-slow">
+          {/* Flashing red siren lights */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-0 w-full h-full bg-red-600/30 animate-flash"></div>
+            <div className="absolute top-10 left-10 w-32 h-32 bg-red-500 rounded-full blur-3xl animate-siren-left"></div>
+            <div className="absolute top-10 right-10 w-32 h-32 bg-red-500 rounded-full blur-3xl animate-siren-right"></div>
+            <div
+              className="absolute bottom-10 left-1/4 w-32 h-32 bg-red-500 rounded-full blur-3xl animate-siren-left"
+              style={{ animationDelay: "0.5s" }}
+            ></div>
+            <div
+              className="absolute bottom-10 right-1/4 w-32 h-32 bg-red-500 rounded-full blur-3xl animate-siren-right"
+              style={{ animationDelay: "0.5s" }}
+            ></div>
+          </div>
+
+          {/* Alert Content */}
+          <div className="relative z-10 max-w-2xl mx-4 bg-gradient-to-br from-red-950 to-red-900 border-4 border-red-500 rounded-3xl p-8 shadow-2xl shadow-red-500/50 animate-scale-in">
+            <div className="text-center space-y-6">
+              {/* Siren Icon */}
+              <div className="flex justify-center">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-red-500 rounded-full blur-xl animate-pulse"></div>
+                  <div className="relative text-8xl animate-bounce">🚨</div>
+                </div>
+              </div>
+
+              {/* Alert Text */}
+              <div>
+                <h2 className="text-5xl font-black text-white mb-3 animate-pulse tracking-wider">
+                  RUG DETECTED!
+                </h2>
+                <p className="text-2xl text-red-200 font-bold mb-6">
+                  Validator Commission → 100%
+                </p>
+              </div>
+
+              {/* Validator Info */}
+              <div className="bg-black/50 rounded-2xl p-6 border-2 border-red-500/50">
+                <div className="flex items-center justify-center gap-4 mb-4">
+                  {newRugDetected.icon_url ? (
+                    <img
+                      src={newRugDetected.icon_url}
+                      alt="Validator"
+                      className="w-16 h-16 rounded-xl border-2 border-red-400"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl bg-red-500/20 flex items-center justify-center border-2 border-red-400">
+                      <span className="text-3xl">🔷</span>
+                    </div>
+                  )}
+                  <div className="text-left">
+                    <p className="text-xl font-bold text-white">
+                      {newRugDetected.name || "Unknown Validator"}
+                    </p>
+                    <p className="text-sm text-gray-400 font-mono break-all">
+                      {newRugDetected.vote_pubkey.slice(0, 20)}...
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="bg-red-950/50 rounded-lg p-3 border border-red-500/30">
+                    <p className="text-gray-400 mb-1">Previous</p>
+                    <p className="text-2xl font-bold text-white">
+                      {newRugDetected.from_commission}%
+                    </p>
+                  </div>
+                  <div className="bg-red-950/50 rounded-lg p-3 border border-red-500/30">
+                    <p className="text-gray-400 mb-1">Current</p>
+                    <p className="text-2xl font-bold text-red-400">
+                      {newRugDetected.to_commission}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-sm text-gray-400">
+                  Epoch: {newRugDetected.epoch}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 justify-center pt-4">
+                <a
+                  href={`/validator/${newRugDetected.vote_pubkey}`}
+                  className="px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-105"
+                >
+                  View Details
+                </a>
+                <button
+                  onClick={dismissSiren}
+                  className="px-8 py-4 bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl hover:scale-105"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       <div className="text-center space-y-4 mb-12">
         <div className="inline-block">
@@ -159,6 +455,44 @@ export default function Page() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Real-time Status Bar */}
+      <div className="glass rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-3 h-3 rounded-full ${
+                autoRefresh ? "bg-green-500 animate-pulse" : "bg-gray-500"
+              }`}
+            ></div>
+            <span className="text-sm text-gray-400">
+              {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
+            </span>
+          </div>
+          {lastUpdate && (
+            <div className="text-sm text-gray-500">
+              Last update: {lastUpdate.toLocaleTimeString()}
+            </div>
+          )}
+          <button
+            onClick={testSirenAlert}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all"
+            title="Test the siren alert"
+          >
+            🚨 Test Alert
+          </button>
+        </div>
+        <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            autoRefresh
+              ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
+              : "bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30"
+          }`}
+        >
+          {autoRefresh ? "⏸ Pause" : "▶ Start"} Auto-refresh
+        </button>
       </div>
 
       {/* Controls */}

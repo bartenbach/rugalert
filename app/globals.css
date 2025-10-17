@@ -166,3 +166,75 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Siren Alert Animations */
+@keyframes flash {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes siren-left {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.5);
+  }
+}
+
+@keyframes siren-right {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes scale-in {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-flash {
+  animation: flash 0.5s ease-in-out infinite;
+}
+
+.animate-siren-left {
+  animation: siren-left 1s ease-in-out infinite;
+}
+
+.animate-siren-right {
+  animation: siren-right 1s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out forwards;
+}
+

@@ -190,10 +190,11 @@ This will:
 ## 🔍 Monitoring
 
 ### Cron Schedule
-- Runs every 2 hours (defined in `vercel.json`)
+- Runs every 15 minutes (defined in `vercel.json`)
 - Checks all validators for commission changes
 - Creates events for ANY change (RUG, CAUTION, or INFO)
 - Sends email alerts ONLY for RUGs
+- Delta-only snapshots mean low Airtable writes even with frequent checks
 
 ### Check Cron Logs
 - Vercel Dashboard → Your Project → Deployments
@@ -237,9 +238,10 @@ curl https://your-project.vercel.app/api/health
 
 ### Issue: Airtable rate limits
 **Solutions**:
-- Keep 2-hour cron interval (don't speed up)
-- Consider upgrading Airtable plan if needed
-- The current design is optimized for free tier
+- The 15-minute cron uses delta-only writes (only records changes)
+- Most runs will write very few records
+- Consider upgrading Airtable plan if you see rate limit errors
+- Monitor usage in Airtable dashboard
 
 ---
 
@@ -255,7 +257,8 @@ curl https://your-project.vercel.app/api/health
 ## 💡 Tips
 
 - The first snapshot takes ~30-60 seconds (processes all validators)
-- Subsequent snapshots are faster (only records changes)
+- Subsequent snapshots are much faster (only records changes - usually just a few writes)
+- Cron runs every 15 minutes so RUGs are detected quickly
 - RPC calls can fail - consider using a paid RPC provider (Helius, QuickNode)
 - Discord webhook is optional but nice for real-time RUG alerts
 - Email alerts go to ALL subscribers for RUG events only

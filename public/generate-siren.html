@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Siren Sound Generator</title>
+</head>
+<body>
+    <h1>Siren Sound Generator</h1>
+    <p>Click the button to generate and download a siren sound file:</p>
+    <button onclick="generateSiren()">Generate Siren Sound</button>
+    <button onclick="playSiren()">Test Play</button>
+    
+    <script>
+        let audioContext = null;
+        let sirenBuffer = null;
+
+        async function generateSiren() {
+            // Create audio context
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const sampleRate = ctx.sampleRate;
+            const duration = 3; // 3 seconds
+            const numSamples = sampleRate * duration;
+            
+            // Create buffer
+            const buffer = ctx.createBuffer(1, numSamples, sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            // Generate siren sound (alternating frequencies)
+            for (let i = 0; i < numSamples; i++) {
+                const t = i / sampleRate;
+                const cycle = Math.floor(t / 0.5); // Change every 0.5 seconds
+                const freq = cycle % 2 === 0 ? 800 : 1200; // Alternate between 800Hz and 1200Hz
+                const fadeIn = Math.min(1, t / 0.1); // Fade in over 0.1s
+                const fadeOut = Math.min(1, (duration - t) / 0.1); // Fade out over 0.1s
+                const envelope = fadeIn * fadeOut;
+                data[i] = Math.sin(2 * Math.PI * freq * t) * 0.3 * envelope;
+            }
+            
+            sirenBuffer = buffer;
+            
+            // Convert to WAV and download
+            const wav = bufferToWave(buffer);
+            const blob = new Blob([wav], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'siren.mp3'; // Browser will convert
+            a.click();
+            
+            alert('Siren sound generated! Save this as siren.mp3 in your /public folder.');
+        }
+
+        function playSiren() {
+            if (!sirenBuffer) {
+                alert('Generate the siren first!');
+                return;
+            }
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = ctx.createBufferSource();
+            source.buffer = sirenBuffer;
+            source.connect(ctx.destination);
+            source.start();
+        }
+
+        function bufferToWave(buffer) {
+            const length = buffer.length * buffer.numberOfChannels * 2;
+            const wav = new ArrayBuffer(44 + length);
+            const view = new DataView(wav);
+            const channels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+
+            // WAV header
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + length, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, channels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * channels * 2, true);
+            view.setUint16(32, channels * 2, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, length, true);
+
+            // Write audio data
+            const data = buffer.getChannelData(0);
+            let offset = 44;
+            for (let i = 0; i < data.length; i++) {
+                const sample = Math.max(-1, Math.min(1, data[i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                offset += 2;
+            }
+
+            return wav;
+        }
+    </script>
+</body>
+</html>
+

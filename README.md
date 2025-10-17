@@ -10,7 +10,7 @@ A tiny Next.js app that flags Solana validators who hike commission (RUG = to 10
 - Per-validator commission chart (epochs vs %)
 - Subscribe form (emails via Resend, optional)
 - Discord webhook (optional)
-- Vercel Cron snapshotter
+- Vercel Cron snapshotter (every 15 minutes)
 
 ## Airtable Base
 Create 4 tables with these **exact** names (lowercase is fine):
@@ -50,12 +50,12 @@ npm run dev
 ## Deploy (Vercel recommended)
 1. Push to GitHub and import the repo in Vercel.
 2. Add env vars from `.env.local` to Vercel → Project Settings → Environment Variables.
-3. Ensure `vercel.json` exists (sets a 2-hour cron to `/api/snapshot` with header `x-cron-secret`).
+3. Ensure `vercel.json` exists (sets a 15-minute cron to `/api/snapshot` with header `x-cron-secret`).
 4. Deploy. Point `rugdetector.pumpkinspool.com` CNAME at Vercel.
 5. Manually trigger a first snapshot (e.g., curl with header):  
    `curl -X POST https://<vercel-deployment>/api/snapshot -H "x-cron-secret: <CRON_SECRET>"`
 
 ## Notes
 - Name + Avatar enrichment: by default uses a deterministic DiceBear identicon and a shortened vote key. Replace `lib/enrich.ts` with a real metadata fetch if desired.
-- Airtable rate limits are low; the 2-hour cron is conservative. If you speed up, add caching or backoff retries.
+- Cron runs every 15 minutes to catch commission changes quickly. The snapshot endpoint uses delta-only writes (only records changes), so Airtable rate limits should be fine.
 - History and events endpoints do simple hydration (join) at request time. For scale, denormalize name/avatar into events during snapshot.
