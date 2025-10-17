@@ -278,7 +278,10 @@ export default function Page() {
 
       {/* Siren Alert Overlay */}
       {sirenActive && newRugDetected && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-pulse-slow">
+        <div
+          className="fixed top-0 left-0 right-0 bottom-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-pulse-slow"
+          style={{ margin: 0, padding: 0 }}
+        >
           {/* Flashing red siren lights */}
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute top-0 left-0 w-full h-full bg-red-600/30 animate-flash"></div>
