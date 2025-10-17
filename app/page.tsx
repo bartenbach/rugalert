@@ -574,7 +574,7 @@ export default function Page() {
                         No suspicious events detected
                       </p>
                       <p className="text-sm text-gray-500">
-                        All validators are behaving normally
+                        All validators are currently behaving ethically!
                       </p>
                     </div>
                   </td>

@@ -4,9 +4,21 @@ import { tb } from '../../../lib/airtable'
 export async function GET(req: NextRequest) {
   try {
     const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
-    const latest = await tb.snapshots.select({ sort: [{ field: 'epoch', direction: 'desc' }], maxRecords: 1 }).firstPage()
-    if (!latest[0]) return NextResponse.json({ items: [] })
-    const minEpoch = Number(latest[0].get('epoch')) - epochs
+    
+    // Try to get latest epoch from snapshots first, fall back to events if empty
+    let latestSnapshot = await tb.snapshots.select({ sort: [{ field: 'epoch', direction: 'desc' }], maxRecords: 1 }).firstPage()
+    let latestEpoch = latestSnapshot[0]?.get('epoch') as number | undefined
+    
+    // If no snapshots exist, get latest epoch from events table
+    if (!latestEpoch) {
+      const latestEvent = await tb.events.select({ sort: [{ field: 'epoch', direction: 'desc' }], maxRecords: 1 }).firstPage()
+      latestEpoch = latestEvent[0]?.get('epoch') as number | undefined
+    }
+    
+    // If still no epoch found, return empty (truly no data)
+    if (!latestEpoch) return NextResponse.json({ items: [] })
+    
+    const minEpoch = Number(latestEpoch) - epochs
 
     // latest event per validator since minEpoch
     const all: any[] = []
