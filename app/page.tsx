@@ -399,88 +399,6 @@ export default function Page() {
         </p>
       </div>
 
-      {/* Email Subscription */}
-      <div className="glass rounded-2xl p-8 max-w-2xl mx-auto border-2 border-orange-500/20">
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <span className="text-3xl">🔔</span>
-            <h2 className="text-2xl font-bold text-white">Get Email Alerts</h2>
-          </div>
-          <p className="text-gray-400 text-sm">
-            Subscribe to receive instant email notifications when validators
-            change their commission rates
-          </p>
-          <form
-            onSubmit={handleSubscribe}
-            className="flex flex-col gap-4 max-w-lg mx-auto mt-6"
-          >
-            {/* Email Preference Selector */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-gray-400">Email me for:</label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={() => setEmailPreference("rugs_only")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    emailPreference === "rugs_only"
-                      ? "bg-red-500/30 text-red-300 border-2 border-red-500"
-                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  🚨 RUGs Only
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmailPreference("rugs_and_cautions")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    emailPreference === "rugs_and_cautions"
-                      ? "bg-yellow-500/30 text-yellow-300 border-2 border-yellow-500"
-                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  ⚠️ RUGs + Cautions
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmailPreference("all")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    emailPreference === "all"
-                      ? "bg-blue-500/30 text-blue-300 border-2 border-blue-500"
-                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  📊 All Changes
-                </button>
-              </div>
-            </div>
-
-            {/* Email Input and Submit */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                required
-                className="input-modern flex-1 bg-white/5 text-white text-center sm:text-left"
-                disabled={subscribing || subscribed}
-              />
-              <button
-                type="submit"
-                disabled={subscribing || subscribed}
-                className="btn-primary px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {subscribing
-                  ? "Subscribing..."
-                  : subscribed
-                  ? "✓ Subscribed!"
-                  : "Subscribe"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="glass rounded-2xl p-6 card-shine hover:scale-105 transition-transform duration-300">
@@ -790,15 +708,99 @@ export default function Page() {
           <div className="w-px h-6 bg-white/10"></div>
           <div className="flex items-center gap-2">
             <span className="caution-badge">⚠️ CAUTION</span>
-            <span className="text-gray-400">Increase ≥ 10pp</span>
+            <span className="text-gray-400">Commission Increase ≥ 10%</span>
           </div>
           <div className="w-px h-6 bg-white/10"></div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-white/5 text-gray-300 border border-white/10">
               📊 INFO
             </span>
-            <span className="text-gray-400">Other changes</span>
+            <span className="text-gray-400">All other commission changes</span>
           </div>
+        </div>
+      </div>
+
+      {/* Email Subscription */}
+      <div className="glass rounded-2xl p-8 max-w-2xl mx-auto border-2 border-orange-500/20 mt-8">
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="text-3xl">🔔</span>
+            <h2 className="text-2xl font-bold text-white">Get Email Alerts</h2>
+          </div>
+          <p className="text-gray-400 text-sm">
+            Subscribe to receive instant email notifications when validators
+            change their commission rates
+          </p>
+          <form
+            onSubmit={handleSubscribe}
+            className="flex flex-col gap-4 max-w-lg mx-auto mt-6"
+          >
+            {/* Email Preference Selector */}
+            <div className="flex flex-col gap-2 items-center">
+              <label className="text-sm text-gray-400 text-center">
+                Email me for:
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setEmailPreference("rugs_only")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    emailPreference === "rugs_only"
+                      ? "bg-red-500/30 text-red-300 border-2 border-red-500"
+                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  🚨 Rugs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmailPreference("rugs_and_cautions")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    emailPreference === "rugs_and_cautions"
+                      ? "bg-yellow-500/30 text-yellow-300 border-2 border-yellow-500"
+                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  ⚠️ Increase ≥ 10%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmailPreference("all")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    emailPreference === "all"
+                      ? "bg-blue-500/30 text-blue-300 border-2 border-blue-500"
+                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  📊 All Changes
+                </button>
+              </div>
+            </div>
+
+            {/* Email Input and Submit */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="your@email.com"
+                required
+                className="input-modern flex-1 bg-white/5 text-white text-center sm:text-left"
+                disabled={subscribing || subscribed}
+              />
+              <button
+                type="submit"
+                disabled={subscribing || subscribed}
+                className="btn-primary px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {subscribing
+                  ? "Subscribing..."
+                  : subscribed
+                  ? "✓ Subscribed!"
+                  : "Subscribe"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
