@@ -1,9 +1,9 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
-export default function UnsubscribePage() {
+function UnsubscribeForm() {
   const searchParams = useSearchParams();
   const emailParam = searchParams.get("email");
 
@@ -118,5 +118,22 @@ export default function UnsubscribePage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function UnsubscribePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-8 max-w-md w-full text-center">
+            <div className="text-4xl mb-4 animate-pulse">⏳</div>
+            <p className="text-gray-400">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <UnsubscribeForm />
+    </Suspense>
   );
 }
