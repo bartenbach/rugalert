@@ -51,32 +51,53 @@ async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUT
       return false;
     });
     
-    const to = eligibleSubs.map((s) => String(s.get("email"))).filter(Boolean);
-    console.log(`📧 Sending ${eventType} email to ${to.length} recipients:`, to);
+    const emails = eligibleSubs.map((s) => String(s.get("email"))).filter(Boolean);
+    console.log(`📧 Sending ${eventType} email to ${emails.length} recipients individually`);
     
-    if (!to.length) {
+    if (!emails.length) {
       console.log("⚠️ No eligible recipients for this event type");
       return;
     }
     
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from: process.env.ALERTS_FROM, to, subject, text }),
+    // Send individual emails to each subscriber (protects PII)
+    const emailPromises = emails.map(async (email) => {
+      try {
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ 
+            from: process.env.ALERTS_FROM, 
+            to: [email], // Send to one recipient at a time
+            subject, 
+            text 
+          }),
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          console.error(`❌ Email failed for ${email}:`, response.status, result);
+          return { email, success: false, error: result };
+        } else {
+          console.log(`✅ Email sent to ${email}`);
+          return { email, success: true };
+        }
+      } catch (error) {
+        console.error(`❌ Email error for ${email}:`, error);
+        return { email, success: false, error };
+      }
     });
     
-    const result = await response.json();
+    // Wait for all emails to send
+    const results = await Promise.all(emailPromises);
+    const successCount = results.filter(r => r.success).length;
+    console.log(`📧 Email batch complete: ${successCount}/${emails.length} sent successfully`);
     
-    if (!response.ok) {
-      console.error("❌ Email send failed:", response.status, result);
-    } else {
-      console.log("✅ Email sent successfully:", result);
-    }
   } catch (error) {
-    console.error("❌ Email error:", error);
+    console.error("❌ Email batch error:", error);
   }
 }
 
