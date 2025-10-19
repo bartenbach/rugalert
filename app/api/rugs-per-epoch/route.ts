@@ -1,6 +1,8 @@
 import { tb } from '@/lib/airtable'
 import { NextRequest, NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
