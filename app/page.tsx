@@ -821,7 +821,9 @@ export default function Page() {
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-3xl">🔔</span>
-            <h2 className="text-2xl font-bold text-white">Get Commission Change Alerts</h2>
+            <h2 className="text-2xl font-bold text-white">
+              Get Commission Change Alerts
+            </h2>
           </div>
           <p className="text-gray-400 text-sm">
             Subscribe to receive instant email notifications when validators
