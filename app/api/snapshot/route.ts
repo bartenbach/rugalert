@@ -72,7 +72,7 @@ async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUT
             from: process.env.ALERTS_FROM, 
             to: [email], // Send to one recipient at a time
             subject, 
-            text 
+            text: `${text}\n\n---\nTo unsubscribe from these alerts, visit:\n${process.env.BASE_URL || "https://rugalert.pumpkinspool.com"}/unsubscribe?email=${encodeURIComponent(email)}`
           }),
         });
         
