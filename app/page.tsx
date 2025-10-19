@@ -26,10 +26,10 @@ export default function Page() {
     "rugs_only" | "rugs_and_cautions" | "all"
   >("rugs_only");
 
-  // Event type filters
+  // Event type filters (default: show RUGs + Cautions only)
   const [showRugs, setShowRugs] = useState(true);
   const [showCautions, setShowCautions] = useState(true);
-  const [showInfo, setShowInfo] = useState(true);
+  const [showInfo, setShowInfo] = useState(false); // Hidden by default
 
   // Real-time monitoring state
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -559,7 +559,7 @@ export default function Page() {
                 : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
             }`}
           >
-            🚨 RUGs
+            🚨 RUG
           </button>
           <button
             onClick={() => setShowCautions(!showCautions)}
@@ -569,7 +569,7 @@ export default function Page() {
                 : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
             }`}
           >
-            ⚠️ Cautions
+            ⚠️ Caution
           </button>
           <button
             onClick={() => setShowInfo(!showInfo)}
@@ -592,7 +592,7 @@ export default function Page() {
             }}
             className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
           >
-            Only RUGs
+            Only RUG
           </button>
           <button
             onClick={() => {
@@ -602,7 +602,7 @@ export default function Page() {
             }}
             className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
           >
-            RUGs + Cautions
+            RUG + Caution
           </button>
           <button
             onClick={() => {
