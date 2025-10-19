@@ -14,7 +14,10 @@ export default function RugsPerEpochChart() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/rugs-per-epoch");
+        // Get epochs from URL params (default 10, same as dashboard)
+        const urlParams = new URLSearchParams(window.location.search);
+        const epochs = urlParams.get("epochs") || "10";
+        const res = await fetch(`/api/rugs-per-epoch?epochs=${epochs}`);
         const json = await res.json();
         setData(json.data || []);
       } catch (error) {
@@ -24,6 +27,10 @@ export default function RugsPerEpochChart() {
       }
     }
     load();
+
+    // Reload when window location changes (epoch filter changes)
+    const interval = setInterval(load, 30000); // Also refresh every 30s
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

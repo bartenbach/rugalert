@@ -27,6 +27,13 @@ export async function GET(req: NextRequest) {
       sort: [{ field: 'epoch', direction: 'desc' }],
       pageSize: 100
     }).eachPage((recs, next) => { all.push(...recs); next() })
+    
+    // Sort by createdTime (descending) to get truly latest events within same epoch
+    all.sort((a, b) => {
+      const timeA = new Date(a._rawJson.createdTime).getTime()
+      const timeB = new Date(b._rawJson.createdTime).getTime()
+      return timeB - timeA // Descending (newest first)
+    })
 
     const seen = new Set<string>()
     const latestPer: any[] = []

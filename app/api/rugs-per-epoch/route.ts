@@ -3,49 +3,79 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
   try {
-    // Fetch all RUG events
+    const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
+    
+    // Get latest epoch to determine range
+    let latestSnapshot = await tb.snapshots.select({ sort: [{ field: 'epoch', direction: 'desc' }], maxRecords: 1 }).firstPage()
+    let latestEpoch = latestSnapshot[0]?.get('epoch') as number | undefined
+    
+    if (!latestEpoch) {
+      const latestEvent = await tb.events.select({ sort: [{ field: 'epoch', direction: 'desc' }], maxRecords: 1 }).firstPage()
+      latestEpoch = latestEvent[0]?.get('epoch') as number | undefined
+    }
+    
+    if (!latestEpoch) {
+      return NextResponse.json({ data: [] })
+    }
+    
+    const minEpoch = Number(latestEpoch) - epochs
+    
+    // Fetch RUG events only in the displayed epoch range
     const allRugs: any[] = []
     await tb.events.select({
-      filterByFormula: `{type} = "RUG"`,
-      sort: [{ field: 'epoch', direction: 'desc' }], // Sort desc to get latest first
+      filterByFormula: `AND({type} = "RUG", {epoch} >= ${minEpoch})`,
+      sort: [{ field: 'epoch', direction: 'desc' }],
     }).eachPage((records, fetchNextPage) => {
       allRugs.push(...records)
       fetchNextPage()
     })
+    
+    // Sort by createdTime (descending) to get truly latest events
+    allRugs.sort((a, b) => {
+      const timeA = new Date(a._rawJson.createdTime).getTime()
+      const timeB = new Date(b._rawJson.createdTime).getTime()
+      return timeB - timeA
+    })
 
-    console.log(`📊 Found ${allRugs.length} total RUG events`)
+    console.log(`📊 Found ${allRugs.length} RUG events in epochs ${minEpoch}-${latestEpoch}`)
     
     // Group by epoch, but only count UNIQUE validators per epoch
-    // This matches the dashboard behavior of showing one event per validator
-    const rugsByEpoch = new Map<number, Set<string>>()
+    // AND only count the LATEST event per validator (in case of multiple events)
+    const latestRugPerValidator = new Map<string, any>()
     
     for (const rug of allRugs) {
-      const epoch = rug.get('epoch') as number
       const votePubkey = rug.get('votePubkey') as string
       const type = rug.get('type') as string
       
-      // Double-check it's actually a RUG
-      if (type === "RUG") {
-        if (!rugsByEpoch.has(epoch)) {
-          rugsByEpoch.set(epoch, new Set())
-        }
-        // Add validator to the set (automatically deduplicates)
-        rugsByEpoch.get(epoch)!.add(votePubkey)
-      } else {
-        console.warn(`⚠️ Non-RUG event found in RUG query: type=${type}, epoch=${epoch}`)
+      // Only keep the first (latest due to sort order) RUG per validator
+      if (type === "RUG" && !latestRugPerValidator.has(votePubkey)) {
+        latestRugPerValidator.set(votePubkey, rug)
       }
+    }
+    
+    // Now count by epoch
+    const rugsByEpoch = new Map<number, Set<string>>()
+    
+    for (const rug of latestRugPerValidator.values()) {
+      const epoch = rug.get('epoch') as number
+      const votePubkey = rug.get('votePubkey') as string
+      
+      if (!rugsByEpoch.has(epoch)) {
+        rugsByEpoch.set(epoch, new Set())
+      }
+      rugsByEpoch.get(epoch)!.add(votePubkey)
     }
 
     // Convert to array and count unique validators per epoch
     const data = Array.from(rugsByEpoch.entries())
       .map(([epoch, validators]) => ({ 
         epoch, 
-        count: validators.size // Count unique validators
+        count: validators.size
       }))
       .sort((a, b) => a.epoch - b.epoch)
 
     const totalUniqueRugs = data.reduce((sum, d) => sum + d.count, 0)
-    console.log(`📊 Returning ${data.length} epochs with ${totalUniqueRugs} unique rugged validators`)
+    console.log(`📊 Returning ${data.length} epochs with ${totalUniqueRugs} unique rugged validators (latest events only)`)
 
     return NextResponse.json({ data })
   } catch (e: any) {
