@@ -24,37 +24,60 @@ async function sendDiscord(msg: string) {
 }
 
 async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUTION" | "INFO") {
-  if (!process.env.RESEND_API_KEY || !process.env.ALERTS_FROM) return;
-  
-  const subs = await tb.subs.select().firstPage();
-  
-  // Filter subscribers based on their preferences
-  const eligibleSubs = subs.filter((s) => {
-    const email = s.get("email");
-    if (!email) return false;
+  try {
+    if (!process.env.RESEND_API_KEY || !process.env.ALERTS_FROM) {
+      console.log("⚠️ Email skipped: Missing RESEND_API_KEY or ALERTS_FROM");
+      return;
+    }
     
-    const prefs = s.get("preferences") as string | undefined;
-    const preference = prefs || "rugs_only"; // Default to rugs_only
+    const subs = await tb.subs.select().firstPage();
+    console.log(`📧 Found ${subs.length} total subscribers`);
     
-    // Determine if this subscriber should get this type of alert
-    if (preference === "all") return true; // All events
-    if (preference === "rugs_and_cautions" && (eventType === "RUG" || eventType === "CAUTION")) return true;
-    if (preference === "rugs_only" && eventType === "RUG") return true;
+    // Filter subscribers based on their preferences
+    const eligibleSubs = subs.filter((s) => {
+      const email = s.get("email");
+      if (!email) return false;
+      
+      const prefs = s.get("preferences") as string | undefined;
+      const preference = prefs || "rugs_only"; // Default to rugs_only
+      
+      console.log(`  Subscriber: ${email}, preference: ${preference}, eventType: ${eventType}`);
+      
+      // Determine if this subscriber should get this type of alert
+      if (preference === "all") return true; // All events
+      if (preference === "rugs_and_cautions" && (eventType === "RUG" || eventType === "CAUTION")) return true;
+      if (preference === "rugs_only" && eventType === "RUG") return true;
+      
+      return false;
+    });
     
-    return false;
-  });
-  
-  const to = eligibleSubs.map((s) => String(s.get("email"))).filter(Boolean);
-  if (!to.length) return;
-  
-  await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from: process.env.ALERTS_FROM, to, subject, text }),
-  });
+    const to = eligibleSubs.map((s) => String(s.get("email"))).filter(Boolean);
+    console.log(`📧 Sending ${eventType} email to ${to.length} recipients:`, to);
+    
+    if (!to.length) {
+      console.log("⚠️ No eligible recipients for this event type");
+      return;
+    }
+    
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: process.env.ALERTS_FROM, to, subject, text }),
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      console.error("❌ Email send failed:", response.status, result);
+    } else {
+      console.log("✅ Email sent successfully:", result);
+    }
+  } catch (error) {
+    console.error("❌ Email error:", error);
+  }
 }
 
 // Handle GET requests (Vercel cron sometimes uses GET)

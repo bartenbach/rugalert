@@ -1,4 +1,5 @@
 "use client";
+import RugsPerEpochChart from "@/components/RugsPerEpochChart";
 import { useEffect, useRef, useState } from "react";
 
 type Row = {
@@ -718,6 +719,11 @@ export default function Page() {
             <span className="text-gray-400">All other commission changes</span>
           </div>
         </div>
+      </div>
+
+      {/* Rugs per Epoch Chart */}
+      <div className="mt-8">
+        <RugsPerEpochChart />
       </div>
 
       {/* Email Subscription */}
