@@ -26,6 +26,11 @@ export default function Page() {
     "rugs_only" | "rugs_and_cautions" | "all"
   >("rugs_only");
 
+  // Event type filters
+  const [showRugs, setShowRugs] = useState(true);
+  const [showCautions, setShowCautions] = useState(true);
+  const [showInfo, setShowInfo] = useState(true);
+
   // Real-time monitoring state
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(false); // Default to OFF
@@ -264,11 +269,22 @@ export default function Page() {
     return () => clearInterval(interval);
   }, [autoRefresh, epochs]);
 
-  const filtered = items.filter((it) =>
-    `${it.vote_pubkey} ${it.name ?? ""} ${it.type}`
-      .toLowerCase()
-      .includes(q.toLowerCase())
-  );
+  const filtered = items.filter((it) => {
+    // Filter by search query
+    if (q.trim()) {
+      const searchText = `${it.vote_pubkey} ${it.name ?? ""} ${
+        it.type
+      }`.toLowerCase();
+      if (!searchText.includes(q.toLowerCase())) return false;
+    }
+
+    // Filter by event type
+    if (it.type === "RUG" && !showRugs) return false;
+    if (it.type === "CAUTION" && !showCautions) return false;
+    if (it.type === "INFO" && !showInfo) return false;
+
+    return true;
+  });
 
   const rugCount = filtered.filter((it) => it.type === "RUG").length;
   const cautionCount = filtered.filter((it) => it.type === "CAUTION").length;
@@ -531,6 +547,74 @@ export default function Page() {
             📥 Export CSV
           </a>
         </div>
+
+        {/* Event Type Filters */}
+        <div className="flex flex-wrap items-center gap-3 pt-4 mt-4 border-t border-white/10">
+          <span className="text-sm text-gray-400 font-medium">Show:</span>
+          <button
+            onClick={() => setShowRugs(!showRugs)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              showRugs
+                ? "bg-red-500/30 text-red-300 border-2 border-red-500"
+                : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
+            }`}
+          >
+            🚨 RUGs
+          </button>
+          <button
+            onClick={() => setShowCautions(!showCautions)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              showCautions
+                ? "bg-yellow-500/30 text-yellow-300 border-2 border-yellow-500"
+                : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
+            }`}
+          >
+            ⚠️ Cautions
+          </button>
+          <button
+            onClick={() => setShowInfo(!showInfo)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              showInfo
+                ? "bg-blue-500/30 text-blue-300 border-2 border-blue-500"
+                : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
+            }`}
+          >
+            📊 Info
+          </button>
+
+          {/* Quick Presets */}
+          <div className="hidden sm:block w-px h-6 bg-white/10"></div>
+          <button
+            onClick={() => {
+              setShowRugs(true);
+              setShowCautions(false);
+              setShowInfo(false);
+            }}
+            className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
+          >
+            Only RUGs
+          </button>
+          <button
+            onClick={() => {
+              setShowRugs(true);
+              setShowCautions(true);
+              setShowInfo(false);
+            }}
+            className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
+          >
+            RUGs + Cautions
+          </button>
+          <button
+            onClick={() => {
+              setShowRugs(true);
+              setShowCautions(true);
+              setShowInfo(true);
+            }}
+            className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
+          >
+            Show All
+          </button>
+        </div>
       </div>
 
       {/* Events Table */}
@@ -570,12 +654,18 @@ export default function Page() {
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="space-y-2">
-                      <div className="text-4xl">🎉</div>
+                      <div className="text-4xl">
+                        {items.length === 0 ? "🎉" : "🔍"}
+                      </div>
                       <p className="text-gray-400">
-                        No suspicious events detected
+                        {items.length === 0
+                          ? "No suspicious events detected"
+                          : "No events match your filters"}
                       </p>
                       <p className="text-sm text-gray-500">
-                        All validators are currently behaving ethically!
+                        {items.length === 0
+                          ? "All validators are currently behaving ethically!"
+                          : "Try adjusting your search or filter settings"}
                       </p>
                     </div>
                   </td>
@@ -716,7 +806,7 @@ export default function Page() {
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-white/5 text-gray-300 border border-white/10">
               📊 INFO
             </span>
-            <span className="text-gray-400">All other commission changes</span>
+            <span className="text-gray-400">Minor commission changes</span>
           </div>
         </div>
       </div>
@@ -731,11 +821,11 @@ export default function Page() {
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-3xl">🔔</span>
-            <h2 className="text-2xl font-bold text-white">Get Email Alerts</h2>
+            <h2 className="text-2xl font-bold text-white">Get Commission Change Alerts</h2>
           </div>
           <p className="text-gray-400 text-sm">
             Subscribe to receive instant email notifications when validators
-            change their commission rates
+            change their commission
           </p>
           <form
             onSubmit={handleSubscribe}
