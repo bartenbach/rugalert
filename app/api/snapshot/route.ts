@@ -217,13 +217,17 @@ export async function POST(req: NextRequest) {
           let type = "INFO";
           let shouldNotify = false;
           
-          if (to === 100 && from < 100) {
+          // RUG: Commission increased TO 90% or higher (taking almost all rewards)
+          if (to >= 90 && delta > 0) {
             type = "RUG";
             shouldNotify = true;
-          } else if (delta >= 10 && to < 100) {
+          } 
+          // CAUTION: Commission increased by 10+ percentage points (but not to rug levels)
+          else if (delta >= 10 && to < 90) {
             type = "CAUTION";
             shouldNotify = true;
           }
+          // INFO: All other changes (small increases, decreases, etc.)
 
           // Create event for any commission change
           await tb.events.create([{
@@ -232,7 +236,7 @@ export async function POST(req: NextRequest) {
 
           // Send notifications based on event type
           if (type === "RUG") {
-            const msg = `RUG: ${v.votePubkey} ${from}% → 100% at epoch ${epoch} (slot ${slot})`;
+            const msg = `RUG: ${v.votePubkey} ${from}% → ${to}% at epoch ${epoch} (slot ${slot})`;
             await sendDiscord(msg);
             await sendEmail("Solana Validator Commission RUG detected", `${msg}\n${process.env.BASE_URL || ""}/history`, "RUG");
           } else if (type === "CAUTION") {

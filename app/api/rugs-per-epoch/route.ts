@@ -7,46 +7,45 @@ export async function GET(req: NextRequest) {
     const allRugs: any[] = []
     await tb.events.select({
       filterByFormula: `{type} = "RUG"`,
-      sort: [{ field: 'epoch', direction: 'asc' }],
+      sort: [{ field: 'epoch', direction: 'desc' }], // Sort desc to get latest first
     }).eachPage((records, fetchNextPage) => {
       allRugs.push(...records)
       fetchNextPage()
     })
 
-    console.log(`📊 Found ${allRugs.length} RUG events total`)
+    console.log(`📊 Found ${allRugs.length} total RUG events`)
     
-    // Debug: log first few rugs to verify data
-    if (allRugs.length > 0) {
-      const sample = allRugs.slice(0, 3).map(r => ({
-        type: r.get('type'),
-        epoch: r.get('epoch'),
-        from: r.get('fromCommission'),
-        to: r.get('toCommission'),
-      }))
-      console.log('📊 Sample RUG records:', JSON.stringify(sample, null, 2))
-    }
-
-    // Group by epoch and count
-    const rugsByEpoch = new Map<number, number>()
+    // Group by epoch, but only count UNIQUE validators per epoch
+    // This matches the dashboard behavior of showing one event per validator
+    const rugsByEpoch = new Map<number, Set<string>>()
     
     for (const rug of allRugs) {
       const epoch = rug.get('epoch') as number
+      const votePubkey = rug.get('votePubkey') as string
       const type = rug.get('type') as string
       
       // Double-check it's actually a RUG
       if (type === "RUG") {
-        rugsByEpoch.set(epoch, (rugsByEpoch.get(epoch) || 0) + 1)
+        if (!rugsByEpoch.has(epoch)) {
+          rugsByEpoch.set(epoch, new Set())
+        }
+        // Add validator to the set (automatically deduplicates)
+        rugsByEpoch.get(epoch)!.add(votePubkey)
       } else {
         console.warn(`⚠️ Non-RUG event found in RUG query: type=${type}, epoch=${epoch}`)
       }
     }
 
-    // Convert to array and sort by epoch
+    // Convert to array and count unique validators per epoch
     const data = Array.from(rugsByEpoch.entries())
-      .map(([epoch, count]) => ({ epoch, count }))
+      .map(([epoch, validators]) => ({ 
+        epoch, 
+        count: validators.size // Count unique validators
+      }))
       .sort((a, b) => a.epoch - b.epoch)
 
-    console.log(`📊 Returning ${data.length} epochs with rugs`)
+    const totalUniqueRugs = data.reduce((sum, d) => sum + d.count, 0)
+    console.log(`📊 Returning ${data.length} epochs with ${totalUniqueRugs} unique rugged validators`)
 
     return NextResponse.json({ data })
   } catch (e: any) {

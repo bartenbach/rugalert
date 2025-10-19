@@ -56,7 +56,7 @@ export default function RugsPerEpochChart() {
             🚨 Rugs per Epoch
           </h2>
           <p className="text-gray-400 text-sm">
-            Historical rug patterns across epochs
+            Unique validators that rugged per epoch
           </p>
         </div>
         <div className="text-right">
@@ -95,9 +95,9 @@ export default function RugsPerEpochChart() {
               </div>
 
               {/* Count Badge */}
-              <div className="w-16 text-left">
+              <div className="w-20 text-left">
                 <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
-                  {item.count} {item.count === 1 ? "rug" : "rugs"}
+                  {item.count} {item.count === 1 ? "validator" : "validators"}
                 </span>
               </div>
             </div>

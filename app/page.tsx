@@ -794,7 +794,7 @@ export default function Page() {
         <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
           <div className="flex items-center gap-2">
             <span className="rug-badge">🚨 RUG</span>
-            <span className="text-gray-400">Commission → 100%</span>
+            <span className="text-gray-400">Commission ≥ 90%</span>
           </div>
           <div className="w-px h-6 bg-white/10"></div>
           <div className="flex items-center gap-2">
