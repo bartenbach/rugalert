@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     
     const minEpoch = Number(latestEpoch) - epochs
 
-    // latest event per validator since minEpoch
+    // Fetch all events in the epoch range
     const all: any[] = []
     await tb.events.select({
       filterByFormula: `{epoch} >= ${minEpoch}`,
@@ -30,20 +30,42 @@ export async function GET(req: NextRequest) {
       pageSize: 100
     }).eachPage((recs, next) => { all.push(...recs); next() })
     
-    // Sort by createdTime (descending) to get truly latest events within same epoch
-    all.sort((a, b) => {
-      const timeA = new Date(a._rawJson.createdTime).getTime()
-      const timeB = new Date(b._rawJson.createdTime).getTime()
-      return timeB - timeA // Descending (newest first)
-    })
-
-    const seen = new Set<string>()
-    const latestPer: any[] = []
+    console.log(`📊 Found ${all.length} total events in epochs ${minEpoch}-${latestEpoch}`)
+    
+    // Group events by validator
+    const eventsByValidator = new Map<string, any[]>()
     for (const r of all) {
       const vp = String(r.get('votePubkey'))
-      if (seen.has(vp)) continue
-      seen.add(vp)
-
+      if (!eventsByValidator.has(vp)) {
+        eventsByValidator.set(vp, [])
+      }
+      eventsByValidator.get(vp)!.push(r)
+    }
+    
+    // For each validator, pick the MOST SEVERE event (RUG > CAUTION > INFO)
+    // If multiple events of same severity, pick the latest by createdTime
+    const severityOrder = { "RUG": 3, "CAUTION": 2, "INFO": 1 }
+    
+    const latestPer: any[] = []
+    for (const [vp, events] of eventsByValidator.entries()) {
+      // Sort by severity (descending) then by createdTime (descending)
+      events.sort((a, b) => {
+        const severityA = severityOrder[a.get('type') as string] || 0
+        const severityB = severityOrder[b.get('type') as string] || 0
+        
+        if (severityA !== severityB) {
+          return severityB - severityA // Higher severity first
+        }
+        
+        // Same severity, use createdTime
+        const timeA = new Date(a._rawJson.createdTime).getTime()
+        const timeB = new Date(b._rawJson.createdTime).getTime()
+        return timeB - timeA // Newer first
+      })
+      
+      // Take the first event (most severe, or latest if same severity)
+      const r = events[0]
+      
       const v = await tb.validators.select({ filterByFormula: `{votePubkey} = "${vp}"`, maxRecords: 1 }).firstPage()
       latestPer.push({
         id: r.id,
@@ -54,9 +76,11 @@ export async function GET(req: NextRequest) {
         delta: r.get('delta'),
         epoch: r.get('epoch'),
         name: v[0]?.get('name') || null,
-        icon_url: v[0]?.get('iconUrl') || null,  // ← use correct column
+        icon_url: v[0]?.get('iconUrl') || null,
       })
     }
+    
+    console.log(`📊 Returning ${latestPer.length} validators (prioritized by severity: RUG > CAUTION > INFO)`)
 
     return NextResponse.json({ items: latestPer })
   } catch (e: any) {
