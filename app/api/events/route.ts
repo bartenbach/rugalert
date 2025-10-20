@@ -44,14 +44,16 @@ export async function GET(req: NextRequest) {
     
     // For each validator, pick the MOST SEVERE event (RUG > CAUTION > INFO)
     // If multiple events of same severity, pick the latest by createdTime
-    const severityOrder = { "RUG": 3, "CAUTION": 2, "INFO": 1 }
+    const severityOrder: Record<string, number> = { "RUG": 3, "CAUTION": 2, "INFO": 1 }
     
     const latestPer: any[] = []
     for (const [vp, events] of eventsByValidator.entries()) {
       // Sort by severity (descending) then by createdTime (descending)
       events.sort((a, b) => {
-        const severityA = severityOrder[a.get('type') as string] || 0
-        const severityB = severityOrder[b.get('type') as string] || 0
+        const typeA = String(a.get('type'))
+        const typeB = String(b.get('type'))
+        const severityA = severityOrder[typeA] || 0
+        const severityB = severityOrder[typeB] || 0
         
         if (severityA !== severityB) {
           return severityB - severityA // Higher severity first
