@@ -59,7 +59,9 @@ export default function Page() {
   async function load(isAutoRefresh = false) {
     if (!isAutoRefresh) setLoading(true);
     try {
-      const res = await fetch(`/api/events?epochs=${epochs}`);
+      // If INFO filter is enabled, request all events (not just most severe per validator)
+      const showAllEvents = showInfo ? "&showAll=true" : "";
+      const res = await fetch(`/api/events?epochs=${epochs}${showAllEvents}`);
       const json = await res.json();
       const newItems = json.items || [];
 
@@ -253,10 +255,10 @@ export default function Page() {
     }
   }
 
-  // Initial load
+  // Initial load and reload when filters change
   useEffect(() => {
     load();
-  }, [epochs]);
+  }, [epochs, showInfo]);
 
   // Auto-refresh polling
   useEffect(() => {
@@ -267,7 +269,7 @@ export default function Page() {
     }, 30000); // Poll every 30 seconds (reasonable for backend cron every 15 min)
 
     return () => clearInterval(interval);
-  }, [autoRefresh, epochs]);
+  }, [autoRefresh, epochs, showInfo]);
 
   const filtered = items.filter((it) => {
     // Filter by search query
