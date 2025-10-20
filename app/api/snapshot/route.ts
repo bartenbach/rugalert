@@ -256,16 +256,20 @@ export async function POST(req: NextRequest) {
           }]);
 
           // Send notifications based on event type
+          const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
+          const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
+          const validatorName = chainName || v.votePubkey;
+          
           if (type === "RUG") {
-            const msg = `RUG: ${v.votePubkey} ${from}% → ${to}% at epoch ${epoch} (slot ${slot})`;
+            const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
             await sendDiscord(msg);
-            await sendEmail("Solana Validator Commission RUG detected", `${msg}\n${process.env.BASE_URL || ""}/history`, "RUG");
+            await sendEmail("🚨 Solana Validator Commission RUG Detected", msg, "RUG");
           } else if (type === "CAUTION") {
-            const msg = `CAUTION: ${v.votePubkey} ${from}% → ${to}% (+${delta}pp) at epoch ${epoch}`;
-            await sendEmail("Solana Validator Commission Jump", `${msg}\n${process.env.BASE_URL || ""}/history`, "CAUTION");
+            const msg = `⚠️ CAUTION: Large Commission Increase\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+            await sendEmail("⚠️ Solana Validator Commission Jump", msg, "CAUTION");
           } else if (type === "INFO") {
-            const msg = `INFO: ${v.votePubkey} ${from}% → ${to}% at epoch ${epoch}`;
-            await sendEmail("Solana Validator Commission Change", `${msg}\n${process.env.BASE_URL || ""}/history`, "INFO");
+            const msg = `📊 Commission Change\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+            await sendEmail("📊 Solana Validator Commission Change", msg, "INFO");
           }
         }
       }

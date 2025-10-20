@@ -2,11 +2,24 @@
 import CommissionChart from "@/components/CommissionChart";
 import { useEffect, useState } from "react";
 
+type Event = {
+  id: string;
+  vote_pubkey: string;
+  name?: string | null;
+  icon_url?: string | null;
+  type: "RUG" | "CAUTION" | "INFO";
+  from_commission: number;
+  to_commission: number;
+  delta: number;
+  epoch: number;
+};
+
 export default function Detail({ params }: { params: { votePubkey: string } }) {
   const [series, setSeries] = useState<{ epoch: number; commission: number }[]>(
     []
   );
   const [meta, setMeta] = useState<any>(null);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,6 +31,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       const m = await fetch(`/api/meta/${params.votePubkey}`);
       const mj = await m.json();
       setMeta(mj.meta || null);
+      const e = await fetch(`/api/validator-events/${params.votePubkey}`);
+      const ej = await e.json();
+      setEvents(ej.items || []);
       setLoading(false);
     })();
   }, [params.votePubkey]);
@@ -161,10 +177,102 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             )}
           </div>
 
+          {/* Commission Change Events Table */}
+          {events.length > 0 && (
+            <div className="glass rounded-2xl p-8 border border-white/10 shadow-sm card-shine">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Commission Change Events
+                </h2>
+                <p className="text-gray-400 text-sm">
+                  All detected commission changes for this validator
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left py-4 px-4 text-sm font-semibold text-gray-400">
+                        Status
+                      </th>
+                      <th className="text-left py-4 px-4 text-sm font-semibold text-gray-400">
+                        Commission
+                      </th>
+                      <th className="text-left py-4 px-4 text-sm font-semibold text-gray-400">
+                        Change
+                      </th>
+                      <th className="text-left py-4 px-4 text-sm font-semibold text-gray-400">
+                        Epoch
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {events.map((event) => (
+                      <tr
+                        key={event.id}
+                        className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                      >
+                        <td className="py-4 px-4">
+                          {event.type === "RUG" && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-semibold border border-red-500/20">
+                              🚨 RUG
+                            </span>
+                          )}
+                          {event.type === "CAUTION" && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 text-yellow-400 rounded-lg text-xs font-semibold border border-yellow-500/20">
+                              ⚠️ Caution
+                            </span>
+                          )}
+                          {event.type === "INFO" && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 rounded-lg text-xs font-semibold border border-blue-500/20">
+                              📊 Info
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-gray-400">
+                              {event.from_commission}%
+                            </span>
+                            <span className="text-gray-600">→</span>
+                            <span className="text-white font-semibold">
+                              {event.to_commission}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span
+                            className={`text-sm font-semibold ${
+                              event.delta > 0
+                                ? "text-red-400"
+                                : event.delta < 0
+                                ? "text-green-400"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {event.delta > 0 ? "+" : ""}
+                            {event.delta}%
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="text-sm text-gray-400 font-mono">
+                            {event.epoch}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Additional Info */}
           <div className="glass rounded-xl p-6 border border-white/10 shadow-sm text-center">
             <p className="text-sm text-gray-400">
-              Data spans {series.length} epochs • Updated in real-time
+              Data spans {series.length} epochs • {events.length} commission
+              changes detected • Updated in real-time
             </p>
           </div>
         </>
