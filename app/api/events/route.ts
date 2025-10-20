@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
           to_commission: r.get('toCommission'),
           delta: r.get('delta'),
           epoch: r.get('epoch'),
+          created_at: r._rawJson.createdTime,
           name: v[0]?.get('name') || null,
           icon_url: v[0]?.get('iconUrl') || null,
         })
@@ -109,6 +110,7 @@ export async function GET(req: NextRequest) {
         to_commission: r.get('toCommission'),
         delta: r.get('delta'),
         epoch: r.get('epoch'),
+        created_at: r._rawJson.createdTime,
         name: v[0]?.get('name') || null,
         icon_url: v[0]?.get('iconUrl') || null,
       })

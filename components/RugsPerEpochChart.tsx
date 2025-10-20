@@ -7,9 +7,25 @@ interface EpochData {
   count: number;
 }
 
+interface RugEvent {
+  id: string;
+  vote_pubkey: string;
+  name?: string | null;
+  icon_url?: string | null;
+  type: string;
+  from_commission: number;
+  to_commission: number;
+  delta: number;
+  epoch: number;
+  created_at?: string;
+}
+
 export default function RugsPerEpochChart() {
   const [data, setData] = useState<EpochData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
+  const [epochEvents, setEpochEvents] = useState<RugEvent[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -32,6 +48,28 @@ export default function RugsPerEpochChart() {
     const interval = setInterval(load, 30000); // Also refresh every 30s
     return () => clearInterval(interval);
   }, []);
+
+  async function loadEpochEvents(epoch: number) {
+    if (selectedEpoch === epoch) {
+      // Clicking the same epoch closes it
+      setSelectedEpoch(null);
+      setEpochEvents([]);
+      return;
+    }
+
+    setSelectedEpoch(epoch);
+    setLoadingEvents(true);
+    try {
+      const res = await fetch(`/api/epoch-events/${epoch}`);
+      const json = await res.json();
+      setEpochEvents(json.items || []);
+    } catch (error) {
+      console.error("Failed to load epoch events:", error);
+      setEpochEvents([]);
+    } finally {
+      setLoadingEvents(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -77,37 +115,157 @@ export default function RugsPerEpochChart() {
       {/* Bar Chart */}
       <div className="space-y-2">
         {data.map((item) => (
-          <div key={item.epoch} className="group">
-            <div className="flex items-center gap-3">
-              {/* Epoch Label */}
-              <div className="w-20 text-right text-sm font-mono text-gray-400 group-hover:text-orange-400 transition-colors">
-                #{item.epoch}
-              </div>
+          <div key={item.epoch}>
+            <button
+              onClick={() => loadEpochEvents(item.epoch)}
+              className="w-full group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                {/* Epoch Label */}
+                <div
+                  className={`w-20 text-right text-sm font-mono transition-colors ${
+                    selectedEpoch === item.epoch
+                      ? "text-orange-400 font-bold"
+                      : "text-gray-400 group-hover:text-orange-400"
+                  }`}
+                >
+                  #{item.epoch}
+                </div>
 
-              {/* Bar */}
-              <div className="flex-1 relative">
-                <div className="h-10 bg-white/5 rounded-lg overflow-hidden">
+                {/* Bar */}
+                <div className="flex-1 relative">
                   <div
-                    className="h-full bg-gradient-to-r from-red-500/80 to-red-600/80 rounded-lg transition-all duration-300 group-hover:from-red-400 group-hover:to-red-500 flex items-center justify-end pr-3"
-                    style={{
-                      width: `${(item.count / maxCount) * 100}%`,
-                      minWidth: item.count > 0 ? "3rem" : "0",
-                    }}
+                    className={`h-10 bg-white/5 rounded-lg overflow-hidden transition-all ${
+                      selectedEpoch === item.epoch
+                        ? "ring-2 ring-orange-500/50"
+                        : ""
+                    }`}
                   >
-                    <span className="text-white font-bold text-sm">
-                      {item.count}
-                    </span>
+                    <div
+                      className="h-full bg-gradient-to-r from-red-500/80 to-red-600/80 rounded-lg transition-all duration-300 group-hover:from-red-400 group-hover:to-red-500 flex items-center justify-end pr-3"
+                      style={{
+                        width: `${(item.count / maxCount) * 100}%`,
+                        minWidth: item.count > 0 ? "3rem" : "0",
+                      }}
+                    >
+                      <span className="text-white font-bold text-sm">
+                        {item.count}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Count Badge */}
-              <div className="w-20 text-left">
-                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
-                  {item.count} {item.count === 1 ? "validator" : "validators"}
-                </span>
+                {/* Count Badge */}
+                <div className="w-20 text-left">
+                  <span
+                    className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold transition-colors ${
+                      selectedEpoch === item.epoch
+                        ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                        : "bg-red-500/20 text-red-300 border border-red-500/30 group-hover:bg-red-500/30"
+                    }`}
+                  >
+                    {item.count} {item.count === 1 ? "validator" : "validators"}
+                  </span>
+                </div>
               </div>
-            </div>
+            </button>
+
+            {/* Expanded Details */}
+            {selectedEpoch === item.epoch && (
+              <div className="mt-3 mb-4 ml-24 mr-24 bg-white/5 rounded-lg border border-white/10 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                {loadingEvents ? (
+                  <div className="p-6 text-center">
+                    <div className="inline-flex items-center gap-3">
+                      <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-gray-400">Loading details...</span>
+                    </div>
+                  </div>
+                ) : epochEvents.length === 0 ? (
+                  <div className="p-6 text-center text-gray-400">
+                    No events found for this epoch
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-white/5 border-b border-white/10">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                            Validator
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                            Commission
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                            Change
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {epochEvents.map((event) => (
+                          <tr
+                            key={event.id}
+                            className="hover:bg-white/5 transition-colors"
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={`/validator/${event.vote_pubkey}`}
+                                  className="flex items-center gap-2 hover:text-orange-400 transition-colors"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {event.icon_url ? (
+                                    <img
+                                      src={event.icon_url}
+                                      alt=""
+                                      className="w-8 h-8 rounded-lg object-cover border border-white/10"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                        const fallback =
+                                          e.currentTarget.nextElementSibling;
+                                        if (fallback) {
+                                          fallback.classList.remove("hidden");
+                                        }
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div
+                                    className={`w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500/20 to-orange-500/30 border border-white/10 flex items-center justify-center ${
+                                      event.icon_url ? "hidden" : ""
+                                    }`}
+                                  >
+                                    <span className="text-sm">🔷</span>
+                                  </div>
+                                  <span className="text-sm font-medium text-white">
+                                    {event.name ||
+                                      event.vote_pubkey.slice(0, 8)}
+                                  </span>
+                                </a>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-gray-400">
+                                  {event.from_commission}%
+                                </span>
+                                <span className="text-gray-600">→</span>
+                                <span className="text-red-400 font-semibold">
+                                  {event.to_commission}%
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-sm font-semibold text-red-400">
+                                +{event.delta}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

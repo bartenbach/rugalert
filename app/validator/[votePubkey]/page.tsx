@@ -12,7 +12,28 @@ type Event = {
   to_commission: number;
   delta: number;
   epoch: number;
+  created_at?: string;
 };
+
+// Utility function to format relative time
+function getRelativeTime(timestamp: string): string {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const diffMs = now.getTime() - then.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  // For older dates, show the date
+  return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 export default function Detail({ params }: { params: { votePubkey: string } }) {
   const [series, setSeries] = useState<{ epoch: number; commission: number }[]>(
@@ -203,7 +224,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         Change
                       </th>
                       <th className="text-left py-4 px-4 text-sm font-semibold text-gray-400">
-                        Epoch
+                        <div className="flex items-center gap-1.5">
+                          Detected
+                          <span className="text-xs text-gray-500">↓</span>
+                        </div>
                       </th>
                     </tr>
                   </thead>
@@ -256,9 +280,32 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           </span>
                         </td>
                         <td className="py-4 px-4">
-                          <span className="text-sm text-gray-400 font-mono">
-                            {event.epoch}
-                          </span>
+                          {event.created_at ? (
+                            <div
+                              className="cursor-help"
+                              title={`${new Date(
+                                event.created_at
+                              ).toLocaleString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                                hour12: true,
+                              })} • Epoch ${event.epoch}`}
+                            >
+                              <div className="text-sm text-white font-medium">
+                                {getRelativeTime(event.created_at)}
+                              </div>
+                              <div className="text-xs text-gray-500 font-mono">
+                                Epoch {event.epoch}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400 font-mono">
+                              Epoch {event.epoch}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))}

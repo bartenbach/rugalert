@@ -12,7 +12,28 @@ type Row = {
   to_commission: number;
   delta: number;
   epoch: number;
+  created_at?: string;
 };
+
+// Utility function to format relative time
+function getRelativeTime(timestamp: string): string {
+  const now = new Date();
+  const then = new Date(timestamp);
+  const diffMs = now.getTime() - then.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  // For older dates, show the date
+  return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 export default function Page() {
   const [epochs, setEpochs] = useState<number>(10);
@@ -33,28 +54,11 @@ export default function Page() {
 
   // Real-time monitoring state
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(false); // Default to OFF
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [sirenActive, setSirenActive] = useState(false);
   const [newRugDetected, setNewRugDetected] = useState<Row | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const previousRugsRef = useRef<Set<string>>(new Set());
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const oscillatorsRef = useRef<OscillatorNode[]>([]);
   const sirenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Load sound preference from localStorage on mount
-  useEffect(() => {
-    const savedSoundPref = localStorage.getItem("rugalert-sound-enabled");
-    if (savedSoundPref !== null) {
-      setSoundEnabled(savedSoundPref === "true");
-    }
-  }, []);
-
-  // Save sound preference to localStorage when changed
-  useEffect(() => {
-    localStorage.setItem("rugalert-sound-enabled", soundEnabled.toString());
-  }, [soundEnabled]);
 
   async function load(isAutoRefresh = false) {
     if (!isAutoRefresh) setLoading(true);
@@ -65,8 +69,8 @@ export default function Page() {
       const json = await res.json();
       const newItems = json.items || [];
 
-      // Detect new RUG events
-      if (autoRefresh && previousRugsRef.current.size > 0) {
+      // Detect new RUG events for visual alert
+      if (isAutoRefresh && previousRugsRef.current.size > 0) {
         const currentRugs = newItems.filter((it: Row) => it.type === "RUG");
         const newRug = currentRugs.find(
           (rug: Row) => !previousRugsRef.current.has(rug.id)
@@ -91,141 +95,24 @@ export default function Page() {
     }
   }
 
-  async function playSirenSound() {
-    // Always use Web Audio API for immediate sound generation
-    // (HTML5 audio has loading delays)
-    await generateSirenWithWebAudio();
-  }
-
-  async function generateSirenWithWebAudio() {
-    try {
-      console.log("🔊 Starting siren sound generation...");
-
-      // Stop any existing oscillators first
-      stopAllOscillators();
-
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext ||
-          (window as any).webkitAudioContext)();
-      }
-
-      const ctx = audioContextRef.current;
-      console.log("🔊 Audio context state:", ctx.state);
-
-      // Resume audio context if suspended (required by browser security)
-      if (ctx.state === "suspended") {
-        console.log("🔊 Resuming suspended audio context...");
-        await ctx.resume();
-        console.log("🔊 Audio context resumed:", ctx.state);
-      }
-
-      const oscillator1 = ctx.createOscillator();
-      const oscillator2 = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      oscillator1.type = "sine";
-      oscillator2.type = "sine";
-      oscillator1.frequency.value = 800;
-      oscillator2.frequency.value = 800;
-
-      // Create alternating siren effect
-      const now = ctx.currentTime;
-      for (let i = 0; i < 30; i++) {
-        // Loop for 15 seconds (30 * 0.5s)
-        const time = now + i * 0.5;
-        const freq = i % 2 === 0 ? 800 : 1200;
-        oscillator1.frequency.setValueAtTime(freq, time);
-        oscillator2.frequency.setValueAtTime(freq + 5, time); // Slight detune for richer sound
-      }
-
-      gainNode.gain.value = 0.15; // Lower volume
-
-      oscillator1.connect(gainNode);
-      oscillator2.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      console.log("🔊 Starting oscillators at time:", now);
-      oscillator1.start(now);
-      oscillator2.start(now);
-
-      // Store references so we can stop them later
-      oscillatorsRef.current = [oscillator1, oscillator2];
-
-      // Schedule stop after 15 seconds
-      oscillator1.stop(now + 15);
-      oscillator2.stop(now + 15);
-
-      console.log("✅ Siren sound started successfully!");
-    } catch (error) {
-      console.error("❌ Web Audio API failed:", error);
-    }
-  }
-
-  function stopAllOscillators() {
-    try {
-      console.log("🛑 Stopping", oscillatorsRef.current.length, "oscillators");
-      oscillatorsRef.current.forEach((osc, index) => {
-        try {
-          osc.stop();
-          osc.disconnect();
-          console.log("🛑 Stopped oscillator", index);
-        } catch (e) {
-          console.log("⚠️ Oscillator", index, "already stopped or error:", e);
-        }
-      });
-      oscillatorsRef.current = [];
-    } catch (error) {
-      console.error("❌ Failed to stop oscillators:", error);
-    }
-  }
-
   function triggerSirenAlert(rug: Row) {
-    console.log("🚨 Triggering siren alert for:", rug.name || rug.vote_pubkey);
+    console.log("🚨 Triggering visual alert for:", rug.name || rug.vote_pubkey);
     setNewRugDetected(rug);
     setSirenActive(true);
 
-    // Play sound only if enabled
-    if (soundEnabled) {
-      playSirenSound();
+    // Auto-dismiss after 30 seconds
+    if (sirenTimeoutRef.current) {
+      clearTimeout(sirenTimeoutRef.current);
     }
-
-    // Auto-dismiss after 15 seconds
-    if (sirenTimeoutRef.current) clearTimeout(sirenTimeoutRef.current);
     sirenTimeoutRef.current = setTimeout(() => {
-      console.log("⏰ Auto-dismissing alert after 15 seconds");
       dismissSiren();
-    }, 15000);
-  }
-
-  // Test function to trigger alert manually
-  function testSirenAlert() {
-    const testRug: Row = {
-      id: "test-" + Date.now(),
-      vote_pubkey: "TEST123ABC456DEF789",
-      name: "Test Validator",
-      icon_url: null,
-      type: "RUG",
-      from_commission: 5,
-      to_commission: 100,
-      delta: 95,
-      epoch: 999,
-    };
-    triggerSirenAlert(testRug);
+    }, 30000);
   }
 
   function dismissSiren() {
-    console.log("❌ Dismissing siren alert");
+    console.log("❌ Dismissing alert");
     setSirenActive(false);
     setNewRugDetected(null);
-
-    // Stop HTML5 audio if playing
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-
-    // Stop Web Audio oscillators
-    stopAllOscillators();
 
     // Clear auto-dismiss timer
     if (sirenTimeoutRef.current) {
@@ -293,11 +180,6 @@ export default function Page() {
 
   return (
     <div className="space-y-8">
-      {/* Hidden audio element for siren */}
-      <audio ref={audioRef} loop>
-        <source src="/siren.mp3" type="audio/mpeg" />
-      </audio>
-
       {/* Siren Alert Overlay */}
       {sirenActive && newRugDetected && (
         <div
@@ -459,61 +341,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Real-time Status Bar */}
-      <div className="glass rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                autoRefresh ? "bg-green-500 animate-pulse" : "bg-gray-500"
-              }`}
-            ></div>
-            <span className="text-sm text-gray-400">
-              {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
-            </span>
-          </div>
-          {lastUpdate && (
-            <div className="text-sm text-gray-500">
-              Last update: {lastUpdate.toLocaleTimeString()}
-            </div>
-          )}
-          <button
-            onClick={testSirenAlert}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all"
-            title="Test the siren alert"
-          >
-            🚨 Test Alert
-          </button>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              soundEnabled
-                ? "bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30"
-                : "bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30"
-            }`}
-            title={
-              soundEnabled
-                ? "Sound ON - Click to mute"
-                : "Sound OFF - Click to enable"
-            }
-          >
-            {soundEnabled ? "🔊 Sound ON" : "🔇 Sound OFF"}
-          </button>
-          <button
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              autoRefresh
-                ? "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30"
-                : "bg-gray-500/20 text-gray-400 border border-gray-500/30 hover:bg-gray-500/30"
-            }`}
-          >
-            {autoRefresh ? "⏸ Pause" : "▶ Start"} Auto-refresh
-          </button>
-        </div>
-      </div>
-
       {/* Controls */}
       <div className="glass rounded-2xl p-6 space-y-4">
         <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
@@ -545,9 +372,39 @@ export default function Page() {
               />
             </div>
           </div>
-          <a href="/api/export" className="btn-secondary whitespace-nowrap">
-            📥 Export CSV
-          </a>
+          <div className="flex items-center gap-4">
+            {/* Real-time Status (clickable to toggle) */}
+            <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all hover:scale-105 ${
+                autoRefresh
+                  ? "text-gray-400 bg-white/5 border-white/10 hover:bg-white/10"
+                  : "text-gray-500 bg-white/5 border-white/10 hover:bg-white/10"
+              }`}
+              title={
+                autoRefresh
+                  ? "Click to pause auto-refresh"
+                  : "Click to enable auto-refresh"
+              }
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  autoRefresh ? "bg-green-500 animate-pulse" : "bg-gray-500"
+                }`}
+              ></div>
+              <span className="whitespace-nowrap">
+                {autoRefresh ? "Auto-refresh" : "Paused"}
+              </span>
+              {lastUpdate && (
+                <span className="text-gray-500 border-l border-white/10 pl-2 ml-1">
+                  {lastUpdate.toLocaleTimeString()}
+                </span>
+              )}
+            </button>
+            <a href="/api/export" className="btn-secondary whitespace-nowrap">
+              📥 Export CSV
+            </a>
+          </div>
         </div>
 
         {/* Event Type Filters */}
@@ -637,8 +494,11 @@ export default function Page() {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-24">
                   Change
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-24">
-                  Epoch
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-32">
+                  <div className="flex items-center gap-1.5">
+                    Detected
+                    <span className="text-xs text-gray-500">↓</span>
+                  </div>
                 </th>
               </tr>
             </thead>
@@ -782,7 +642,35 @@ export default function Page() {
                         {it.delta}%
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-gray-400">{it.epoch}</td>
+                    <td className="px-6 py-4">
+                      {it.created_at ? (
+                        <div
+                          className="cursor-help"
+                          title={`${new Date(it.created_at).toLocaleString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                              hour12: true,
+                            }
+                          )} • Epoch ${it.epoch}`}
+                        >
+                          <div className="text-white font-medium">
+                            {getRelativeTime(it.created_at)}
+                          </div>
+                          <div className="text-xs text-gray-500 font-mono">
+                            Epoch {it.epoch}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-mono">
+                          Epoch {it.epoch}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -824,7 +712,7 @@ export default function Page() {
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-3xl">🔔</span>
             <h2 className="text-2xl font-bold text-white">
-              Get Commission Change Alerts
+              Get Commission Alerts
             </h2>
           </div>
           <p className="text-gray-400 text-sm">

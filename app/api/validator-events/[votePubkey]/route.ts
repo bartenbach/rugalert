@@ -42,6 +42,7 @@ export async function GET(
       to_commission: r.get('toCommission'),
       delta: r.get('delta'),
       epoch: r.get('epoch'),
+      created_at: r._rawJson.createdTime,
       name: validator[0]?.get('name') || null,
       icon_url: validator[0]?.get('iconUrl') || null,
     }))
