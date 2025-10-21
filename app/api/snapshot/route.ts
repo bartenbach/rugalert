@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findValidator, tb } from "../../../lib/airtable";
+import { tb } from "../../../lib/airtable";
 
 // ---- raw JSON-RPC helper (works for vote/epoch and jsonParsed GPA) ----
 async function rpc(method: string, params: any[] = []) {
@@ -142,14 +142,56 @@ export async function POST(req: NextRequest) {
       nodePubkey: string;   // identity pubkey
       commission: number;
       activatedStake: number;
-      epochVoteAccount?: boolean;
-      epochCredits?: Array<[number, number, number]>; // [epoch, credits, previousCredits]
-      lastVote?: number;
+      version?: string;      // Validator client version
     }>;
 
     // Track stake and performance metrics
     let stakeRecordsCreated = 0;
     let performanceRecordsCreated = 0;
+    
+    // Get block production data for skip rate calculation (current epoch only)
+    const blockProduction = await rpc("getBlockProduction", [{ epoch }]);
+    const blockProductionData = blockProduction?.value?.byIdentity || {};
+    
+    // PRE-FETCH existing records to avoid timeout from too many sequential calls
+    console.log(`📊 Pre-fetching existing records for ${allVotes.length} validators...`);
+    
+    // Fetch all validators at once
+    const existingValidators = new Map<string, any>();
+    const allValidators: any[] = [];
+    await tb.validators.select({ pageSize: 100 }).eachPage((records, fetchNextPage) => {
+      allValidators.push(...records);
+      fetchNextPage();
+    });
+    allValidators.forEach(v => existingValidators.set(String(v.get('votePubkey')), v));
+    
+    // Fetch existing stake records for this epoch
+    const existingStakeKeys = new Set<string>();
+    await tb.stakeHistory.select({
+      filterByFormula: `{epoch} = ${epoch}`,
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => existingStakeKeys.add(String(r.get('key'))));
+      fetchNextPage();
+    });
+    
+    // Fetch existing performance records for this epoch
+    const existingPerfKeys = new Set<string>();
+    await tb.performanceHistory.select({
+      filterByFormula: `{epoch} = ${epoch}`,
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => existingPerfKeys.add(String(r.get('key'))));
+      fetchNextPage();
+    });
+    
+    console.log(`✅ Pre-fetch complete. Found ${existingValidators.size} validators, ${existingStakeKeys.size} stake records, ${existingPerfKeys.size} perf records`);
+    
+    // Batch arrays for bulk creation
+    const validatorsToCreate: any[] = [];
+    const validatorsToUpdate: {id: string, fields: any}[] = [];
+    const stakeRecordsToCreate: any[] = [];
+    const perfRecordsToCreate: any[] = [];
 
     // 2) jsonParsed GPA over Config program (validatorInfo records)
     const gpa = await rpc("getProgramAccounts", [
@@ -186,84 +228,68 @@ export async function POST(req: NextRequest) {
       const iconUrl = meta.iconUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(v.nodePubkey)}`;
       const website = meta.website;
 
-      // Upsert validator row (write only if we have values to set)
-      const existing = await findValidator(v.votePubkey);
+      // Prepare validator upsert (batch later)
+      const existing = existingValidators.get(v.votePubkey);
       if (existing) {
         const patch: any = {};
         if (existing.get("identityPubkey") !== v.nodePubkey)
           patch.identityPubkey = v.nodePubkey;
         if (chainName) patch.name = chainName;
         if (iconUrl)   patch.iconUrl = iconUrl;
-        if (website)   patch.website = website; // if you added this column
-        if (Object.keys(patch).length) await tb.validators.update(existing.id, patch);
+        if (website)   patch.website = website;
+        if (v.version && existing.get("version") !== v.version) patch.version = v.version;
+        if (Object.keys(patch).length) {
+          validatorsToUpdate.push({ id: existing.id, fields: patch });
+        }
       } else {
-        await tb.validators.create([{
+        validatorsToCreate.push({
           fields: {
             votePubkey: v.votePubkey,
             identityPubkey: v.nodePubkey,
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),
             ...(website   ? { website } : {}),
+            ...(v.version ? { version: v.version } : {}),
           }
-        }]);
+        });
       }
 
       // ---- STAKE HISTORY TRACKING ----
-      // Record active stake for this epoch (idempotent)
       const stakeKey = `${v.votePubkey}-${epoch}`;
-      const existingStake = await tb.stakeHistory
-        .select({ filterByFormula: `{key} = "${stakeKey}"`, maxRecords: 1 })
-        .firstPage();
-      
-      if (!existingStake[0] && v.activatedStake) {
-        await tb.stakeHistory.create([{
+      if (!existingStakeKeys.has(stakeKey) && v.activatedStake !== undefined) {
+        stakeRecordsToCreate.push({
           fields: {
             key: stakeKey,
             votePubkey: v.votePubkey,
             epoch,
-            activeStake: Number(v.activatedStake),
+            activeStake: Number(v.activatedStake || 0),
+            // Note: activatingStake and deactivatingStake require additional RPC calls
           }
-        }]);
-        stakeRecordsCreated++;
+        });
       }
 
       // ---- PERFORMANCE HISTORY TRACKING ----
-      // Calculate skip rate and record performance metrics
-      // Skip rate = (slots_in_epoch - credits_earned) / slots_in_epoch * 100
-      // We can get credits from epochCredits array [epoch, credits, previousCredits]
-      if (v.epochCredits && v.epochCredits.length > 0) {
-        // Get the most recent epoch credits entry
-        const latestCredits = v.epochCredits[v.epochCredits.length - 1];
-        const [creditEpoch, credits, previousCredits] = latestCredits;
-        
-        // Only record if this is for a completed epoch (not current)
-        if (Number(creditEpoch) < epoch) {
-          const perfKey = `${v.votePubkey}-${creditEpoch}`;
-          const existingPerf = await tb.performanceHistory
-            .select({ filterByFormula: `{key} = "${perfKey}"`, maxRecords: 1 })
-            .firstPage();
+      const blockData = blockProductionData[v.nodePubkey];
+      if (blockData) {
+        const perfKey = `${v.votePubkey}-${epoch}`;
+        if (!existingPerfKeys.has(perfKey)) {
+          const leaderSlots = Number(blockData[0] || 0);
+          const blocksProduced = Number(blockData[1] || 0);
           
-          if (!existingPerf[0]) {
-            // Total possible credits per epoch (can change, but currently 6912000)
-            // This is 432,000 slots/epoch * 16 votes per slot = 6,912,000
-            const SLOTS_PER_EPOCH = 432000;
-            const VOTES_PER_SLOT = 16;
-            const MAX_CREDITS = SLOTS_PER_EPOCH * VOTES_PER_SLOT;
-            
-            const earnedCredits = Number(credits) - Number(previousCredits);
-            const skipRate = ((MAX_CREDITS - earnedCredits) / MAX_CREDITS) * 100;
-            
-            await tb.performanceHistory.create([{
-              fields: {
-                key: perfKey,
-                votePubkey: v.votePubkey,
-                epoch: Number(creditEpoch),
-                credits: earnedCredits,
-                skipRate: Math.max(0, Math.min(100, skipRate)), // Clamp between 0-100
-              }
-            }]);
-            performanceRecordsCreated++;
+          let skipRate = 0;
+          if (leaderSlots > 0) {
+            skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
           }
+          
+          perfRecordsToCreate.push({
+            fields: {
+              key: perfKey,
+              votePubkey: v.votePubkey,
+              epoch,
+              skipRate: Math.max(0, Math.min(100, skipRate)),
+              credits: blocksProduced,
+            }
+          });
         }
       }
 
@@ -340,11 +366,44 @@ export async function POST(req: NextRequest) {
           }
         }
       }
-      // If commission didn’t change, we write nothing and (correctly) emit no event.
+      // If commission didn't change, we write nothing and (correctly) emit no event.
     }
 
-    console.log(`📊 Stake records created: ${stakeRecordsCreated}`);
-    console.log(`📊 Performance records created: ${performanceRecordsCreated}`);
+    // BATCH CREATE/UPDATE operations to avoid timeout
+    console.log(`📦 Batching operations: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} validator updates`);
+    console.log(`📦 Batching: ${stakeRecordsToCreate.length} stake records, ${perfRecordsToCreate.length} perf records`);
+    
+    // Airtable allows max 10 records per create/update call, so batch them
+    const batchSize = 10;
+    
+    // Create new validators
+    for (let i = 0; i < validatorsToCreate.length; i += batchSize) {
+      const batch = validatorsToCreate.slice(i, i + batchSize);
+      await tb.validators.create(batch);
+    }
+    
+    // Update existing validators
+    for (let i = 0; i < validatorsToUpdate.length; i += batchSize) {
+      const batch = validatorsToUpdate.slice(i, i + batchSize);
+      await tb.validators.update(batch);
+    }
+    
+    // Create stake records
+    for (let i = 0; i < stakeRecordsToCreate.length; i += batchSize) {
+      const batch = stakeRecordsToCreate.slice(i, i + batchSize);
+      await tb.stakeHistory.create(batch);
+      stakeRecordsCreated += batch.length;
+    }
+    
+    // Create performance records
+    for (let i = 0; i < perfRecordsToCreate.length; i += batchSize) {
+      const batch = perfRecordsToCreate.slice(i, i + batchSize);
+      await tb.performanceHistory.create(batch);
+      performanceRecordsCreated += batch.length;
+    }
+
+    console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
+    console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
     
     return NextResponse.json({ 
       ok: true, 
