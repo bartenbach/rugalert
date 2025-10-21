@@ -87,6 +87,7 @@ export async function GET(
         iconUrl: validator.get('iconUrl'),
         website: validator.get('website'),
         version: validator.get('version'),
+        delinquent: Boolean(validator.get('delinquent')),
       },
       performance: perfData,
       stake: stakeData,

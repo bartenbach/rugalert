@@ -44,6 +44,7 @@ type ValidatorInfo = {
     iconUrl?: string;
     website?: string;
     version?: string;
+    delinquent?: boolean;
   };
   performance: {
     skipRate: number;
@@ -161,9 +162,16 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 <span className="text-4xl">🔷</span>
               </div>
               <div className="flex-1">
-                <h1 className="text-3xl md:text-4xl font-bold gradient-text mb-2">
-                  {meta?.name || "Unknown Validator"}
-                </h1>
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="text-3xl md:text-4xl font-bold gradient-text">
+                    {meta?.name || "Unknown Validator"}
+                  </h1>
+                  {validatorInfo?.validator?.delinquent && (
+                    <span className="px-3 py-1 bg-red-500/20 border-2 border-red-500 rounded-lg text-sm font-bold text-red-400 whitespace-nowrap animate-pulse">
+                      🚨 DELINQUENT
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 text-gray-400 text-sm font-mono bg-white/5 rounded-lg px-4 py-2 inline-block border border-white/10">
                   <span className="text-gray-400">📋</span>
                   <span>{params.votePubkey}</span>

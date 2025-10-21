@@ -15,6 +15,7 @@ type Validator = {
   lastVote: number | null;
   version: string | null;
   skipRate: number | null;
+  delinquent: boolean;
   rank: number;
 };
 
@@ -234,8 +235,15 @@ export default function ValidatorsPage() {
                             <span className="text-lg">🔷</span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-white group-hover:text-orange-400 transition-colors truncate">
-                              {validator.name || validator.votePubkey}
+                            <div className="flex items-center gap-2">
+                              <div className="font-semibold text-white group-hover:text-orange-400 transition-colors truncate">
+                                {validator.name || validator.votePubkey}
+                              </div>
+                              {validator.delinquent && (
+                                <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-xs font-bold text-red-400 whitespace-nowrap">
+                                  DELINQUENT
+                                </span>
+                              )}
                             </div>
                             {validator.version && (
                               <div className="text-xs text-gray-500 font-mono">

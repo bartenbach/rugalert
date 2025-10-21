@@ -8,6 +8,7 @@ const base = new Airtable({
 
 const VALIDATORS_TABLE = "validators";
 const STAKE_HISTORY_TABLE = "stake_history";
+const SNAPSHOTS_TABLE = "snapshots";
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,9 +36,32 @@ export async function GET(request: NextRequest) {
             identityPubkey: record.fields.identityPubkey,
             name: record.fields.name || null,
             iconUrl: record.fields.iconUrl || null,
-            commission: record.fields.commission || 0,
             version: record.fields.version || null,
+            delinquent: Boolean(record.fields.delinquent),
+            commission: 0, // Will be filled from snapshots
           });
+        });
+        fetchNextPage();
+      });
+
+    // Fetch latest commission from snapshots
+    // Instead of filtering by exact epoch, get the most recent snapshot for each validator
+    const commissionMap = new Map<string, { commission: number; epoch: number }>();
+    await base(SNAPSHOTS_TABLE)
+      .select({
+        pageSize: 100,
+        sort: [{ field: 'epoch', direction: 'desc' }],
+      })
+      .eachPage((pageRecords, fetchNextPage) => {
+        pageRecords.forEach((record) => {
+          const votePubkey = record.fields.votePubkey as string;
+          const commission = Number(record.fields.commission || 0);
+          const epoch = Number(record.fields.epoch || 0);
+          
+          // Keep only the most recent snapshot for each validator
+          if (!commissionMap.has(votePubkey) || (commissionMap.get(votePubkey)!.epoch < epoch)) {
+            commissionMap.set(votePubkey, { commission, epoch });
+          }
         });
         fetchNextPage();
       });
@@ -54,15 +78,17 @@ export async function GET(request: NextRequest) {
         fetchNextPage();
       });
 
-    // Merge validators with their stake data
+    // Merge validators with their stake and commission data
     const validatorsWithStake: any[] = [];
     stakeRecords.forEach((stakeRecord) => {
       const votePubkey = stakeRecord.fields.votePubkey as string;
       const validator = validatorsMap.get(votePubkey);
       
       if (validator) {
+        const commissionData = commissionMap.get(votePubkey);
         validatorsWithStake.push({
           ...validator,
+          commission: commissionData?.commission || 0,
           activeStake: Number(stakeRecord.fields.activeStake || 0),
           activatingStake: Number(stakeRecord.fields.activatingStake || 0),
           deactivatingStake: Number(stakeRecord.fields.deactivatingStake || 0),
@@ -95,6 +121,7 @@ export async function GET(request: NextRequest) {
         stakePercent: totalStake > 0 ? (validator.activeStake / totalStake) * 100 : 0,
         cumulativeStakePercent: totalStake > 0 ? (cumulativeStake / totalStake) * 100 : 0,
         version: validator.version,
+        delinquent: validator.delinquent,
         rank: index + 1,
       };
     });

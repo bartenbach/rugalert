@@ -138,6 +138,13 @@ export async function POST(req: NextRequest) {
     ]);
     const epoch = Number(epochInfo.epoch);
     const slot = Number(epochInfo.absoluteSlot);
+    
+    // Track which validators are delinquent
+    const delinquentSet = new Set<string>();
+    votes.delinquent.forEach((v: any) => {
+      delinquentSet.add(v.votePubkey);
+    });
+    
     const allVotes = [...votes.current, ...votes.delinquent] as Array<{
       votePubkey: string;
       nodePubkey: string;   // identity pubkey
@@ -329,6 +336,9 @@ export async function POST(req: NextRequest) {
       const website = meta.website;
       const version = versionMap.get(v.nodePubkey);
 
+      // Check if validator is delinquent
+      const isDelinquent = delinquentSet.has(v.votePubkey);
+      
       // Prepare validator upsert (batch later)
       const existing = existingValidators.get(v.votePubkey);
       if (existing) {
@@ -339,6 +349,8 @@ export async function POST(req: NextRequest) {
         if (iconUrl)   patch.iconUrl = iconUrl;
         if (website)   patch.website = website;
         if (version && existing.get("version") !== version) patch.version = version;
+        // Update delinquent status (changes frequently)
+        patch.delinquent = isDelinquent;
         if (Object.keys(patch).length) {
           validatorsToUpdate.push({ id: existing.id, fields: patch });
         }
@@ -347,6 +359,7 @@ export async function POST(req: NextRequest) {
           fields: {
             votePubkey: v.votePubkey,
             identityPubkey: v.nodePubkey,
+            delinquent: isDelinquent,
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),
             ...(website   ? { website } : {}),
