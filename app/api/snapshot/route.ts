@@ -180,6 +180,7 @@ export async function POST(req: NextRequest) {
     // WARNING: This can be very expensive on mainnet (millions of accounts)
     // Set ENABLE_STAKE_TRACKING=false to disable if causing timeouts
     let stakeByVoter = new Map<string, { activating: number; deactivating: number }>();
+    let stakeAccountCounts = new Map<string, number>(); // Count of stake accounts per validator
     const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
     
     if (enableStakeTracking) {
@@ -216,7 +217,7 @@ export async function POST(req: NextRequest) {
         
         console.log(`📊 Processing ${allStakeAccounts.length} stake accounts from ${pageCount} pages...`);
         
-        // Group stake by voter pubkey
+        // Group stake by voter pubkey and count accounts
         for (const account of allStakeAccounts as any[]) {
           const stakeData = account?.account?.data?.parsed?.info?.stake;
           if (stakeData?.delegation) {
@@ -225,6 +226,11 @@ export async function POST(req: NextRequest) {
             const activationEpoch = Number(delegation.activationEpoch || 0);
             const deactivationEpoch = Number(delegation.deactivationEpoch || Number.MAX_SAFE_INTEGER);
             const stake = Number(delegation.stake || 0);
+            
+            // Count stake accounts per validator (only if stake > 0)
+            if (stake > 0) {
+              stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
+            }
             
             if (!stakeByVoter.has(voter)) {
               stakeByVoter.set(voter, { activating: 0, deactivating: 0 });
@@ -244,6 +250,7 @@ export async function POST(req: NextRequest) {
           }
         }
         console.log(`✅ Processed stake accounts for ${stakeByVoter.size} voters`);
+        console.log(`✅ Counted ${stakeAccountCounts.size} validators with active stake accounts`);
       } catch (e) {
         console.log(`⚠️ Could not fetch stake accounts (continuing without activating/deactivating data):`, e);
       }
@@ -415,6 +422,8 @@ export async function POST(req: NextRequest) {
       
       // Prepare validator upsert (batch later)
       const existing = existingValidators.get(v.votePubkey);
+      const accountCount = stakeAccountCounts.get(v.votePubkey) || 0;
+      
       if (existing) {
         const patch: any = {};
         if (existing.get("identityPubkey") !== v.nodePubkey)
@@ -429,6 +438,8 @@ export async function POST(req: NextRequest) {
         patch.activeStake = Number(v.activatedStake || 0);
         // Update Jito status
         patch.jitoEnabled = isJitoEnabled;
+        // Update stake account count
+        patch.stakeAccountCount = accountCount;
         if (Object.keys(patch).length) {
           validatorsToUpdate.push({ id: existing.id, fields: patch });
         }
@@ -440,6 +451,7 @@ export async function POST(req: NextRequest) {
             delinquent: isDelinquent,
             activeStake: Number(v.activatedStake || 0),
             jitoEnabled: isJitoEnabled,
+            stakeAccountCount: accountCount,
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),
             ...(website   ? { website } : {}),

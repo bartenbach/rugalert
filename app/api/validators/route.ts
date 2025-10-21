@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
     const validatorsMap = new Map<string, any>();
     await base(VALIDATORS_TABLE)
       .select({
-        fields: ['votePubkey', 'identityPubkey', 'name', 'iconUrl', 'version'],
+        fields: ['votePubkey', 'identityPubkey', 'name', 'iconUrl', 'version', 'stakeAccountCount'],
         pageSize: 100,
       })
       .eachPage((pageRecords, fetchNextPage) => {
@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
             name: record.fields.name || null,
             iconUrl: record.fields.iconUrl || null,
             version: record.fields.version || null,
+            stakeAccountCount: Number(record.fields.stakeAccountCount || 0),
             commission: 0, // Will be filled from snapshots
             // Delinquent status will be set from real-time RPC data below
           });
@@ -113,6 +114,9 @@ export async function GET(request: NextRequest) {
         fetchNextPage();
       });
 
+    // Note: Stake account counts are now populated by the snapshot job
+    // and cached in the validators table for performance
+
     // Merge ALL validators with their stake and commission data
     // Use stake_history if available, otherwise fall back to RPC stake data
     const validatorsWithStake: any[] = [];
@@ -140,6 +144,7 @@ export async function GET(request: NextRequest) {
           deactivatingStake: stakeRecord ? Number(stakeRecord.fields.deactivatingStake || 0) : 0,
           // Override delinquent status with real-time RPC data
           delinquent: delinquentSet.has(votePubkey),
+          // stakeAccountCount comes from validator object (cached in DB)
         });
       }
     });
@@ -160,6 +165,7 @@ export async function GET(request: NextRequest) {
           activatingStake: 0,
           deactivatingStake: 0,
           delinquent: delinquentSet.has(votePubkey),
+          stakeAccountCount: 0, // Will be populated by snapshot job
         });
       }
     });
@@ -191,6 +197,7 @@ export async function GET(request: NextRequest) {
         version: validator.version,
         delinquent: validator.delinquent,
         rank: index + 1,
+        stakeAccountCount: validator.stakeAccountCount,
       };
     });
 

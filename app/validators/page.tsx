@@ -17,6 +17,7 @@ type Validator = {
   skipRate: number | null;
   delinquent: boolean;
   rank: number;
+  stakeAccountCount: number;
 };
 
 type NetworkStats = {
@@ -193,7 +194,7 @@ export default function ValidatorsPage() {
       <div className="glass rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-white/5 border-b border-white/10">
+            <thead className="bg-[#0a0a0a]/95 backdrop-blur-sm border-b border-white/10 sticky top-0 z-10 shadow-lg">
               <tr>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-16">
                   #
@@ -233,109 +234,166 @@ export default function ValidatorsPage() {
                 </tr>
               ) : (
                 <>
-                  {displayedValidators.map((validator) => (
-                    <tr
-                      key={validator.votePubkey}
-                      onClick={() =>
-                        (window.location.href = `/validator/${validator.votePubkey}`)
-                      }
-                      className={`transition-colors duration-200 cursor-pointer group ${
-                        validator.delinquent
-                          ? "bg-red-500/10 hover:bg-red-500/20 border-l-4 border-red-500"
-                          : "hover:bg-white/5"
-                      }`}
-                    >
-                      <td className="px-6 py-4">
-                        <span className="text-gray-400 font-mono text-sm">
-                          {validator.rank}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          {validator.iconUrl ? (
-                            <>
-                              <img
-                                src={validator.iconUrl}
-                                alt={validator.name || "Validator"}
-                                loading="lazy"
-                                className="w-10 h-10 rounded-xl object-cover border border-white/10 group-hover:border-orange-400 transition-colors"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  e.currentTarget.nextElementSibling?.classList.remove(
-                                    "hidden"
-                                  );
-                                }}
-                              />
-                              <div className="hidden w-10 h-10 rounded-xl border border-white/10 group-hover:border-orange-400 transition-colors"></div>
-                            </>
-                          ) : (
-                            <div className="w-10 h-10 rounded-xl border border-white/10 group-hover:border-orange-400 transition-colors"></div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="font-semibold text-white group-hover:text-orange-400 transition-colors truncate">
-                                {validator.name || validator.votePubkey}
+                  {displayedValidators.map((validator, index) => {
+                    // Check if we need to insert Nakamoto coefficient divider
+                    const previousValidator =
+                      index > 0 ? displayedValidators[index - 1] : null;
+                    const showNakamotoDivider =
+                      previousValidator &&
+                      previousValidator.cumulativeStakePercent < 33.33 &&
+                      validator.cumulativeStakePercent >= 33.33;
+
+                    return (
+                      <>
+                        {showNakamotoDivider && (
+                          <tr key={`nakamoto-${validator.votePubkey}`}>
+                            <td colSpan={5} className="px-0 py-0">
+                              <div className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50">
+                                <div className="px-6 py-4 flex items-center justify-center gap-3">
+                                  <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
+                                  <div className="text-center">
+                                    <div className="text-cyan-400 font-bold text-sm uppercase tracking-wider">
+                                      ⚠️ Nakamoto Coefficient Threshold
+                                    </div>
+                                    <div className="text-xs text-cyan-300/80 mt-1">
+                                      Cumulative stake above forms a
+                                      superminority - Threat of halt (outside
+                                      attack) or censorship (inside collusion)
+                                    </div>
+                                    <div className="text-xs text-cyan-400/60 mt-1 font-semibold">
+                                      Please consider staking below this line to
+                                      help decentralize the network
+                                    </div>
+                                  </div>
+                                  <div className="flex-1 h-px bg-gradient-to-r from-cyan-400 via-cyan-400 to-transparent"></div>
+                                </div>
                               </div>
-                              {validator.delinquent && (
-                                <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-xs font-bold text-red-400 whitespace-nowrap">
-                                  DELINQUENT
-                                </span>
-                              )}
-                            </div>
-                            {validator.version && (
-                              <div className="text-xs text-gray-500 font-mono">
-                                v{validator.version}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 w-48">
-                        <div>
-                          <div className="text-white font-semibold whitespace-nowrap">
-                            {validator.activeStake.toLocaleString(undefined, {
-                              maximumFractionDigits: 0,
-                            })}{" "}
-                            SOL
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {validator.stakePercent.toFixed(2)}%
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
-                              style={{
-                                width: `${Math.min(
-                                  validator.cumulativeStakePercent,
-                                  100
-                                )}%`,
-                              }}
-                            ></div>
-                          </div>
-                          <span className="text-sm text-gray-400 font-mono w-12 text-right">
-                            {validator.cumulativeStakePercent.toFixed(1)}%
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`text-sm font-semibold ${
-                            validator.commission >= 90
-                              ? "text-red-400"
-                              : validator.commission >= 10
-                              ? "text-yellow-400"
-                              : "text-green-400"
+                            </td>
+                          </tr>
+                        )}
+                        <tr
+                          key={validator.votePubkey}
+                          onClick={() =>
+                            (window.location.href = `/validator/${validator.votePubkey}`)
+                          }
+                          className={`transition-all duration-200 cursor-pointer group border-b border-white/5 ${
+                            validator.delinquent
+                              ? "bg-red-500/10 hover:bg-red-500/20 border-l-4 border-red-500"
+                              : "hover:bg-white/5 hover:shadow-lg hover:shadow-orange-500/5 hover:scale-[1.01]"
                           }`}
                         >
-                          {validator.commission}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 group-hover:border-orange-400/50 transition-all">
+                              <span className="text-gray-300 font-bold text-sm">
+                                {validator.rank}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              {validator.iconUrl ? (
+                                <>
+                                  <img
+                                    src={validator.iconUrl}
+                                    alt={validator.name || "Validator"}
+                                    loading="lazy"
+                                    className="w-10 h-10 rounded-xl object-cover border border-white/10 group-hover:border-orange-400 transition-all shadow-lg group-hover:shadow-orange-500/20 group-hover:scale-110"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                      e.currentTarget.nextElementSibling?.classList.remove(
+                                        "hidden"
+                                      );
+                                    }}
+                                  />
+                                  <div className="hidden w-10 h-10 rounded-xl border border-white/10 group-hover:border-orange-400 transition-colors"></div>
+                                </>
+                              ) : (
+                                <div className="w-10 h-10 rounded-xl border border-white/10 group-hover:border-orange-400 transition-colors"></div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <div className="font-semibold text-white group-hover:text-orange-400 transition-colors truncate">
+                                    {validator.name || validator.votePubkey}
+                                  </div>
+                                  {validator.delinquent && (
+                                    <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-xs font-bold text-red-400 whitespace-nowrap">
+                                      DELINQUENT
+                                    </span>
+                                  )}
+                                </div>
+                                {validator.version && (
+                                  <div className="text-xs text-gray-500 font-mono">
+                                    v{validator.version}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 w-48">
+                            <div>
+                              <div className="text-white font-bold text-lg whitespace-nowrap group-hover:text-orange-400 transition-colors">
+                                {validator.activeStake.toLocaleString(
+                                  undefined,
+                                  {
+                                    maximumFractionDigits: 0,
+                                  }
+                                )}{" "}
+                                <span className="text-base text-gray-400">
+                                  SOL
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500 flex items-center gap-2">
+                                <span>
+                                  {validator.stakePercent.toFixed(2)}% of
+                                  network
+                                </span>
+                                {validator.stakeAccountCount > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span>
+                                      {validator.stakeAccountCount.toLocaleString()}{" "}
+                                      accounts
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
+                                  style={{
+                                    width: `${Math.min(
+                                      validator.cumulativeStakePercent,
+                                      100
+                                    )}%`,
+                                  }}
+                                ></div>
+                              </div>
+                              <span className="text-sm text-gray-400 font-mono w-12 text-right">
+                                {validator.cumulativeStakePercent.toFixed(1)}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`text-sm font-semibold ${
+                                validator.commission >= 90
+                                  ? "text-red-400"
+                                  : validator.commission >= 10
+                                  ? "text-yellow-400"
+                                  : "text-green-400"
+                              }`}
+                            >
+                              {validator.commission}%
+                            </span>
+                          </td>
+                        </tr>
+                      </>
+                    );
+                  })}
 
                   {/* Scroll sentinel for infinite scroll */}
                   {displayCount < allValidators.length && (
