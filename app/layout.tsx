@@ -74,6 +74,12 @@ export default function RootLayout({
                 Dashboard
               </a>
               <a
+                href="/validators"
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-orange-500/20 hover:text-orange-400 transition-all duration-300"
+              >
+                Validators
+              </a>
+              <a
                 href="/history"
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-orange-500/20 hover:text-orange-400 transition-all duration-300"
               >
