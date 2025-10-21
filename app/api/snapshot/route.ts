@@ -183,19 +183,38 @@ export async function POST(req: NextRequest) {
     const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
     
     if (enableStakeTracking) {
-      console.log(`📊 Fetching all stake accounts (this may take a while)...`);
+      console.log(`📊 Fetching all stake accounts with pagination (this may take a while)...`);
       try {
-        const allStakeAccounts = await rpc("getProgramAccounts", [
-          "Stake11111111111111111111111111111111111111",
-          {
-            encoding: "jsonParsed",
-            filters: [
-              { dataSize: 200 }, // Stake account data size
-            ],
-          },
-        ]);
+        // Use Helius getProgramAccountsV2 with pagination
+        const allStakeAccounts: any[] = [];
+        let paginationKey: string | null = null;
+        let pageCount = 0;
         
-        console.log(`📊 Processing ${allStakeAccounts.length} stake accounts...`);
+        do {
+          pageCount++;
+          const params: any = {
+            encoding: "jsonParsed",
+            filters: [{ dataSize: 200 }],
+            limit: 5000, // Helius recommends 1000-5000
+          };
+          
+          if (paginationKey) {
+            params.paginationKey = paginationKey;
+          }
+          
+          const response = await rpc("getProgramAccountsV2", [
+            "Stake11111111111111111111111111111111111111",
+            params,
+          ]);
+          
+          const accounts = response.accounts || [];
+          allStakeAccounts.push(...accounts);
+          paginationKey = response.paginationKey || null;
+          
+          console.log(`  Fetched page ${pageCount}: ${accounts.length} accounts (total: ${allStakeAccounts.length})`);
+        } while (paginationKey);
+        
+        console.log(`📊 Processing ${allStakeAccounts.length} stake accounts from ${pageCount} pages...`);
         
         // Group stake by voter pubkey
         for (const account of allStakeAccounts as any[]) {
@@ -261,10 +280,19 @@ export async function POST(req: NextRequest) {
               if (voteCreditsMap.size <= 3) {
                 console.log(`  Sample: ${v.votePubkey.substring(0, 8)}... epoch ${epoch} credits: ${credits}`);
               }
+            } else if (voteCreditsMap.size === 0) {
+              // Debug why we're not finding credits
+              console.log(`  No credits found for ${v.votePubkey.substring(0, 8)}...`);
+              console.log(`  Looking for epoch ${epoch}, available epochs:`, epochCreditsArray.slice(0, 3).map((e: any) => e[0]));
             }
+          } else if (voteCreditsMap.size === 0) {
+            console.log(`  No epochCredits array for ${v.votePubkey.substring(0, 8)}...`);
           }
         } catch (e) {
-          // Silently skip validators we can't fetch credits for
+          // Log errors for first validator to help debug
+          if (voteCreditsMap.size === 0) {
+            console.log(`  Error fetching credits for ${v.votePubkey.substring(0, 8)}...:`, e);
+          }
         }
       });
       
