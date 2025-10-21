@@ -253,26 +253,24 @@ export default function ValidatorsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           {validator.iconUrl ? (
-                            <img
-                              src={validator.iconUrl}
-                              alt={validator.name || "Validator"}
-                              loading="lazy"
-                              className="w-10 h-10 rounded-xl object-cover border border-white/10 group-hover:border-orange-400 transition-colors"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                                e.currentTarget.nextElementSibling?.classList.remove(
-                                  "hidden"
-                                );
-                              }}
-                            />
-                          ) : null}
-                          <div
-                            className={`w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-500/30 border border-white/10 group-hover:border-orange-400 flex items-center justify-center transition-colors ${
-                              validator.iconUrl ? "hidden" : ""
-                            }`}
-                          >
-                            <span className="text-lg">🔷</span>
-                          </div>
+                            <>
+                              <img
+                                src={validator.iconUrl}
+                                alt={validator.name || "Validator"}
+                                loading="lazy"
+                                className="w-10 h-10 rounded-xl object-cover border border-white/10 group-hover:border-orange-400 transition-colors"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  e.currentTarget.nextElementSibling?.classList.remove(
+                                    "hidden"
+                                  );
+                                }}
+                              />
+                              <div className="hidden w-10 h-10 rounded-xl border border-white/10 group-hover:border-orange-400 transition-colors"></div>
+                            </>
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl border border-white/10 group-hover:border-orange-400 transition-colors"></div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <div className="font-semibold text-white group-hover:text-orange-400 transition-colors truncate">
