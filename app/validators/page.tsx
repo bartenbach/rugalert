@@ -29,31 +29,30 @@ type NetworkStats = {
 };
 
 export default function ValidatorsPage() {
-  const [validators, setValidators] = useState<Validator[]>([]);
+  const [allValidators, setAllValidators] = useState<Validator[]>([]); // All validators loaded once
+  const [displayedValidators, setDisplayedValidators] = useState<Validator[]>(
+    []
+  ); // Currently displayed
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalValidators, setTotalValidators] = useState(0);
   const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [displayCount, setDisplayCount] = useState(200); // How many to show
 
   const observerTarget = useRef<HTMLDivElement>(null);
-  const currentPageRef = useRef(1); // Track page synchronously
+  const PAGE_SIZE = 200;
 
-  // Initial load
+  // Initial load - fetch ALL validators at once
   const loadValidators = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/validators?page=1&pageSize=50");
+      // Fetch all validators in one go (no pagination on server side)
+      const res = await fetch("/api/validators");
       const data = await res.json();
 
       if (res.ok) {
-        setValidators(data.validators);
-        setCurrentPage(1);
-        currentPageRef.current = 1;
-        setHasMore(data.hasMore);
-        setTotalValidators(data.total);
+        setAllValidators(data.validators);
+        setDisplayedValidators(data.validators.slice(0, PAGE_SIZE));
+        setDisplayCount(PAGE_SIZE);
         setNetworkStats(data.networkStats || null);
       } else {
         setError(data.error || "Failed to load validators");
@@ -66,45 +65,20 @@ export default function ValidatorsPage() {
     }
   };
 
-  // Load more validators
-  const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore) return;
-
-    // Use ref to get synchronous access and avoid race conditions
-    const nextPage = currentPageRef.current + 1;
-
-    try {
-      setLoadingMore(true);
-      currentPageRef.current = nextPage;
-      setCurrentPage(nextPage);
-
-      const res = await fetch(`/api/validators?page=${nextPage}&pageSize=50`);
-      const data = await res.json();
-
-      if (res.ok) {
-        setValidators((prev) => [...prev, ...data.validators]);
-        setHasMore(data.hasMore);
-      } else {
-        // Rollback page increment on error
-        currentPageRef.current = nextPage - 1;
-        setCurrentPage(nextPage - 1);
-        console.error("Failed to load validators:", data.error);
-      }
-    } catch (err) {
-      console.error("Error loading more validators:", err);
-      // Rollback page increment on error
-      currentPageRef.current = nextPage - 1;
-      setCurrentPage(nextPage - 1);
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [hasMore, loadingMore]);
+  // Load more validators from the already-fetched list
+  const loadMore = useCallback(() => {
+    const nextCount = displayCount + PAGE_SIZE;
+    setDisplayedValidators(allValidators.slice(0, nextCount));
+    setDisplayCount(nextCount);
+  }, [allValidators, displayCount, PAGE_SIZE]);
 
   // Intersection observer for infinite scroll
   useEffect(() => {
+    const hasMore = displayCount < allValidators.length;
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+        if (entries[0].isIntersecting && hasMore) {
           loadMore();
         }
       },
@@ -121,7 +95,7 @@ export default function ValidatorsPage() {
         observer.unobserve(currentTarget);
       }
     };
-  }, [hasMore, loadingMore, loadMore]);
+  }, [displayCount, allValidators.length, loadMore]);
 
   useEffect(() => {
     loadValidators();
@@ -250,7 +224,7 @@ export default function ValidatorsPage() {
                     </div>
                   </td>
                 </tr>
-              ) : validators.length === 0 ? (
+              ) : displayedValidators.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="text-4xl mb-2">🔍</div>
@@ -259,7 +233,7 @@ export default function ValidatorsPage() {
                 </tr>
               ) : (
                 <>
-                  {validators.map((validator) => (
+                  {displayedValidators.map((validator) => (
                     <tr
                       key={validator.votePubkey}
                       onClick={() =>
@@ -365,8 +339,8 @@ export default function ValidatorsPage() {
                     </tr>
                   ))}
 
-                  {/* Loading more indicator */}
-                  {loadingMore && (
+                  {/* Scroll sentinel for infinite scroll */}
+                  {displayCount < allValidators.length && (
                     <tr>
                       <td colSpan={5} className="px-6 py-8 text-center">
                         <div className="flex items-center justify-center gap-3">
@@ -389,13 +363,15 @@ export default function ValidatorsPage() {
       </div>
 
       {/* End message */}
-      {!loading && !hasMore && validators.length > 0 && (
-        <div className="text-center py-8">
-          <div className="text-gray-500 text-sm">
-            Showing all {totalValidators} validators
+      {!loading &&
+        displayCount >= allValidators.length &&
+        allValidators.length > 0 && (
+          <div className="text-center py-8">
+            <div className="text-gray-500 text-sm">
+              Showing all {allValidators.length} validators
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }

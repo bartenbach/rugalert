@@ -15,8 +15,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const pageSize = parseInt(searchParams.get("pageSize") || "100");
+    const page = parseInt(searchParams.get("page") || "0");
+    const pageSize = parseInt(searchParams.get("pageSize") || "0");
 
     // Get current epoch and vote accounts for total stake
     const rpcUrl = process.env.SOLANA_RPC_URL || clusterApiUrl("mainnet-beta");
@@ -194,11 +194,16 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Paginate on our side
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const validators = allValidators.slice(startIndex, endIndex);
-    const hasMore = endIndex < allValidators.length;
+    // Paginate on our side (if page/pageSize are provided)
+    let validators = allValidators;
+    let hasMore = false;
+    
+    if (page > 0 && pageSize > 0) {
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      validators = allValidators.slice(startIndex, endIndex);
+      hasMore = endIndex < allValidators.length;
+    }
 
     return NextResponse.json({
       validators,
