@@ -10,6 +10,8 @@ const VALIDATORS_TABLE = "validators";
 const STAKE_HISTORY_TABLE = "stake_history";
 const SNAPSHOTS_TABLE = "snapshots";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
