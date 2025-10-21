@@ -35,6 +35,13 @@ function getRelativeTime(timestamp: string): string {
   return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+type ValidatorSearchResult = {
+  votePubkey: string;
+  name: string;
+  iconUrl?: string;
+  identityPubkey: string;
+};
+
 export default function Page() {
   const [epochs, setEpochs] = useState<number>(10);
   const [items, setItems] = useState<Row[]>([]);
@@ -57,8 +64,17 @@ export default function Page() {
   const [sirenActive, setSirenActive] = useState(false);
   const [newRugDetected, setNewRugDetected] = useState<Row | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  // Validator search state (integrated with main search)
+  const [searchResults, setSearchResults] = useState<ValidatorSearchResult[]>(
+    []
+  );
+  const [searching, setSearching] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
   const previousRugsRef = useRef<Set<string>>(new Set());
   const sirenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   async function load(isAutoRefresh = false) {
     if (!isAutoRefresh) setLoading(true);
@@ -141,6 +157,45 @@ export default function Page() {
       setSubscribing(false);
     }
   }
+
+  // Validator search with debounce (using existing "q" search)
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (q.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    setSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/search-validators?q=${encodeURIComponent(q)}`
+        );
+        const data = await res.json();
+        setSearchResults(data.results || []);
+        // Only show dropdown if we have results
+        if (data.results && data.results.length > 0) {
+          setShowSearchResults(true);
+        }
+      } catch (error) {
+        console.error("Search failed:", error);
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [q]);
 
   // Initial load and reload when filters change
   useEffect(() => {
@@ -361,15 +416,73 @@ export default function Page() {
             </div>
             <div className="relative flex-1 min-w-[300px]">
               <span className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none text-base">
-                🔍
+                {searching ? (
+                  <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <>🔍</>
+                )}
               </span>
               <input
                 placeholder="Search validator name or pubkey..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
+                onFocus={() =>
+                  searchResults.length > 0 && setShowSearchResults(true)
+                }
                 className="input-modern w-full bg-white/5 text-white pl-11"
                 style={{ paddingLeft: "2.75rem" }}
               />
+
+              {/* Validator Search Results Dropdown */}
+              {showSearchResults && searchResults.length > 0 && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[100]"
+                    onClick={() => setShowSearchResults(false)}
+                  />
+                  <div className="absolute top-full left-0 right-0 mt-2 glass rounded-xl border border-orange-500/30 overflow-hidden z-[101] max-h-96 overflow-y-auto shadow-2xl bg-[#1a1a1a]/95 backdrop-blur-xl">
+                    <div className="p-3 border-b border-orange-500/20 bg-orange-500/10">
+                      <span className="text-xs text-orange-400 font-semibold px-2">
+                        🔍 Validators matching "{q}"
+                      </span>
+                    </div>
+                    {searchResults.map((result) => (
+                      <a
+                        key={result.votePubkey}
+                        href={`/validator/${result.votePubkey}`}
+                        className="flex items-center gap-3 p-4 hover:bg-orange-500/10 transition-colors border-b border-white/5 last:border-0 group"
+                        onClick={() => {
+                          setShowSearchResults(false);
+                          setQ("");
+                        }}
+                      >
+                        {result.iconUrl ? (
+                          <img
+                            src={result.iconUrl}
+                            alt={result.name}
+                            className="w-10 h-10 rounded-lg border-2 border-white/10 group-hover:border-orange-500/50 transition-colors"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center border-2 border-white/10 group-hover:border-orange-500/50 transition-colors">
+                            <span className="text-lg">🔷</span>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white text-sm font-semibold truncate group-hover:text-orange-400 transition-colors">
+                            {result.name}
+                          </div>
+                          <div className="text-xs text-gray-400 font-mono truncate">
+                            {result.votePubkey}
+                          </div>
+                        </div>
+                        <span className="text-gray-500 group-hover:text-orange-400 transition-colors">
+                          →
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-4">

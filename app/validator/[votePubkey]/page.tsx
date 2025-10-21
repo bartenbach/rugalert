@@ -1,5 +1,6 @@
 "use client";
 import CommissionChart from "@/components/CommissionChart";
+import StakeChart from "@/components/StakeChart";
 import { useEffect, useState } from "react";
 
 type Event = {
@@ -35,12 +36,49 @@ function getRelativeTime(timestamp: string): string {
   return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+type ValidatorInfo = {
+  validator: {
+    votePubkey: string;
+    identityPubkey: string;
+    name?: string;
+    iconUrl?: string;
+    website?: string;
+    version?: string;
+  };
+  performance: {
+    skipRate: number;
+    voteCredits: number;
+    voteCreditsPercentage: number;
+    slotsElapsed: number;
+    maxPossibleCredits: number;
+    epoch: number;
+  } | null;
+  stake: {
+    activeStake: number;
+    activatingStake: number;
+    deactivatingStake: number;
+    epoch: number;
+  } | null;
+  currentEpoch: number;
+};
+
+type StakeHistory = {
+  epoch: number;
+  activeStake: number;
+  activatingStake?: number;
+  deactivatingStake?: number;
+};
+
 export default function Detail({ params }: { params: { votePubkey: string } }) {
   const [series, setSeries] = useState<{ epoch: number; commission: number }[]>(
     []
   );
+  const [stakeHistory, setStakeHistory] = useState<StakeHistory[]>([]);
   const [meta, setMeta] = useState<any>(null);
   const [events, setEvents] = useState<Event[]>([]);
+  const [validatorInfo, setValidatorInfo] = useState<ValidatorInfo | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,6 +93,12 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       const e = await fetch(`/api/validator-events/${params.votePubkey}`);
       const ej = await e.json();
       setEvents(ej.items || []);
+      const i = await fetch(`/api/validator-info/${params.votePubkey}`);
+      const ij = await i.json();
+      setValidatorInfo(ij.error ? null : ij);
+      const sh = await fetch(`/api/stake-history/${params.votePubkey}`);
+      const shj = await sh.json();
+      setStakeHistory(shj.history || []);
       setLoading(false);
     })();
   }, [params.votePubkey]);
@@ -138,7 +182,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             </div>
           </div>
 
-          {/* Stats Grid */}
+          {/* Stats Grid - Commission History */}
           {series.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="glass rounded-2xl p-6 border border-white/10 shadow-sm card-shine hover:shadow-md hover:border-green-500/30 transition-all duration-300">
@@ -146,7 +190,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
                     <span>📉</span>
                   </div>
-                  <div className="text-sm text-gray-400">Minimum</div>
+                  <div className="text-sm text-gray-400">
+                    Minimum Commission
+                  </div>
                 </div>
                 <div className="text-3xl font-bold text-green-400">
                   {minCommission}%
@@ -158,7 +204,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
                     <span>📊</span>
                   </div>
-                  <div className="text-sm text-gray-400">Average</div>
+                  <div className="text-sm text-gray-400">
+                    Average Commission
+                  </div>
                 </div>
                 <div className="text-3xl font-bold text-blue-400">
                   {avgCommission}%
@@ -170,7 +218,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
                     <span>📈</span>
                   </div>
-                  <div className="text-sm text-gray-400">Maximum</div>
+                  <div className="text-sm text-gray-400">
+                    Maximum Commission
+                  </div>
                 </div>
                 <div className="text-3xl font-bold text-red-400">
                   {maxCommission}%
@@ -179,7 +229,145 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             </div>
           )}
 
-          {/* Chart */}
+          {/* Validator Info - Performance & Stake */}
+          {validatorInfo && (
+            <div className="glass rounded-2xl p-8 border border-white/10 shadow-sm">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Current Performance & Stake
+                </h2>
+                <p className="text-gray-400 text-sm">
+                  Real-time validator metrics for Epoch{" "}
+                  {validatorInfo.currentEpoch}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Software Version */}
+                <div className="bg-white/5 rounded-xl p-5 border border-white/10 hover:border-purple-500/30 transition-all">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm">
+                      🔧
+                    </div>
+                    <div className="text-xs text-gray-400 font-medium">
+                      Software Version
+                    </div>
+                  </div>
+                  <div className="text-2xl font-bold text-purple-400 font-mono">
+                    {validatorInfo.validator.version || "Unknown"}
+                  </div>
+                </div>
+
+                {/* Skip Rate */}
+                {validatorInfo.performance && (
+                  <div className="bg-white/5 rounded-xl p-5 border border-white/10 hover:border-orange-500/30 transition-all">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center text-sm">
+                        📡
+                      </div>
+                      <div className="text-xs text-gray-400 font-medium">
+                        Skip Rate
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-orange-400">
+                      {validatorInfo.performance.skipRate.toFixed(2)}%
+                    </div>
+                  </div>
+                )}
+
+                {/* Vote Performance */}
+                {validatorInfo.performance && (
+                  <div className="bg-white/5 rounded-xl p-5 border border-white/10 hover:border-cyan-500/30 transition-all">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center text-sm">
+                        🗳️
+                      </div>
+                      <div className="text-xs text-gray-400 font-medium">
+                        Vote Performance
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-cyan-400">
+                      {validatorInfo.performance.voteCreditsPercentage.toFixed(
+                        1
+                      )}
+                      %
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {validatorInfo.performance.voteCredits.toLocaleString()} /{" "}
+                      {validatorInfo.performance.maxPossibleCredits.toLocaleString()}{" "}
+                      credits
+                    </div>
+                  </div>
+                )}
+
+                {/* Active Stake */}
+                {validatorInfo.stake && (
+                  <div className="bg-white/5 rounded-xl p-5 border border-white/10 hover:border-green-500/30 transition-all">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-sm">
+                        💎
+                      </div>
+                      <div className="text-xs text-gray-400 font-medium">
+                        Active Stake
+                      </div>
+                    </div>
+                    <div className="text-xl font-bold text-green-400">
+                      {validatorInfo.stake.activeStake.toLocaleString(
+                        undefined,
+                        { maximumFractionDigits: 0 }
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">SOL</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Activating/Deactivating Stake (if present) */}
+              {validatorInfo.stake &&
+                (validatorInfo.stake.activatingStake > 0 ||
+                  validatorInfo.stake.deactivatingStake > 0) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    {validatorInfo.stake.activatingStake > 0 && (
+                      <div className="bg-blue-500/5 rounded-xl p-5 border border-blue-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm">⬆️</span>
+                          <div className="text-sm text-gray-400">
+                            Activating Stake
+                          </div>
+                        </div>
+                        <div className="text-xl font-bold text-blue-400">
+                          {validatorInfo.stake.activatingStake.toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 }
+                          )}{" "}
+                          SOL
+                        </div>
+                      </div>
+                    )}
+
+                    {validatorInfo.stake.deactivatingStake > 0 && (
+                      <div className="bg-yellow-500/5 rounded-xl p-5 border border-yellow-500/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm">⬇️</span>
+                          <div className="text-sm text-gray-400">
+                            Deactivating Stake
+                          </div>
+                        </div>
+                        <div className="text-xl font-bold text-yellow-400">
+                          {validatorInfo.stake.deactivatingStake.toLocaleString(
+                            undefined,
+                            { maximumFractionDigits: 0 }
+                          )}{" "}
+                          SOL
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+            </div>
+          )}
+
+          {/* Commission Chart */}
           <div className="glass rounded-2xl p-8 border border-white/10 shadow-sm card-shine">
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-white mb-2">
@@ -194,6 +382,26 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             ) : (
               <div className="text-center py-12 text-gray-400">
                 No commission history available
+              </div>
+            )}
+          </div>
+
+          {/* Stake History Chart */}
+          <div className="glass rounded-2xl p-8 border border-white/10 shadow-sm card-shine">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold text-white mb-2">
+                Stake History
+              </h2>
+              <p className="text-gray-400 text-sm">
+                Track how this validator's active stake has grown or declined
+                over time
+              </p>
+            </div>
+            {stakeHistory.length > 0 ? (
+              <StakeChart data={stakeHistory} />
+            ) : (
+              <div className="text-center py-12 text-gray-400">
+                No stake history available yet
               </div>
             )}
           </div>

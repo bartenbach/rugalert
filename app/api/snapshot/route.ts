@@ -464,10 +464,11 @@ export async function POST(req: NextRequest) {
           if (type === "RUG") {
             const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
             await sendDiscord(msg);
-            await sendEmail("🚨 Solana Validator Commission RUG Detected", msg, "RUG");
+            await sendEmail("🚨 Solana Validator Commission Rug Detected", msg, "RUG");
           } else if (type === "CAUTION") {
-            const msg = `⚠️ CAUTION: Large Commission Increase\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
-            await sendEmail("⚠️ Solana Validator Commission Jump", msg, "CAUTION");
+            const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+            await sendDiscord(msg);
+            await sendEmail("⚠️ Solana Validator Large Commission Jump Detected", msg, "CAUTION");
           } else if (type === "INFO") {
             const msg = `📊 Commission Change\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
             await sendEmail("📊 Solana Validator Commission Change", msg, "INFO");

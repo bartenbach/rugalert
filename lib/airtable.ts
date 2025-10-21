@@ -22,6 +22,8 @@ const TB_EVENTS     = process.env.AIRTABLE_TB_EVENTS     || 'events'
 const TB_SUBS       = process.env.AIRTABLE_TB_SUBSCRIBERS|| 'subscribers'
 const TB_STAKE_HISTORY = process.env.AIRTABLE_TB_STAKE_HISTORY || 'stake_history'
 const TB_PERFORMANCE_HISTORY = process.env.AIRTABLE_TB_PERFORMANCE_HISTORY || 'performance_history'
+const TB_MEV_SNAPSHOTS = process.env.AIRTABLE_TB_MEV_SNAPSHOTS || 'mev_snapshots'
+const TB_MEV_EVENTS = process.env.AIRTABLE_TB_MEV_EVENTS || 'mev_events'
 
 export const tb = {
   validators: base(TB_VALIDATORS),
@@ -30,6 +32,8 @@ export const tb = {
   subs:       base(TB_SUBS),
   stakeHistory: base(TB_STAKE_HISTORY),
   performanceHistory: base(TB_PERFORMANCE_HISTORY),
+  mevSnapshots: base(TB_MEV_SNAPSHOTS),
+  mevEvents: base(TB_MEV_EVENTS),
 }
 
 // ---------- Utilities ----------
