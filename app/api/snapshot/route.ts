@@ -408,8 +408,8 @@ export async function POST(req: NextRequest) {
     for (const v of allVotes) {
       const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
-      // DiceBear fallback ONLY when missing iconUrl
-      const iconUrl = meta.iconUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(v.nodePubkey)}`;
+      // No fallback icon - let validators with no icon show empty square
+      const iconUrl = meta.iconUrl;
       const website = meta.website;
       const version = versionMap.get(v.nodePubkey);
 
@@ -429,7 +429,16 @@ export async function POST(req: NextRequest) {
         if (existing.get("identityPubkey") !== v.nodePubkey)
           patch.identityPubkey = v.nodePubkey;
         if (chainName) patch.name = chainName;
-        if (iconUrl)   patch.iconUrl = iconUrl;
+        
+        // Handle iconUrl: update if we have a new one, or clear if existing is DiceBear
+        const existingIconUrl = existing.get("iconUrl") as string | undefined;
+        if (iconUrl) {
+          patch.iconUrl = iconUrl;
+        } else if (existingIconUrl && existingIconUrl.includes('dicebear.com')) {
+          // Clear DiceBear fallback URLs
+          patch.iconUrl = null;
+        }
+        
         if (website)   patch.website = website;
         if (version && existing.get("version") !== version) patch.version = version;
         // Update delinquent status (changes frequently)

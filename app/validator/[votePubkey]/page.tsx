@@ -122,13 +122,20 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   return (
     <div className="space-y-8">
       {/* Back Button */}
-      <a
-        href="/"
+      <button
+        onClick={() => {
+          // Try to go back, but if no history (direct link), go to validators page
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            window.location.href = "/validators";
+          }
+        }}
         className="inline-flex items-center gap-2 text-gray-400 hover:text-orange-400 transition-colors"
       >
         <span>←</span>
-        <span>Back to Dashboard</span>
-      </a>
+        <span>Back to Validators</span>
+      </button>
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -143,7 +150,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
           <div className="glass rounded-2xl p-8 border border-white/10 shadow-sm card-shine">
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
               {meta?.avatarUrl ? (
-                <div className="relative group">
+                <div className="relative group flex-shrink-0">
                   <img
                     src={meta.avatarUrl}
                     className="w-24 h-24 rounded-2xl object-cover border-2 border-white/10 group-hover:border-orange-500/30 transition-colors"
@@ -157,16 +164,14 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 </div>
               ) : null}
               <div
-                className={`w-24 h-24 rounded-2xl bg-gradient-to-br from-orange-500/20 to-orange-500/30 border-2 border-white/10 flex items-center justify-center ${
+                className={`w-24 h-24 flex-shrink-0 rounded-2xl border-2 border-white/10 flex items-center justify-center ${
                   meta?.avatarUrl ? "hidden" : ""
                 }`}
-              >
-                <span className="text-4xl">🔷</span>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-3xl md:text-4xl font-bold gradient-text">
-                    {meta?.name || "Unknown Validator"}
+              ></div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                  <h1 className="text-2xl md:text-3xl font-bold gradient-text break-all">
+                    {meta?.name || params.votePubkey}
                   </h1>
                   {validatorInfo?.validator?.delinquent && (
                     <span className="px-3 py-1 bg-red-500/20 border-2 border-red-500 rounded-lg text-sm font-bold text-red-400 whitespace-nowrap animate-pulse">
