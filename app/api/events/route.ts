@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
           created_at: r._rawJson.createdTime,
           name: v[0]?.get('name') || null,
           icon_url: v[0]?.get('iconUrl') || null,
+          delinquent: Boolean(v[0]?.get('delinquent')),
         })
       }
       
@@ -113,6 +114,7 @@ export async function GET(req: NextRequest) {
         created_at: r._rawJson.createdTime,
         name: v[0]?.get('name') || null,
         icon_url: v[0]?.get('iconUrl') || null,
+        delinquent: Boolean(v[0]?.get('delinquent')),
       })
     }
     

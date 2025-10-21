@@ -81,6 +81,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
     null
   );
   const [loading, setLoading] = useState(true);
+  const [copiedIdentity, setCopiedIdentity] = useState(false);
+  const [copiedVote, setCopiedVote] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -172,9 +174,74 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-gray-400 text-sm font-mono bg-white/5 rounded-lg px-4 py-2 inline-block border border-white/10">
-                  <span className="text-gray-400">📋</span>
-                  <span>{params.votePubkey}</span>
+                <div className="flex flex-col gap-2">
+                  {/* Identity Pubkey */}
+                  {validatorInfo?.validator?.identityPubkey && (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          validatorInfo.validator.identityPubkey
+                        );
+                        setCopiedIdentity(true);
+                        setTimeout(() => {
+                          setCopiedIdentity(false);
+                        }, 2000);
+                      }}
+                      className={`flex items-center gap-2 text-gray-400 text-sm font-mono rounded-lg px-4 py-2 border transition-all cursor-pointer group ${
+                        copiedIdentity
+                          ? "bg-green-500/20 border-green-500"
+                          : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400"
+                      }`}
+                      title="Click to copy Identity Pubkey"
+                    >
+                      <span className="text-gray-500 font-semibold">
+                        Identity:
+                      </span>
+                      <span className="flex-1 text-left">
+                        {validatorInfo.validator.identityPubkey}
+                      </span>
+                      {copiedIdentity ? (
+                        <span className="text-green-400 font-semibold">
+                          ✓ Copied!
+                        </span>
+                      ) : (
+                        <span className="text-gray-600 group-hover:text-orange-400 transition-colors">
+                          📋
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Vote Pubkey */}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(params.votePubkey);
+                      setCopiedVote(true);
+                      setTimeout(() => {
+                        setCopiedVote(false);
+                      }, 2000);
+                    }}
+                    className={`flex items-center gap-2 text-gray-400 text-sm font-mono rounded-lg px-4 py-2 border transition-all cursor-pointer group ${
+                      copiedVote
+                        ? "bg-green-500/20 border-green-500"
+                        : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400"
+                    }`}
+                    title="Click to copy Vote Pubkey"
+                  >
+                    <span className="text-gray-500 font-semibold">Vote:</span>
+                    <span className="flex-1 text-left">
+                      {params.votePubkey}
+                    </span>
+                    {copiedVote ? (
+                      <span className="text-green-400 font-semibold">
+                        ✓ Copied!
+                      </span>
+                    ) : (
+                      <span className="text-gray-600 group-hover:text-orange-400 transition-colors">
+                        📋
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
               {currentCommission !== null && (

@@ -39,6 +39,7 @@ export default function ValidatorsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const observerTarget = useRef<HTMLDivElement>(null);
+  const currentPageRef = useRef(1); // Track page synchronously
 
   // Initial load
   const loadValidators = async () => {
@@ -50,6 +51,7 @@ export default function ValidatorsPage() {
       if (res.ok) {
         setValidators(data.validators);
         setCurrentPage(1);
+        currentPageRef.current = 1;
         setHasMore(data.hasMore);
         setTotalValidators(data.total);
         setNetworkStats(data.networkStats || null);
@@ -68,23 +70,35 @@ export default function ValidatorsPage() {
   const loadMore = useCallback(async () => {
     if (!hasMore || loadingMore) return;
 
+    // Use ref to get synchronous access and avoid race conditions
+    const nextPage = currentPageRef.current + 1;
+
     try {
       setLoadingMore(true);
-      const nextPage = currentPage + 1;
+      currentPageRef.current = nextPage;
+      setCurrentPage(nextPage);
+
       const res = await fetch(`/api/validators?page=${nextPage}&pageSize=50`);
       const data = await res.json();
 
       if (res.ok) {
         setValidators((prev) => [...prev, ...data.validators]);
-        setCurrentPage(nextPage);
         setHasMore(data.hasMore);
+      } else {
+        // Rollback page increment on error
+        currentPageRef.current = nextPage - 1;
+        setCurrentPage(nextPage - 1);
+        console.error("Failed to load validators:", data.error);
       }
     } catch (err) {
       console.error("Error loading more validators:", err);
+      // Rollback page increment on error
+      currentPageRef.current = nextPage - 1;
+      setCurrentPage(nextPage - 1);
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, currentPage]);
+  }, [hasMore, loadingMore]);
 
   // Intersection observer for infinite scroll
   useEffect(() => {
@@ -213,7 +227,7 @@ export default function ValidatorsPage() {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
                   Validator
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-48">
                   Stake
                 </th>
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-32">
@@ -222,15 +236,12 @@ export default function ValidatorsPage() {
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-32">
                   Commission
                 </th>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300 w-32">
-                  Version
-                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex items-center justify-center gap-3">
                       <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-gray-400">
@@ -241,7 +252,7 @@ export default function ValidatorsPage() {
                 </tr>
               ) : validators.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
+                  <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="text-4xl mb-2">🔍</div>
                     <p className="text-gray-400">No validators found</p>
                   </td>
@@ -307,9 +318,9 @@ export default function ValidatorsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 w-48">
                         <div>
-                          <div className="text-white font-semibold">
+                          <div className="text-white font-semibold whitespace-nowrap">
                             {validator.activeStake.toLocaleString(undefined, {
                               maximumFractionDigits: 0,
                             })}{" "}
@@ -351,18 +362,13 @@ export default function ValidatorsPage() {
                           {validator.commission}%
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-gray-400 font-mono">
-                          {validator.version || "—"}
-                        </span>
-                      </td>
                     </tr>
                   ))}
 
                   {/* Loading more indicator */}
                   {loadingMore && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center">
+                      <td colSpan={5} className="px-6 py-8 text-center">
                         <div className="flex items-center justify-center gap-3">
                           <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                           <span className="text-gray-400 text-sm">

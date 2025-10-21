@@ -115,11 +115,18 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
     for (let i = 0; i <= 5; i++) {
       const stake = minStake + ((maxStake - minStake) * (5 - i)) / 5;
       const y = padding.top + ((height - padding.top - padding.bottom) * i) / 5;
-      ctx.fillText(
-        stake >= 1000 ? `${(stake / 1000).toFixed(0)}K` : stake.toFixed(0),
-        padding.left - 10,
-        y + 4
-      );
+
+      // Format stake amounts: M for millions, K for thousands
+      let label: string;
+      if (stake >= 1000000) {
+        label = `${(stake / 1000000).toFixed(2)}M`;
+      } else if (stake >= 1000) {
+        label = `${(stake / 1000).toFixed(0)}K`;
+      } else {
+        label = stake.toFixed(0);
+      }
+
+      ctx.fillText(label, padding.left - 10, y + 4);
     }
 
     // Draw X-axis labels (epochs)

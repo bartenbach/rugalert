@@ -14,6 +14,7 @@ type Row = {
   delta: number;
   epoch: number;
   created_at?: string;
+  delinquent?: boolean;
 };
 
 // Utility function to format relative time
@@ -736,7 +737,11 @@ export default function Page() {
                 paginatedItems.map((it) => (
                   <tr
                     key={it.id}
-                    className="hover:bg-white/5 transition-colors duration-200 group"
+                    className={`transition-colors duration-200 group ${
+                      it.delinquent
+                        ? "bg-red-500/10 hover:bg-red-500/20 border-l-4 border-red-500"
+                        : "hover:bg-white/5"
+                    }`}
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -766,12 +771,19 @@ export default function Page() {
                           </div>
                         </a>
                         <div className="flex-1 min-w-0">
-                          <a
-                            href={`/validator/${it.vote_pubkey}`}
-                            className="font-semibold text-white hover:text-orange-400 transition-colors block"
-                          >
-                            {it.name || it.vote_pubkey}
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={`/validator/${it.vote_pubkey}`}
+                              className="font-semibold text-white hover:text-orange-400 transition-colors"
+                            >
+                              {it.name || it.vote_pubkey}
+                            </a>
+                            {it.delinquent && (
+                              <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-xs font-bold text-red-400 whitespace-nowrap">
+                                DELINQUENT
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
