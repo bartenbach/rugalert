@@ -25,22 +25,42 @@ export async function GET(
 
     const validator = validatorRecords[0];
 
-    // Get current epoch info from RPC
+    // Get current epoch info and vote accounts from RPC
     const rpcUrl = process.env.RPC_URL!;
-    const epochRes = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getEpochInfo',
-        params: [],
+    const [epochRes, voteAccountsRes] = await Promise.all([
+      fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'getEpochInfo',
+          params: [],
+        }),
       }),
-    });
+      fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'getVoteAccounts',
+          params: [],
+        }),
+      }),
+    ]);
+    
     const epochJson = await epochRes.json();
+    const voteAccountsJson = await voteAccountsRes.json();
+    
     const currentEpoch = Number(epochJson.result?.epoch || 0);
     const slotIndex = Number(epochJson.result?.slotIndex || 0);
     const slotsInEpoch = Number(epochJson.result?.slotsInEpoch || 1);
+    
+    // Check if validator is delinquent (real-time from RPC)
+    const isDelinquent = voteAccountsJson.result?.delinquent?.some(
+      (v: any) => v.votePubkey === votePubkey
+    ) || false;
 
     // Fetch latest performance data
     const perfRecords = await tb.performanceHistory.select({
@@ -87,7 +107,7 @@ export async function GET(
         iconUrl: validator.get('iconUrl'),
         website: validator.get('website'),
         version: validator.get('version'),
-        delinquent: Boolean(validator.get('delinquent')),
+        delinquent: isDelinquent, // Use real-time RPC data
       },
       performance: perfData,
       stake: stakeData,

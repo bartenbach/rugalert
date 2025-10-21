@@ -19,6 +19,15 @@ type Validator = {
   rank: number;
 };
 
+type NetworkStats = {
+  totalValidators: number;
+  activeValidators: number;
+  delinquentValidators: number;
+  totalStake: number;
+  activeStake: number;
+  delinquentStake: number;
+};
+
 export default function ValidatorsPage() {
   const [validators, setValidators] = useState<Validator[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +35,7 @@ export default function ValidatorsPage() {
   const [hasMore, setHasMore] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalValidators, setTotalValidators] = useState(0);
+  const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -34,7 +44,7 @@ export default function ValidatorsPage() {
   const loadValidators = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/validators?page=1&pageSize=100");
+      const res = await fetch("/api/validators?page=1&pageSize=50");
       const data = await res.json();
 
       if (res.ok) {
@@ -42,6 +52,7 @@ export default function ValidatorsPage() {
         setCurrentPage(1);
         setHasMore(data.hasMore);
         setTotalValidators(data.total);
+        setNetworkStats(data.networkStats || null);
       } else {
         setError(data.error || "Failed to load validators");
       }
@@ -60,7 +71,7 @@ export default function ValidatorsPage() {
     try {
       setLoadingMore(true);
       const nextPage = currentPage + 1;
-      const res = await fetch(`/api/validators?page=${nextPage}&pageSize=100`);
+      const res = await fetch(`/api/validators?page=${nextPage}&pageSize=50`);
       const data = await res.json();
 
       if (res.ok) {
@@ -129,23 +140,61 @@ export default function ValidatorsPage() {
       </div>
 
       {/* Stats */}
-      {!loading && validators.length > 0 && (
+      {!loading && networkStats && (
         <div className="glass rounded-2xl p-6">
-          <div className="flex items-center justify-center gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="text-center">
               <div className="text-gray-400 text-sm mb-1">Total Validators</div>
               <div className="text-3xl font-bold text-white">
-                {totalValidators}
+                {networkStats.totalValidators.toLocaleString()}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {networkStats.activeValidators.toLocaleString()} active •{" "}
+                {networkStats.delinquentValidators.toLocaleString()} delinquent
               </div>
             </div>
-            <div className="w-px h-12 bg-white/10"></div>
             <div className="text-center">
               <div className="text-gray-400 text-sm mb-1">Total Stake</div>
               <div className="text-3xl font-bold text-orange-400">
-                {validators
-                  .reduce((sum, v) => sum + v.activeStake, 0)
-                  .toLocaleString(undefined, { maximumFractionDigits: 0 })}{" "}
-                SOL
+                {networkStats.totalStake.toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })}{" "}
+                <span className="text-xl">SOL</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Network-wide (real-time)
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-gray-400 text-sm mb-1">Active Stake</div>
+              <div className="text-3xl font-bold text-green-400">
+                {networkStats.activeStake.toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })}{" "}
+                <span className="text-xl">SOL</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {(
+                  (networkStats.activeStake / networkStats.totalStake) *
+                  100
+                ).toFixed(2)}
+                %
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-gray-400 text-sm mb-1">Delinquent Stake</div>
+              <div className="text-3xl font-bold text-red-400">
+                {networkStats.delinquentStake.toLocaleString(undefined, {
+                  maximumFractionDigits: 0,
+                })}{" "}
+                <span className="text-xl">SOL</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {(
+                  (networkStats.delinquentStake / networkStats.totalStake) *
+                  100
+                ).toFixed(2)}
+                %
               </div>
             </div>
           </div>
@@ -205,7 +254,11 @@ export default function ValidatorsPage() {
                       onClick={() =>
                         (window.location.href = `/validator/${validator.votePubkey}`)
                       }
-                      className="hover:bg-white/5 transition-colors duration-200 cursor-pointer group"
+                      className={`transition-colors duration-200 cursor-pointer group ${
+                        validator.delinquent
+                          ? "bg-red-500/10 hover:bg-red-500/20 border-l-4 border-red-500"
+                          : "hover:bg-white/5"
+                      }`}
                     >
                       <td className="px-6 py-4">
                         <span className="text-gray-400 font-mono text-sm">
@@ -218,6 +271,7 @@ export default function ValidatorsPage() {
                             <img
                               src={validator.iconUrl}
                               alt={validator.name || "Validator"}
+                              loading="lazy"
                               className="w-10 h-10 rounded-xl object-cover border border-white/10 group-hover:border-orange-400 transition-colors"
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";
