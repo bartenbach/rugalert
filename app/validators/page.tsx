@@ -193,21 +193,21 @@ export default function ValidatorsPage() {
       {/* Validators Table */}
       <div className="glass rounded-2xl">
         <table className="w-full">
-          <thead className="bg-[#0a0a0a]/95 backdrop-blur-sm border-b border-white/10 sticky top-0 z-50 shadow-lg rounded-t-2xl">
-            <tr>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-16">
+          <thead className="sticky top-20 z-40 shadow-lg">
+            <tr className="bg-[#0a0a0a] border-b-2 border-white/10">
+              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-16 bg-[#0a0a0a] rounded-tl-2xl">
                 #
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300">
+              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 bg-[#0a0a0a]">
                 Validator
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-48">
+              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-48 bg-[#0a0a0a]">
                 Stake
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32">
+              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a]">
                 Cumulative
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32">
+              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a] rounded-tr-2xl">
                 Commission
               </th>
             </tr>
