@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tb } from "../../../lib/airtable";
+import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
 
 // ---- raw JSON-RPC helper (works for vote/epoch and jsonParsed GPA) ----
 async function rpc(method: string, params: any[] = []) {
@@ -160,9 +161,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Fetch Jito MEV commission data for all validators
+    console.log(`🎯 Fetching Jito MEV data...`);
+    const jitoValidators = await fetchAllJitoValidators();
+    console.log(`✅ Found ${jitoValidators.size} Jito-enabled validators`);
+
     // Track stake and performance metrics
     let stakeRecordsCreated = 0;
     let performanceRecordsCreated = 0;
+    let mevSnapshotsCreated = 0;
+    let mevEventsCreated = 0;
     
     // Get block production data for skip rate calculation (current epoch only)
     const blockProduction = await rpc("getBlockProduction", [{ epoch }]);
@@ -241,12 +249,18 @@ export async function POST(req: NextRequest) {
           
           const epochCreditsArray = voteAccountInfo?.value?.data?.parsed?.info?.epochCredits;
           if (epochCreditsArray && Array.isArray(epochCreditsArray)) {
-            // Find credits for current epoch
+            // epochCredits format: [[epoch, cumulative_credits, prev_epoch_cumulative], ...]
+            // We want the cumulative credits for the current epoch
             const currentEpochCredits = epochCreditsArray.find((entry: any) => 
               Number(entry[0]) === epoch
             );
             if (currentEpochCredits) {
-              voteCreditsMap.set(v.votePubkey, Number(currentEpochCredits[1]));
+              const credits = Number(currentEpochCredits[1]);
+              voteCreditsMap.set(v.votePubkey, credits);
+              // Debug first few validators
+              if (voteCreditsMap.size <= 3) {
+                console.log(`  Sample: ${v.votePubkey.substring(0, 8)}... epoch ${epoch} credits: ${credits}`);
+              }
             }
           }
         } catch (e) {
@@ -292,13 +306,41 @@ export async function POST(req: NextRequest) {
       fetchNextPage();
     });
     
-    console.log(`✅ Pre-fetch complete. Found ${existingValidators.size} validators, ${existingStakeKeys.size} stake records, ${existingPerfKeys.size} perf records`);
+    // Fetch existing MEV snapshots for this epoch
+    const existingMevKeys = new Set<string>();
+    await tb.mevSnapshots.select({
+      filterByFormula: `{epoch} = ${epoch}`,
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => existingMevKeys.add(String(r.get('key'))));
+      fetchNextPage();
+    });
+    
+    // Fetch latest MEV snapshot per validator (for change detection)
+    const latestMevByValidator = new Map<string, any>();
+    await tb.mevSnapshots.select({
+      pageSize: 100,
+      sort: [{ field: 'epoch', direction: 'desc' }],
+      maxRecords: 2000,
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => {
+        const votePubkey = String(r.get('votePubkey'));
+        if (!latestMevByValidator.has(votePubkey)) {
+          latestMevByValidator.set(votePubkey, r);
+        }
+      });
+      fetchNextPage();
+    });
+    
+    console.log(`✅ Pre-fetch complete. Found ${existingValidators.size} validators, ${existingStakeKeys.size} stake records, ${existingPerfKeys.size} perf records, ${existingMevKeys.size} MEV records`);
     
     // Batch arrays for bulk creation
     const validatorsToCreate: any[] = [];
     const validatorsToUpdate: {id: string, fields: any}[] = [];
     const stakeRecordsToCreate: any[] = [];
     const perfRecordsToCreate: any[] = [];
+    const mevSnapshotsToCreate: any[] = [];
+    const mevEventsToCreate: any[] = [];
 
     // 2) jsonParsed GPA over Config program (validatorInfo records)
     const gpa = await rpc("getProgramAccounts", [
@@ -339,6 +381,10 @@ export async function POST(req: NextRequest) {
       // Check if validator is delinquent
       const isDelinquent = delinquentSet.has(v.votePubkey);
       
+      // Check if validator is Jito-enabled
+      const jitoInfo = jitoValidators.get(v.votePubkey);
+      const isJitoEnabled = jitoInfo?.isJitoEnabled || false;
+      
       // Prepare validator upsert (batch later)
       const existing = existingValidators.get(v.votePubkey);
       if (existing) {
@@ -351,6 +397,10 @@ export async function POST(req: NextRequest) {
         if (version && existing.get("version") !== version) patch.version = version;
         // Update delinquent status (changes frequently)
         patch.delinquent = isDelinquent;
+        // Cache activeStake (locked at epoch boundaries)
+        patch.activeStake = Number(v.activatedStake || 0);
+        // Update Jito status
+        patch.jitoEnabled = isJitoEnabled;
         if (Object.keys(patch).length) {
           validatorsToUpdate.push({ id: existing.id, fields: patch });
         }
@@ -360,6 +410,8 @@ export async function POST(req: NextRequest) {
             votePubkey: v.votePubkey,
             identityPubkey: v.nodePubkey,
             delinquent: isDelinquent,
+            activeStake: Number(v.activatedStake || 0),
+            jitoEnabled: isJitoEnabled,
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),
             ...(website   ? { website } : {}),
@@ -489,6 +541,67 @@ export async function POST(req: NextRequest) {
         }
       }
       // If commission didn't change, we write nothing and (correctly) emit no event.
+      
+      // ---- MEV COMMISSION TRACKING ----
+      if (isJitoEnabled && jitoInfo) {
+        const mevKey = `${v.votePubkey}-${epoch}`;
+        
+        // Only create snapshot if we don't have one for this epoch
+        if (!existingMevKeys.has(mevKey)) {
+          mevSnapshotsToCreate.push({
+            fields: {
+              key: mevKey,
+              votePubkey: v.votePubkey,
+              epoch,
+              mevCommission: jitoInfo.mevCommission || 0,
+              priorityFeeCommission: jitoInfo.priorityFeeCommission || 0,
+              mevRewards: jitoInfo.mevRewards || 0,
+              priorityFeeRewards: jitoInfo.priorityFeeRewards || 0,
+            }
+          });
+          mevSnapshotsCreated++;
+          
+          // Check for MEV commission changes
+          const latestMev = latestMevByValidator.get(v.votePubkey);
+          if (latestMev) {
+            const prevMevCommission = Number(latestMev.get('mevCommission') || 0);
+            const currentMevCommission = jitoInfo.mevCommission || 0;
+            
+            // Only create event if MEV commission actually changed
+            if (prevMevCommission !== currentMevCommission) {
+              const delta = currentMevCommission - prevMevCommission;
+              const eventType = detectMevRug(prevMevCommission, currentMevCommission);
+              
+              mevEventsToCreate.push({
+                fields: {
+                  votePubkey: v.votePubkey,
+                  epoch,
+                  type: eventType,
+                  fromMevCommission: prevMevCommission,
+                  toMevCommission: currentMevCommission,
+                  delta,
+                }
+              });
+              mevEventsCreated++;
+              
+              // Send notifications for MEV rugs
+              const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
+              const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
+              const validatorName = chainName || v.votePubkey;
+              
+              if (eventType === "RUG") {
+                const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+                await sendDiscord(msg);
+                await sendEmail("🚨 Solana Validator MEV Commission Rug Detected", msg, "RUG");
+              } else if (eventType === "CAUTION") {
+                const msg = `⚠️ CAUTION: Large MEV Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+                await sendDiscord(msg);
+                await sendEmail("⚠️ Solana Validator MEV Commission Increase", msg, "CAUTION");
+              }
+            }
+          }
+        }
+      }
     }
 
     // BATCH CREATE/UPDATE operations to avoid timeout
@@ -523,9 +636,23 @@ export async function POST(req: NextRequest) {
       await tb.performanceHistory.create(batch);
       performanceRecordsCreated += batch.length;
     }
+    
+    // Create MEV snapshots
+    for (let i = 0; i < mevSnapshotsToCreate.length; i += batchSize) {
+      const batch = mevSnapshotsToCreate.slice(i, i + batchSize);
+      await tb.mevSnapshots.create(batch);
+    }
+    
+    // Create MEV events
+    for (let i = 0; i < mevEventsToCreate.length; i += batchSize) {
+      const batch = mevEventsToCreate.slice(i, i + batchSize);
+      await tb.mevEvents.create(batch);
+    }
 
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
+    console.log(`✅ MEV snapshots created: ${mevSnapshotsCreated}`);
+    console.log(`✅ MEV events created: ${mevEventsCreated}`);
     
     return NextResponse.json({ 
       ok: true, 
@@ -534,6 +661,8 @@ export async function POST(req: NextRequest) {
       metrics: {
         stakeRecordsCreated,
         performanceRecordsCreated,
+        mevSnapshotsCreated,
+        mevEventsCreated,
       }
     });
   } catch (err: any) {
