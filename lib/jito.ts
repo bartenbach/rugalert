@@ -4,130 +4,101 @@
  * Helpers for tracking Jito-enabled validators and their MEV commission rates.
  * 
  * Jito Resources:
+ * - API: https://kobe.mainnet.jito.network/api/v1/validators
  * - Tip Payment Program: T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt
  * - Tip Distribution Program: 4R3gSG8BpU4t19KYj8CfnbtRpnT8gtk4dvTHxVRwc2r7
  * - Jito RPC: https://mainnet.block-engine.jito.wtf
  */
 
-// Jito Tip Payment Program ID
-const JITO_TIP_PAYMENT_PROGRAM = 'T1pyyaTNZsKv2WcRAB8oVnk93mLJw2XzjtVYqCsaHqt';
-const JITO_TIP_DISTRIBUTION_PROGRAM = '4R3gSG8BpU4t19KYj8CfnbtRpnT8gtk4dvTHxVRwc2r7';
+const JITO_API_URL = 'https://kobe.mainnet.jito.network/api/v1/validators';
 
-// Known Jito tip accounts (hardcoded for now, could be fetched dynamically)
-const JITO_TIP_ACCOUNTS = [
-  '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
-  'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe',
-  'Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY',
-  'ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49',
-  'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh',
-  'ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt',
-  'DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL',
-  '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
-];
+interface JitoApiValidator {
+  vote_account: string;
+  mev_commission_bps: number | null;
+  mev_rewards: number;
+  priority_fee_commission_bps: number;
+  priority_fee_rewards: number;
+  running_jito: boolean;
+  active_stake: number;
+}
 
 interface JitoValidatorInfo {
   isJitoEnabled: boolean;
-  mevCommission: number | null;
-  tipAccount: string | null;
+  mevCommission: number | null; // Percentage (0-100)
+  priorityFeeCommission: number | null; // Percentage (0-100)
+  mevRewards: number;
+  priorityFeeRewards: number;
 }
 
 /**
- * Check if a validator is Jito-enabled by checking for tip receiver accounts
+ * Fetch all Jito validators and their MEV commission rates
+ * Returns a Map of votePubkey -> JitoValidatorInfo
+ */
+export async function fetchAllJitoValidators(): Promise<Map<string, JitoValidatorInfo>> {
+  try {
+    console.log('📡 Fetching Jito validators from API...');
+    const response = await fetch(JITO_API_URL);
+    
+    if (!response.ok) {
+      throw new Error(`Jito API returned ${response.status}`);
+    }
+    
+    const data = await response.json() as { validators: JitoApiValidator[] };
+    const jitoMap = new Map<string, JitoValidatorInfo>();
+    
+    for (const validator of data.validators) {
+      if (validator.running_jito) {
+        jitoMap.set(validator.vote_account, {
+          isJitoEnabled: true,
+          // Convert basis points to percentage: 800 bps = 8%
+          mevCommission: validator.mev_commission_bps !== null 
+            ? validator.mev_commission_bps / 100 
+            : null,
+          priorityFeeCommission: validator.priority_fee_commission_bps / 100,
+          mevRewards: validator.mev_rewards,
+          priorityFeeRewards: validator.priority_fee_rewards,
+        });
+      }
+    }
+    
+    console.log(`✅ Found ${jitoMap.size} Jito validators`);
+    return jitoMap;
+  } catch (error) {
+    console.error('❌ Error fetching Jito validators:', error);
+    return new Map();
+  }
+}
+
+/**
+ * Check if a specific validator is Jito-enabled and get their MEV commission
  */
 export async function checkJitoValidator(
-  identityPubkey: string,
-  rpcUrl: string
+  votePubkey: string
 ): Promise<JitoValidatorInfo> {
   try {
-    // Method 1: Check if validator has a tip distribution account
-    // This is a simplified check - in production, you'd query the tip distribution program
+    const jitoValidators = await fetchAllJitoValidators();
+    const info = jitoValidators.get(votePubkey);
     
-    // For now, we can check the validator's version string
-    // Jito validators typically have "jito" in their version
-    const versionCheck = await checkVersionForJito(identityPubkey, rpcUrl);
-    
-    if (versionCheck) {
-      // If Jito-enabled, try to fetch MEV commission
-      const mevCommission = await fetchMevCommission(identityPubkey, rpcUrl);
-      return {
-        isJitoEnabled: true,
-        mevCommission,
-        tipAccount: null, // TODO: Fetch actual tip account
-      };
+    if (info) {
+      return info;
     }
     
     return {
       isJitoEnabled: false,
       mevCommission: null,
-      tipAccount: null,
+      priorityFeeCommission: null,
+      mevRewards: 0,
+      priorityFeeRewards: 0,
     };
   } catch (error) {
-    console.error(`Error checking Jito status for ${identityPubkey}:`, error);
+    console.error(`Error checking Jito status for ${votePubkey}:`, error);
     return {
       isJitoEnabled: false,
       mevCommission: null,
-      tipAccount: null,
+      priorityFeeCommission: null,
+      mevRewards: 0,
+      priorityFeeRewards: 0,
     };
-  }
-}
-
-/**
- * Check validator version string for Jito indicator
- */
-async function checkVersionForJito(
-  identityPubkey: string,
-  rpcUrl: string
-): Promise<boolean> {
-  try {
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getClusterNodes',
-        params: [],
-      }),
-    });
-    
-    const data = await response.json();
-    const node = data.result?.find((n: any) => n.pubkey === identityPubkey);
-    
-    if (node?.version) {
-      // Jito validators typically have "jito" in version string
-      return node.version.toLowerCase().includes('jito');
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error checking version:', error);
-    return false;
-  }
-}
-
-/**
- * Fetch MEV commission rate for a Jito validator
- * 
- * NOTE: This is a placeholder implementation
- * TODO: Implement actual Jito API call or on-chain data parsing
- */
-async function fetchMevCommission(
-  identityPubkey: string,
-  rpcUrl: string
-): Promise<number | null> {
-  try {
-    // PLACEHOLDER: In reality, you need to:
-    // 1. Find the validator's tip distribution account
-    // 2. Query that account's commission configuration
-    // 3. Parse the commission rate (0-100)
-    
-    // For now, return null to indicate "unknown"
-    // This needs to be implemented based on Jito's actual data structure
-    
-    return null;
-  } catch (error) {
-    console.error('Error fetching MEV commission:', error);
-    return null;
   }
 }
 
@@ -176,9 +147,9 @@ export function calculateEffectiveCommission(
 }
 
 /**
- * Get Jito tip accounts (for monitoring)
+ * Get Jito API URL
  */
-export function getJitoTipAccounts(): string[] {
-  return JITO_TIP_ACCOUNTS;
+export function getJitoApiUrl(): string {
+  return JITO_API_URL;
 }
 
