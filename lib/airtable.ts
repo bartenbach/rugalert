@@ -20,12 +20,16 @@ const TB_VALIDATORS = process.env.AIRTABLE_TB_VALIDATORS || 'validators'
 const TB_SNAPSHOTS  = process.env.AIRTABLE_TB_SNAPSHOTS  || 'snapshots'
 const TB_EVENTS     = process.env.AIRTABLE_TB_EVENTS     || 'events'
 const TB_SUBS       = process.env.AIRTABLE_TB_SUBSCRIBERS|| 'subscribers'
+const TB_STAKE_HISTORY = process.env.AIRTABLE_TB_STAKE_HISTORY || 'stake_history'
+const TB_PERFORMANCE_HISTORY = process.env.AIRTABLE_TB_PERFORMANCE_HISTORY || 'performance_history'
 
 export const tb = {
   validators: base(TB_VALIDATORS),
   snapshots:  base(TB_SNAPSHOTS),
   events:     base(TB_EVENTS),
   subs:       base(TB_SUBS),
+  stakeHistory: base(TB_STAKE_HISTORY),
+  performanceHistory: base(TB_PERFORMANCE_HISTORY),
 }
 
 // ---------- Utilities ----------

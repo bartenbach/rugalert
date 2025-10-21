@@ -141,7 +141,15 @@ export async function POST(req: NextRequest) {
       votePubkey: string;
       nodePubkey: string;   // identity pubkey
       commission: number;
+      activatedStake: number;
+      epochVoteAccount?: boolean;
+      epochCredits?: Array<[number, number, number]>; // [epoch, credits, previousCredits]
+      lastVote?: number;
     }>;
+
+    // Track stake and performance metrics
+    let stakeRecordsCreated = 0;
+    let performanceRecordsCreated = 0;
 
     // 2) jsonParsed GPA over Config program (validatorInfo records)
     const gpa = await rpc("getProgramAccounts", [
@@ -198,6 +206,65 @@ export async function POST(req: NextRequest) {
             ...(website   ? { website } : {}),
           }
         }]);
+      }
+
+      // ---- STAKE HISTORY TRACKING ----
+      // Record active stake for this epoch (idempotent)
+      const stakeKey = `${v.votePubkey}-${epoch}`;
+      const existingStake = await tb.stakeHistory
+        .select({ filterByFormula: `{key} = "${stakeKey}"`, maxRecords: 1 })
+        .firstPage();
+      
+      if (!existingStake[0] && v.activatedStake) {
+        await tb.stakeHistory.create([{
+          fields: {
+            key: stakeKey,
+            votePubkey: v.votePubkey,
+            epoch,
+            activeStake: Number(v.activatedStake),
+          }
+        }]);
+        stakeRecordsCreated++;
+      }
+
+      // ---- PERFORMANCE HISTORY TRACKING ----
+      // Calculate skip rate and record performance metrics
+      // Skip rate = (slots_in_epoch - credits_earned) / slots_in_epoch * 100
+      // We can get credits from epochCredits array [epoch, credits, previousCredits]
+      if (v.epochCredits && v.epochCredits.length > 0) {
+        // Get the most recent epoch credits entry
+        const latestCredits = v.epochCredits[v.epochCredits.length - 1];
+        const [creditEpoch, credits, previousCredits] = latestCredits;
+        
+        // Only record if this is for a completed epoch (not current)
+        if (Number(creditEpoch) < epoch) {
+          const perfKey = `${v.votePubkey}-${creditEpoch}`;
+          const existingPerf = await tb.performanceHistory
+            .select({ filterByFormula: `{key} = "${perfKey}"`, maxRecords: 1 })
+            .firstPage();
+          
+          if (!existingPerf[0]) {
+            // Total possible credits per epoch (can change, but currently 6912000)
+            // This is 432,000 slots/epoch * 16 votes per slot = 6,912,000
+            const SLOTS_PER_EPOCH = 432000;
+            const VOTES_PER_SLOT = 16;
+            const MAX_CREDITS = SLOTS_PER_EPOCH * VOTES_PER_SLOT;
+            
+            const earnedCredits = Number(credits) - Number(previousCredits);
+            const skipRate = ((MAX_CREDITS - earnedCredits) / MAX_CREDITS) * 100;
+            
+            await tb.performanceHistory.create([{
+              fields: {
+                key: perfKey,
+                votePubkey: v.votePubkey,
+                epoch: Number(creditEpoch),
+                credits: earnedCredits,
+                skipRate: Math.max(0, Math.min(100, skipRate)), // Clamp between 0-100
+              }
+            }]);
+            performanceRecordsCreated++;
+          }
+        }
       }
 
       // 4) DELTA-ONLY SNAPSHOTS
@@ -276,7 +343,18 @@ export async function POST(req: NextRequest) {
       // If commission didn’t change, we write nothing and (correctly) emit no event.
     }
 
-    return NextResponse.json({ ok: true, epoch, slot });
+    console.log(`📊 Stake records created: ${stakeRecordsCreated}`);
+    console.log(`📊 Performance records created: ${performanceRecordsCreated}`);
+    
+    return NextResponse.json({ 
+      ok: true, 
+      epoch, 
+      slot,
+      metrics: {
+        stakeRecordsCreated,
+        performanceRecordsCreated,
+      }
+    });
   } catch (err: any) {
     console.error("snapshot error:", err);
     return NextResponse.json({ error: String(err?.message || err) }, { status: 500 });
