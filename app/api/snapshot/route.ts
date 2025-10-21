@@ -130,10 +130,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 1) Pull current vote accounts + epoch/slot
-    const [votes, epochInfo] = await Promise.all([
+    // 1) Pull current vote accounts + epoch/slot + cluster nodes for versions
+    const [votes, epochInfo, clusterNodes] = await Promise.all([
       rpc("getVoteAccounts", []),
       rpc("getEpochInfo", []),
+      rpc("getClusterNodes", []),
     ]);
     const epoch = Number(epochInfo.epoch);
     const slot = Number(epochInfo.absoluteSlot);
@@ -142,8 +143,15 @@ export async function POST(req: NextRequest) {
       nodePubkey: string;   // identity pubkey
       commission: number;
       activatedStake: number;
-      version?: string;      // Validator client version
     }>;
+
+    // Build a map of identity pubkey -> version from cluster nodes
+    const versionMap = new Map<string, string>();
+    for (const node of clusterNodes as any[]) {
+      if (node.pubkey && node.version) {
+        versionMap.set(node.pubkey, node.version);
+      }
+    }
 
     // Track stake and performance metrics
     let stakeRecordsCreated = 0;
@@ -152,6 +160,98 @@ export async function POST(req: NextRequest) {
     // Get block production data for skip rate calculation (current epoch only)
     const blockProduction = await rpc("getBlockProduction", [{ epoch }]);
     const blockProductionData = blockProduction?.value?.byIdentity || {};
+    
+    // Fetch ALL stake accounts at once to avoid per-validator RPC calls
+    // WARNING: This can be very expensive on mainnet (millions of accounts)
+    // Set ENABLE_STAKE_TRACKING=false to disable if causing timeouts
+    let stakeByVoter = new Map<string, { activating: number; deactivating: number }>();
+    const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
+    
+    if (enableStakeTracking) {
+      console.log(`📊 Fetching all stake accounts (this may take a while)...`);
+      try {
+        const allStakeAccounts = await rpc("getProgramAccounts", [
+          "Stake11111111111111111111111111111111111111",
+          {
+            encoding: "jsonParsed",
+            filters: [
+              { dataSize: 200 }, // Stake account data size
+            ],
+          },
+        ]);
+        
+        console.log(`📊 Processing ${allStakeAccounts.length} stake accounts...`);
+        
+        // Group stake by voter pubkey
+        for (const account of allStakeAccounts as any[]) {
+          const stakeData = account?.account?.data?.parsed?.info?.stake;
+          if (stakeData?.delegation) {
+            const delegation = stakeData.delegation;
+            const voter = delegation.voter;
+            const activationEpoch = Number(delegation.activationEpoch || 0);
+            const deactivationEpoch = Number(delegation.deactivationEpoch || Number.MAX_SAFE_INTEGER);
+            const stake = Number(delegation.stake || 0);
+            
+            if (!stakeByVoter.has(voter)) {
+              stakeByVoter.set(voter, { activating: 0, deactivating: 0 });
+            }
+            
+            const data = stakeByVoter.get(voter)!;
+            
+            // Stake is activating if it was activated recently (within last 3 epochs)
+            if (activationEpoch === epoch || (activationEpoch < epoch && activationEpoch > epoch - 3)) {
+              data.activating += stake;
+            }
+            
+            // Stake is deactivating if deactivation epoch has been set and is in the past
+            if (deactivationEpoch !== Number.MAX_SAFE_INTEGER && deactivationEpoch <= epoch) {
+              data.deactivating += stake;
+            }
+          }
+        }
+        console.log(`✅ Processed stake accounts for ${stakeByVoter.size} voters`);
+      } catch (e) {
+        console.log(`⚠️ Could not fetch stake accounts (continuing without activating/deactivating data):`, e);
+      }
+    } else {
+      console.log(`⏭️ Stake tracking disabled (set ENABLE_STAKE_TRACKING=true to enable)`);
+    }
+    
+    // Fetch vote account data for all validators at once to get vote credits
+    console.log(`📊 Fetching vote credits for ${allVotes.length} validators...`);
+    const voteCreditsMap = new Map<string, number>();
+    
+    // Batch the vote account fetches to avoid too many concurrent requests
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < allVotes.length; i += BATCH_SIZE) {
+      const batch = allVotes.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(async (v) => {
+        try {
+          const voteAccountInfo = await rpc("getAccountInfo", [
+            v.votePubkey,
+            { encoding: "jsonParsed" }
+          ]);
+          
+          const epochCreditsArray = voteAccountInfo?.value?.data?.parsed?.info?.epochCredits;
+          if (epochCreditsArray && Array.isArray(epochCreditsArray)) {
+            // Find credits for current epoch
+            const currentEpochCredits = epochCreditsArray.find((entry: any) => 
+              Number(entry[0]) === epoch
+            );
+            if (currentEpochCredits) {
+              voteCreditsMap.set(v.votePubkey, Number(currentEpochCredits[1]));
+            }
+          }
+        } catch (e) {
+          // Silently skip validators we can't fetch credits for
+        }
+      });
+      
+      await Promise.all(batchPromises);
+      console.log(`  Processed ${Math.min(i + BATCH_SIZE, allVotes.length)}/${allVotes.length} vote accounts`);
+    }
+    
+    console.log(`✅ Fetched vote credits for ${voteCreditsMap.size} validators`);
     
     // PRE-FETCH existing records to avoid timeout from too many sequential calls
     console.log(`📊 Pre-fetching existing records for ${allVotes.length} validators...`);
@@ -227,6 +327,7 @@ export async function POST(req: NextRequest) {
       // DiceBear fallback ONLY when missing iconUrl
       const iconUrl = meta.iconUrl || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(v.nodePubkey)}`;
       const website = meta.website;
+      const version = versionMap.get(v.nodePubkey);
 
       // Prepare validator upsert (batch later)
       const existing = existingValidators.get(v.votePubkey);
@@ -237,7 +338,7 @@ export async function POST(req: NextRequest) {
         if (chainName) patch.name = chainName;
         if (iconUrl)   patch.iconUrl = iconUrl;
         if (website)   patch.website = website;
-        if (v.version && existing.get("version") !== v.version) patch.version = v.version;
+        if (version && existing.get("version") !== version) patch.version = version;
         if (Object.keys(patch).length) {
           validatorsToUpdate.push({ id: existing.id, fields: patch });
         }
@@ -249,7 +350,7 @@ export async function POST(req: NextRequest) {
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),
             ...(website   ? { website } : {}),
-            ...(v.version ? { version: v.version } : {}),
+            ...(version ? { version } : {}),
           }
         });
       }
@@ -257,40 +358,47 @@ export async function POST(req: NextRequest) {
       // ---- STAKE HISTORY TRACKING ----
       const stakeKey = `${v.votePubkey}-${epoch}`;
       if (!existingStakeKeys.has(stakeKey) && v.activatedStake !== undefined) {
+        // Get activating/deactivating stake from pre-fetched data
+        const stakeData = stakeByVoter.get(v.votePubkey);
+        
         stakeRecordsToCreate.push({
           fields: {
             key: stakeKey,
             votePubkey: v.votePubkey,
             epoch,
             activeStake: Number(v.activatedStake || 0),
-            // Note: activatingStake and deactivatingStake require additional RPC calls
+            ...(stakeData?.activating ? { activatingStake: stakeData.activating } : {}),
+            ...(stakeData?.deactivating ? { deactivatingStake: stakeData.deactivating } : {}),
           }
         });
       }
 
       // ---- PERFORMANCE HISTORY TRACKING ----
       const blockData = blockProductionData[v.nodePubkey];
-      if (blockData) {
-        const perfKey = `${v.votePubkey}-${epoch}`;
-        if (!existingPerfKeys.has(perfKey)) {
+      const perfKey = `${v.votePubkey}-${epoch}`;
+      if (!existingPerfKeys.has(perfKey)) {
+        let skipRate = 0;
+        if (blockData) {
           const leaderSlots = Number(blockData[0] || 0);
           const blocksProduced = Number(blockData[1] || 0);
           
-          let skipRate = 0;
           if (leaderSlots > 0) {
             skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
           }
-          
-          perfRecordsToCreate.push({
-            fields: {
-              key: perfKey,
-              votePubkey: v.votePubkey,
-              epoch,
-              skipRate: Math.max(0, Math.min(100, skipRate)),
-              credits: blocksProduced,
-            }
-          });
         }
+        
+        // Get vote credits from pre-fetched map
+        const voteCredits = voteCreditsMap.get(v.votePubkey);
+        
+        perfRecordsToCreate.push({
+          fields: {
+            key: perfKey,
+            votePubkey: v.votePubkey,
+            epoch,
+            skipRate: Math.max(0, Math.min(100, skipRate)),
+            ...(voteCredits !== undefined ? { voteCredits } : {}),
+          }
+        });
       }
 
       // 4) DELTA-ONLY SNAPSHOTS

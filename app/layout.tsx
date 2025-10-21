@@ -1,3 +1,4 @@
+import EpochProgress from "@/components/EpochProgress";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import React from "react";
@@ -59,6 +60,12 @@ export default function RootLayout({
                 </span>
               </div>
             </a>
+
+            {/* Epoch Progress - Inline in header */}
+            <div className="hidden lg:block flex-1 max-w-md mx-8">
+              <EpochProgress />
+            </div>
+
             <nav className="flex items-center gap-2">
               <a
                 href="/"
