@@ -1,6 +1,7 @@
 "use client";
 import RugsPerEpochChart from "@/components/RugsPerEpochChart";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Row = {
   id: string;
@@ -71,10 +72,19 @@ export default function Page() {
   );
   const [searching, setSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [eventsPerPage] = useState(25);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const previousRugsRef = useRef<Set<string>>(new Set());
   const sirenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   async function load(isAutoRefresh = false) {
     if (!isAutoRefresh) setLoading(true);
@@ -180,7 +190,11 @@ export default function Page() {
         setSearchResults(data.results || []);
         // Only show dropdown if we have results
         if (data.results && data.results.length > 0) {
-          setShowSearchResults(true);
+          // Small delay to ensure input is positioned
+          setTimeout(() => {
+            updateDropdownPosition();
+            setShowSearchResults(true);
+          }, 0);
         }
       } catch (error) {
         console.error("Search failed:", error);
@@ -213,16 +227,38 @@ export default function Page() {
     return () => clearInterval(interval);
   }, [autoRefresh, epochs, showInfo]);
 
-  const filtered = items.filter((it) => {
-    // Filter by search query
-    if (q.trim()) {
-      const searchText = `${it.vote_pubkey} ${it.name ?? ""} ${
-        it.type
-      }`.toLowerCase();
-      if (!searchText.includes(q.toLowerCase())) return false;
-    }
+  // Mount detection for portal
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
-    // Filter by event type
+  // Calculate dropdown position
+  const updateDropdownPosition = () => {
+    if (searchInputRef.current) {
+      const rect = searchInputRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  };
+
+  // Update position when showing results or on scroll/resize
+  useEffect(() => {
+    if (showSearchResults && searchResults.length > 0) {
+      updateDropdownPosition();
+      window.addEventListener("scroll", updateDropdownPosition, true);
+      window.addEventListener("resize", updateDropdownPosition);
+      return () => {
+        window.removeEventListener("scroll", updateDropdownPosition, true);
+        window.removeEventListener("resize", updateDropdownPosition);
+      };
+    }
+  }, [showSearchResults, searchResults.length]);
+
+  const filtered = items.filter((it) => {
+    // Filter by event type only (removed search query filtering)
     if (it.type === "RUG" && !showRugs) return false;
     if (it.type === "CAUTION" && !showCautions) return false;
     if (it.type === "INFO" && !showInfo) return false;
@@ -232,6 +268,17 @@ export default function Page() {
 
   const rugCount = filtered.filter((it) => it.type === "RUG").length;
   const cautionCount = filtered.filter((it) => it.type === "CAUTION").length;
+
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / eventsPerPage);
+  const startIndex = (currentPage - 1) * eventsPerPage;
+  const endIndex = startIndex + eventsPerPage;
+  const paginatedItems = filtered.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [epochs, showInfo, showRugs, showCautions]);
 
   return (
     <div className="space-y-8">
@@ -342,7 +389,7 @@ export default function Page() {
       )}
 
       {/* Hero Section */}
-      <div className="text-center space-y-4 mb-12">
+      <div className="text-center space-y-4 mb-8">
         <div className="inline-block">
           <h1 className="text-5xl md:text-6xl font-bold gradient-text mb-4">
             Validator Commission Tracker
@@ -355,94 +402,62 @@ export default function Page() {
         </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="glass rounded-2xl p-6 card-shine hover:scale-105 transition-transform duration-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Total Events</p>
-              <p className="text-3xl font-bold text-white">{filtered.length}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center">
-              <span className="text-2xl">📊</span>
-            </div>
+      {/* Global Validator Search */}
+      <div className="max-w-2xl mx-auto mb-12">
+        <div className="glass rounded-2xl p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xl">🔍</span>
+            <h2 className="text-lg font-semibold text-white">
+              Search Validators
+            </h2>
           </div>
-        </div>
-
-        <div className="glass rounded-2xl p-6 card-shine hover:scale-105 transition-transform duration-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Rug Alerts</p>
-              <p className="text-3xl font-bold text-red-400">{rugCount}</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center">
-              <span className="text-2xl">🚨</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass rounded-2xl p-6 card-shine hover:scale-105 transition-transform duration-300">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Caution Alerts</p>
-              <p className="text-3xl font-bold text-yellow-400">
-                {cautionCount}
-              </p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-              <span className="text-2xl">⚠️</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="glass rounded-2xl p-6 space-y-4">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center flex-1">
-            <div className="flex items-center gap-3">
-              <label className="text-sm text-gray-400 whitespace-nowrap">
-                Lookback:
-              </label>
-              <input
-                type="number"
-                value={epochs}
-                onChange={(e) =>
-                  setEpochs(Math.max(1, Number(e.target.value || 1)))
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none text-base">
+              {searching ? (
+                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <>🔍</>
+              )}
+            </span>
+            <input
+              ref={searchInputRef}
+              placeholder="Search validator name or pubkey..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onFocus={() => {
+                if (searchResults.length > 0) {
+                  updateDropdownPosition();
+                  setShowSearchResults(true);
                 }
-                className="input-modern w-24 bg-white/5 text-white"
-              />
-              <span className="text-sm text-gray-500">epochs</span>
-            </div>
-            <div className="relative flex-1 min-w-[300px]">
-              <span className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none text-base">
-                {searching ? (
-                  <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <>🔍</>
-                )}
-              </span>
-              <input
-                placeholder="Search validator name or pubkey..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                onFocus={() =>
-                  searchResults.length > 0 && setShowSearchResults(true)
-                }
-                className="input-modern w-full bg-white/5 text-white pl-11"
-                style={{ paddingLeft: "2.75rem" }}
-              />
+              }}
+              className="input-modern w-full bg-white/5 text-white pl-11"
+              style={{ paddingLeft: "2.75rem" }}
+            />
 
-              {/* Validator Search Results Dropdown */}
-              {showSearchResults && searchResults.length > 0 && (
+            {/* Validator Search Results Dropdown - Rendered via Portal */}
+            {isMounted &&
+              showSearchResults &&
+              searchResults.length > 0 &&
+              dropdownPosition &&
+              createPortal(
                 <>
                   <div
-                    className="fixed inset-0 z-[100]"
+                    className="fixed inset-0"
+                    style={{ zIndex: 999998 }}
                     onClick={() => setShowSearchResults(false)}
                   />
-                  <div className="absolute top-full left-0 right-0 mt-2 glass rounded-xl border border-orange-500/30 overflow-hidden z-[101] max-h-96 overflow-y-auto shadow-2xl bg-[#1a1a1a]/95 backdrop-blur-xl">
-                    <div className="p-3 border-b border-orange-500/20 bg-orange-500/10">
-                      <span className="text-xs text-orange-400 font-semibold px-2">
+                  <div
+                    className="fixed rounded-xl border-2 border-orange-500 overflow-hidden max-h-96 overflow-y-auto shadow-2xl"
+                    style={{
+                      zIndex: 999999,
+                      backgroundColor: "#0a0a0a",
+                      top: `${dropdownPosition.top}px`,
+                      left: `${dropdownPosition.left}px`,
+                      width: `${dropdownPosition.width}px`,
+                    }}
+                  >
+                    <div className="p-3 border-b border-orange-500/50 bg-gradient-to-r from-orange-500/30 to-orange-600/30">
+                      <span className="text-sm text-orange-300 font-bold px-2">
                         🔍 Validators matching "{q}"
                       </span>
                     </div>
@@ -450,7 +465,8 @@ export default function Page() {
                       <a
                         key={result.votePubkey}
                         href={`/validator/${result.votePubkey}`}
-                        className="flex items-center gap-3 p-4 hover:bg-orange-500/10 transition-colors border-b border-white/5 last:border-0 group"
+                        className="flex items-center gap-3 p-4 hover:bg-orange-500/30 transition-all border-b border-white/10 last:border-0 group"
+                        style={{ backgroundColor: "#1a1a1a" }}
                         onClick={() => {
                           setShowSearchResults(false);
                           setQ("");
@@ -460,137 +476,208 @@ export default function Page() {
                           <img
                             src={result.iconUrl}
                             alt={result.name}
-                            className="w-10 h-10 rounded-lg border-2 border-white/10 group-hover:border-orange-500/50 transition-colors"
+                            className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center border-2 border-white/10 group-hover:border-orange-500/50 transition-colors">
+                          <div className="w-10 h-10 rounded-lg bg-orange-500/30 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
                             <span className="text-lg">🔷</span>
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="text-white text-sm font-semibold truncate group-hover:text-orange-400 transition-colors">
+                          <div className="text-white text-base font-bold truncate group-hover:text-orange-300 transition-colors">
                             {result.name}
                           </div>
-                          <div className="text-xs text-gray-400 font-mono truncate">
+                          <div className="text-xs text-gray-300 font-mono truncate bg-black/30 px-2 py-0.5 rounded mt-1 inline-block">
                             {result.votePubkey}
                           </div>
                         </div>
-                        <span className="text-gray-500 group-hover:text-orange-400 transition-colors">
+                        <span className="text-gray-400 group-hover:text-orange-400 transition-colors text-xl flex-shrink-0">
                           →
                         </span>
                       </a>
                     ))}
                   </div>
-                </>
+                </>,
+                document.body
               )}
-            </div>
           </div>
-          <div className="flex items-center gap-4">
-            {/* Real-time Status (clickable to toggle) */}
-            <button
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all hover:scale-105 ${
-                autoRefresh
-                  ? "text-gray-400 bg-white/5 border-white/10 hover:bg-white/10"
-                  : "text-gray-500 bg-white/5 border-white/10 hover:bg-white/10"
-              }`}
-              title={
-                autoRefresh
-                  ? "Click to pause auto-refresh"
-                  : "Click to enable auto-refresh"
-              }
-            >
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  autoRefresh ? "bg-green-500 animate-pulse" : "bg-gray-500"
-                }`}
-              ></div>
-              <span className="whitespace-nowrap">
-                {autoRefresh ? "Auto-refresh" : "Paused"}
-              </span>
-              {lastUpdate && (
-                <span className="text-gray-500 border-l border-white/10 pl-2 ml-1">
-                  {lastUpdate.toLocaleTimeString()}
-                </span>
-              )}
-            </button>
-            <a href="/api/export" className="btn-secondary whitespace-nowrap">
-              📥 Export CSV
-            </a>
-          </div>
-        </div>
-
-        {/* Event Type Filters */}
-        <div className="flex flex-wrap items-center gap-3 pt-4 mt-4 border-t border-white/10">
-          <span className="text-sm text-gray-400 font-medium">Show:</span>
-          <button
-            onClick={() => setShowRugs(!showRugs)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              showRugs
-                ? "bg-red-500/30 text-red-300 border-2 border-red-500"
-                : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
-            }`}
-          >
-            🚨 RUG
-          </button>
-          <button
-            onClick={() => setShowCautions(!showCautions)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              showCautions
-                ? "bg-yellow-500/30 text-yellow-300 border-2 border-yellow-500"
-                : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
-            }`}
-          >
-            ⚠️ Caution
-          </button>
-          <button
-            onClick={() => setShowInfo(!showInfo)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              showInfo
-                ? "bg-blue-500/30 text-blue-300 border-2 border-blue-500"
-                : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
-            }`}
-          >
-            📊 Info
-          </button>
-
-          {/* Quick Presets */}
-          <div className="hidden sm:block w-px h-6 bg-white/10"></div>
-          <button
-            onClick={() => {
-              setShowRugs(true);
-              setShowCautions(false);
-              setShowInfo(false);
-            }}
-            className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
-          >
-            Only RUG
-          </button>
-          <button
-            onClick={() => {
-              setShowRugs(true);
-              setShowCautions(true);
-              setShowInfo(false);
-            }}
-            className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
-          >
-            RUG + Caution
-          </button>
-          <button
-            onClick={() => {
-              setShowRugs(true);
-              setShowCautions(true);
-              setShowInfo(true);
-            }}
-            className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
-          >
-            Show All
-          </button>
         </div>
       </div>
 
-      {/* Events Table */}
-      <div className="glass rounded-2xl overflow-hidden">
+      {/* Commission Events Table Section */}
+      <div className="glass rounded-2xl p-6 space-y-6">
+        {/* Table Header with Stats and Controls */}
+        <div className="space-y-4">
+          {/* Title and Stats Row */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+              <span>📊</span>
+              Commission Events
+            </h2>
+            <div className="flex gap-4">
+              <div className="text-center px-4 py-2 rounded-lg bg-white/5 border border-white/10">
+                <div className="text-xs text-gray-400">Total</div>
+                <div className="text-lg font-bold text-white">
+                  {filtered.length}
+                </div>
+              </div>
+              <div className="text-center px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+                <div className="text-xs text-gray-400">Rugs</div>
+                <div className="text-lg font-bold text-red-400">{rugCount}</div>
+              </div>
+              <div className="text-center px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                <div className="text-xs text-gray-400">Cautions</div>
+                <div className="text-lg font-bold text-yellow-400">
+                  {cautionCount}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Controls Row */}
+          <div className="flex flex-wrap gap-4 items-center justify-between">
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-400 whitespace-nowrap">
+                  Lookback:
+                </label>
+                <input
+                  type="number"
+                  value={epochs}
+                  onChange={(e) =>
+                    setEpochs(Math.max(1, Number(e.target.value || 1)))
+                  }
+                  className="input-modern w-20 bg-white/5 text-white text-center"
+                />
+                <span className="text-sm text-gray-500">epochs</span>
+              </div>
+            </div>
+
+            {/* Right Side: Auto-refresh and Export */}
+            <div className="flex items-center gap-2">
+              {/* Real-time Status (clickable to toggle) */}
+              <button
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all hover:scale-105 ${
+                  autoRefresh
+                    ? "text-gray-400 bg-white/5 border-white/10 hover:bg-white/10"
+                    : "text-gray-500 bg-white/5 border-white/10 hover:bg-white/10"
+                }`}
+                title={
+                  autoRefresh
+                    ? "Click to pause auto-refresh"
+                    : "Click to enable auto-refresh"
+                }
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    autoRefresh ? "bg-green-500 animate-pulse" : "bg-gray-500"
+                  }`}
+                ></div>
+                <span className="whitespace-nowrap">
+                  {autoRefresh ? "Auto-refresh" : "Paused"}
+                </span>
+                {lastUpdate && (
+                  <span className="text-gray-500 border-l border-white/10 pl-2 ml-1">
+                    {lastUpdate.toLocaleTimeString()}
+                  </span>
+                )}
+              </button>
+              <a href="/api/export" className="btn-secondary whitespace-nowrap">
+                📥 Export CSV
+              </a>
+            </div>
+          </div>
+
+          {/* Event Type Filters */}
+          <div className="flex flex-wrap items-center gap-3 pt-4 mt-4 border-t border-white/10">
+            <span className="text-sm text-gray-400 font-medium">Show:</span>
+            <button
+              onClick={() => setShowRugs(!showRugs)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                showRugs
+                  ? "bg-red-500/30 text-red-300 border-2 border-red-500"
+                  : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              🚨 RUG
+            </button>
+            <button
+              onClick={() => setShowCautions(!showCautions)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                showCautions
+                  ? "bg-yellow-500/30 text-yellow-300 border-2 border-yellow-500"
+                  : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              ⚠️ Caution
+            </button>
+            <button
+              onClick={() => setShowInfo(!showInfo)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                showInfo
+                  ? "bg-blue-500/30 text-blue-300 border-2 border-blue-500"
+                  : "bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              📊 Info
+            </button>
+
+            {/* Quick Presets */}
+            <div className="hidden sm:block w-px h-6 bg-white/10"></div>
+            <button
+              onClick={() => {
+                setShowRugs(true);
+                setShowCautions(false);
+                setShowInfo(false);
+              }}
+              className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
+            >
+              Only RUG
+            </button>
+            <button
+              onClick={() => {
+                setShowRugs(true);
+                setShowCautions(true);
+                setShowInfo(false);
+              }}
+              className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
+            >
+              RUG + Caution
+            </button>
+            <button
+              onClick={() => {
+                setShowRugs(true);
+                setShowCautions(true);
+                setShowInfo(true);
+              }}
+              className="hidden sm:inline-flex px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10 transition-all"
+            >
+              Show All
+            </button>
+
+            {/* Compact Legend */}
+            <div className="hidden sm:block w-px h-6 bg-white/10"></div>
+            <div className="hidden lg:flex items-center gap-4 text-xs text-gray-500">
+              <span>Legend:</span>
+              <span className="flex items-center gap-1">
+                <span className="rug-badge text-[10px] px-2 py-0.5">🚨</span>{" "}
+                ≥90%
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="caution-badge text-[10px] px-2 py-0.5">
+                  ⚠️
+                </span>{" "}
+                ≥10%
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="text-xs">📊</span> Minor changes
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Events Table */}
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-white/5 border-b border-white/10">
@@ -646,7 +733,7 @@ export default function Page() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((it) => (
+                paginatedItems.map((it) => (
                   <tr
                     key={it.id}
                     className="hover:bg-white/5 transition-colors duration-200 group"
@@ -790,27 +877,67 @@ export default function Page() {
             </tbody>
           </table>
         </div>
-      </div>
 
-      {/* Legend */}
-      <div className="glass rounded-xl p-6">
-        <div className="flex flex-wrap items-center justify-center gap-6 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="rug-badge">🚨 RUG</span>
-            <span className="text-gray-400">Commission ≥ 90%</span>
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-6">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-4 py-2 rounded-lg bg-white/5 text-white border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              ← Previous
+            </button>
+
+            <div className="flex items-center gap-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((page) => {
+                  // Show first page, last page, current page, and pages around current
+                  return (
+                    page === 1 ||
+                    page === totalPages ||
+                    Math.abs(page - currentPage) <= 1
+                  );
+                })
+                .map((page, idx, arr) => {
+                  // Add ellipsis if there's a gap
+                  const prevPage = arr[idx - 1];
+                  const showEllipsis = prevPage && page - prevPage > 1;
+
+                  return (
+                    <div key={page} className="flex items-center gap-2">
+                      {showEllipsis && (
+                        <span className="text-gray-500 px-2">...</span>
+                      )}
+                      <button
+                        onClick={() => setCurrentPage(page)}
+                        className={`w-10 h-10 rounded-lg border transition-all ${
+                          currentPage === page
+                            ? "bg-orange-500 text-white border-orange-500 font-bold"
+                            : "bg-white/5 text-white border-white/10 hover:bg-white/10"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-4 py-2 rounded-lg bg-white/5 text-white border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              Next →
+            </button>
           </div>
-          <div className="w-px h-6 bg-white/10"></div>
-          <div className="flex items-center gap-2">
-            <span className="caution-badge">⚠️ CAUTION</span>
-            <span className="text-gray-400">Commission Increase ≥ 10%</span>
-          </div>
-          <div className="w-px h-6 bg-white/10"></div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-white/5 text-gray-300 border border-white/10">
-              📊 INFO
-            </span>
-            <span className="text-gray-400">Minor commission changes</span>
-          </div>
+        )}
+
+        {/* Showing X of Y events */}
+        <div className="text-center text-sm text-gray-400 mt-4 pb-2">
+          Showing {startIndex + 1}-{Math.min(endIndex, filtered.length)} of{" "}
+          {filtered.length} events
         </div>
       </div>
 
