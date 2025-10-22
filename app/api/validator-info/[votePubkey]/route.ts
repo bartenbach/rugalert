@@ -97,6 +97,26 @@ export async function GET(
       console.log(`⚠️  ${votePubkey.substring(0, 8)}... - No performance data found in database`);
     }
 
+    // Fetch latest MEV data if validator is Jito-enabled
+    const jitoEnabled = Boolean(validator.get('jitoEnabled'));
+    let mevData = null;
+    
+    if (jitoEnabled) {
+      const mevRecords = await tb.mevSnapshots.select({
+        filterByFormula: `{votePubkey} = "${votePubkey}"`,
+        sort: [{ field: 'epoch', direction: 'desc' }],
+        maxRecords: 1,
+      }).firstPage();
+
+      if (mevRecords[0]) {
+        mevData = {
+          mevCommission: Number(mevRecords[0].get('mevCommission') || 0),
+          priorityFeeCommission: Number(mevRecords[0].get('priorityFeeCommission') || 0),
+          epoch: Number(mevRecords[0].get('epoch')),
+        };
+      }
+    }
+
     return NextResponse.json({
       validator: {
         votePubkey: validator.get('votePubkey'),
@@ -106,9 +126,11 @@ export async function GET(
         website: validator.get('website'),
         version: validator.get('version'),
         delinquent: isDelinquent, // Use real-time RPC data
+        jitoEnabled,
       },
       performance: perfData,
       stake: stakeData,
+      mev: mevData,
       currentEpoch,
     });
   } catch (error: any) {

@@ -18,6 +18,8 @@ type Validator = {
   delinquent: boolean;
   rank: number;
   stakeAccountCount: number;
+  jitoEnabled?: boolean;
+  mevCommission?: number | null;
 };
 
 type NetworkStats = {
@@ -207,15 +209,21 @@ export default function ValidatorsPage() {
               <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a]">
                 Cumulative
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a] rounded-tr-2xl">
+              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a]">
                 Commission
+              </th>
+              <th
+                className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a] rounded-tr-2xl"
+                title="MEV Commission on priority fees and bundles"
+              >
+                MEV Commission
               </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center">
+                <td colSpan={6} className="px-6 py-12 text-center">
                   <div className="flex items-center justify-center gap-3">
                     <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                     <span className="text-gray-400">Loading validators...</span>
@@ -224,7 +232,7 @@ export default function ValidatorsPage() {
               </tr>
             ) : displayedValidators.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center">
+                <td colSpan={6} className="px-6 py-12 text-center">
                   <div className="text-4xl mb-2">🔍</div>
                   <p className="text-gray-400">No validators found</p>
                 </td>
@@ -244,7 +252,7 @@ export default function ValidatorsPage() {
                     <>
                       {showNakamotoDivider && (
                         <tr key={`nakamoto-${validator.votePubkey}`}>
-                          <td colSpan={5} className="px-0 py-0">
+                          <td colSpan={6} className="px-0 py-0">
                             <div className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50">
                               <div className="px-4 py-2 flex items-center justify-center gap-2">
                                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
@@ -378,6 +386,26 @@ export default function ValidatorsPage() {
                             {validator.commission}%
                           </span>
                         </td>
+                        <td className="px-4 py-2">
+                          {validator.jitoEnabled &&
+                          validator.mevCommission !== null &&
+                          validator.mevCommission !== undefined ? (
+                            <span
+                              className={`text-sm font-semibold ${
+                                validator.mevCommission <= 5
+                                  ? "text-green-400"
+                                  : validator.mevCommission <= 10
+                                  ? "text-yellow-400"
+                                  : "text-red-400"
+                              }`}
+                              title="MEV Commission"
+                            >
+                              {validator.mevCommission}%
+                            </span>
+                          ) : (
+                            <span className="text-gray-600 text-sm">—</span>
+                          )}
+                        </td>
                       </tr>
                     </>
                   );
@@ -386,7 +414,7 @@ export default function ValidatorsPage() {
                 {/* Scroll sentinel for infinite scroll */}
                 {displayCount < allValidators.length && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center">
+                    <td colSpan={6} className="px-6 py-8 text-center">
                       <div className="flex items-center justify-center gap-3">
                         <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-gray-400 text-sm">

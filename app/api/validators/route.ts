@@ -9,6 +9,7 @@ const base = new Airtable({
 const VALIDATORS_TABLE = "validators";
 const STAKE_HISTORY_TABLE = "stake_history";
 const SNAPSHOTS_TABLE = "snapshots";
+const MEV_SNAPSHOTS_TABLE = "mev_snapshots";
 
 export const dynamic = 'force-dynamic';
 
@@ -55,20 +56,27 @@ export async function GET(request: NextRequest) {
     const validatorsMap = new Map<string, any>();
     await base(VALIDATORS_TABLE)
       .select({
-        fields: ['votePubkey', 'identityPubkey', 'name', 'iconUrl', 'version', 'stakeAccountCount'],
+        fields: ['votePubkey', 'identityPubkey', 'name', 'iconUrl', 'version', 'stakeAccountCount', 'jitoEnabled', 'activeStake', 'activatingStake', 'deactivatingStake'],
         pageSize: 100,
       })
       .eachPage((pageRecords, fetchNextPage) => {
         pageRecords.forEach((record) => {
-          validatorsMap.set(record.fields.votePubkey as string, {
+          const votePubkey = record.fields.votePubkey as string;
+          const jitoEnabled = Boolean(record.fields.jitoEnabled);
+          
+          validatorsMap.set(votePubkey, {
             id: record.id,
-            votePubkey: record.fields.votePubkey,
+            votePubkey,
             identityPubkey: record.fields.identityPubkey,
             name: record.fields.name || null,
             iconUrl: record.fields.iconUrl || null,
             version: record.fields.version || null,
             stakeAccountCount: Number(record.fields.stakeAccountCount || 0),
             commission: 0, // Will be filled from snapshots
+            jitoEnabled,
+            activeStake: Number(record.fields.activeStake || 0),
+            activatingStake: Number(record.fields.activatingStake || 0),
+            deactivatingStake: Number(record.fields.deactivatingStake || 0),
             // Delinquent status will be set from real-time RPC data below
           });
         });
@@ -94,6 +102,29 @@ export async function GET(request: NextRequest) {
           // Keep only the most recent snapshot for each validator (first occurrence since sorted desc)
           if (!commissionMap.has(votePubkey)) {
             commissionMap.set(votePubkey, { commission, epoch });
+          }
+        });
+        fetchNextPage();
+      });
+
+    // Fetch latest MEV commission from mev_snapshots
+    // Fetch ALL mev snapshots, group by votePubkey, keep only most recent
+    const mevCommissionMap = new Map<string, number>();
+    
+    await base(MEV_SNAPSHOTS_TABLE)
+      .select({
+        fields: ['votePubkey', 'mevCommission', 'epoch'],
+        pageSize: 100,
+      })
+      .eachPage((pageRecords, fetchNextPage) => {
+        pageRecords.forEach((record) => {
+          const votePubkey = record.fields.votePubkey as string;
+          const mevCommission = Number(record.fields.mevCommission || 0);
+          
+          // Keep only the most recent MEV snapshot for each validator
+          const existing = mevCommissionMap.get(votePubkey);
+          if (existing === undefined) {
+            mevCommissionMap.set(votePubkey, mevCommission);
           }
         });
         fetchNextPage();
@@ -127,6 +158,8 @@ export async function GET(request: NextRequest) {
           // Override delinquent status with real-time RPC data
           delinquent: delinquentSet.has(votePubkey),
           // stakeAccountCount comes from validator object (cached in DB)
+          // MEV commission from mev_snapshots
+          mevCommission: mevCommissionMap.get(votePubkey) ?? null,
         });
       }
     });
@@ -177,6 +210,8 @@ export async function GET(request: NextRequest) {
         stakePercent: totalStake > 0 ? (validator.activeStake / totalStake) * 100 : 0,
         cumulativeStakePercent: totalStake > 0 ? (cumulativeStake / totalStake) * 100 : 0,
         version: validator.version,
+        jitoEnabled: validator.jitoEnabled || false,
+        mevCommission: validator.mevCommission ?? null,
         delinquent: validator.delinquent,
         rank: index + 1,
         stakeAccountCount: validator.stakeAccountCount,

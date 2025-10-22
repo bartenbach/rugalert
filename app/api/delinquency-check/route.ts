@@ -60,11 +60,6 @@ export async function GET(req: NextRequest) {
 
     console.log(`📊 Network: ${activeValidators.length} active, ${delinquentValidators.length} delinquent`);
     console.log(`📅 Processing date: ${today}`);
-    
-    // Debug: Check simpdigit specifically
-    const simpdigitVote = 'Simpj3KyRQmpRkXuBvCQFS7DBBG6vqw93SkZb9UD1hp';
-    const simpdigitIsDelinquent = delinquentSet.has(simpdigitVote);
-    console.log(`🔍 Simpdigit check: isDelinquent=${simpdigitIsDelinquent}`);
 
     // Fetch existing records for today - SIMPLE: key ends with today's date
     // Key format: "votePubkey-YYYY-MM-DD"

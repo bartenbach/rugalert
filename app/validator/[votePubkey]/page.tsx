@@ -46,6 +46,7 @@ type ValidatorInfo = {
     website?: string;
     version?: string;
     delinquent?: boolean;
+    jitoEnabled?: boolean;
   };
   performance: {
     skipRate: number;
@@ -59,6 +60,11 @@ type ValidatorInfo = {
     activeStake: number;
     activatingStake: number;
     deactivatingStake: number;
+    epoch: number;
+  } | null;
+  mev: {
+    mevCommission: number;
+    priorityFeeCommission: number;
     epoch: number;
   } | null;
   currentEpoch: number;
@@ -341,22 +347,74 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
                   <div className="flex items-baseline gap-2">
                     <span className="text-gray-500">Commission:</span>
-                    <span className="text-white font-semibold">
+                    <span
+                      className={`font-semibold ${
+                        currentCommission !== null
+                          ? currentCommission <= 5
+                            ? "text-green-400"
+                            : currentCommission <= 10
+                            ? "text-yellow-400"
+                            : "text-red-400"
+                          : "text-white"
+                      }`}
+                    >
                       {currentCommission !== null
                         ? `${currentCommission}%`
                         : "—"}
                     </span>
+                    {validatorInfo?.validator?.jitoEnabled &&
+                      validatorInfo?.mev && (
+                        <span
+                          className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold cursor-help ${
+                            validatorInfo.mev.mevCommission <= 5
+                              ? "bg-green-500/20 border border-green-500/50 text-green-300"
+                              : validatorInfo.mev.mevCommission <= 10
+                              ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-300"
+                              : "bg-red-500/20 border border-red-500/50 text-red-300"
+                          }`}
+                          title="MEV Commission: The percentage this validator charges on Maximum Extractable Value (MEV) rewards from priority fees and bundles"
+                        >
+                          MEV Commission {validatorInfo.mev.mevCommission}%
+                        </span>
+                      )}
                   </div>
                   {validatorInfo?.stake && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-gray-500">Stake:</span>
                       <span className="text-white font-semibold">
-                        ◎
+                        ◎{" "}
                         {validatorInfo.stake.activeStake.toLocaleString(
                           "en-US",
                           { maximumFractionDigits: 2 }
                         )}
                       </span>
+                      {(() => {
+                        const delta =
+                          validatorInfo.stake.activatingStake -
+                          validatorInfo.stake.deactivatingStake;
+                        if (delta !== 0) {
+                          return (
+                            <span
+                              className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold ${
+                                delta > 0
+                                  ? "bg-green-500/20 border border-green-500/50 text-green-300"
+                                  : "bg-red-500/20 border border-red-500/50 text-red-300"
+                              }`}
+                              title={`Net stake change: ${
+                                delta > 0 ? "+" : ""
+                              }${delta.toLocaleString("en-US", {
+                                maximumFractionDigits: 2,
+                              })} SOL`}
+                            >
+                              {delta > 0 ? "+" : ""}◎{" "}
+                              {Math.abs(delta).toLocaleString("en-US", {
+                                maximumFractionDigits: 2,
+                              })}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   )}
                   {validatorInfo?.validator?.version && (
@@ -491,19 +549,36 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
           {validatorInfo?.stake && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="glass rounded-xl p-4 border border-white/10">
-                <div className="text-xs text-gray-400 mb-1">Active Stake</div>
-                <div className="text-xl font-bold text-white">
-                  ◎
-                  {validatorInfo.stake.activeStake.toLocaleString("en-US", {
-                    maximumFractionDigits: 2,
-                  })}
+                <div className="text-xs text-gray-400 mb-1">Stake Delta</div>
+                <div
+                  className={`text-xl font-bold ${
+                    validatorInfo.stake.activatingStake -
+                      validatorInfo.stake.deactivatingStake >
+                    0
+                      ? "text-green-400"
+                      : validatorInfo.stake.activatingStake -
+                          validatorInfo.stake.deactivatingStake <
+                        0
+                      ? "text-red-400"
+                      : "text-gray-400"
+                  }`}
+                >
+                  {(() => {
+                    const delta =
+                      validatorInfo.stake.activatingStake -
+                      validatorInfo.stake.deactivatingStake;
+                    if (delta === 0) return "—";
+                    return `${delta > 0 ? "+" : ""}◎ ${Math.abs(
+                      delta
+                    ).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+                  })()}
                 </div>
               </div>
               <div className="glass rounded-xl p-4 border border-white/10">
                 <div className="text-xs text-gray-400 mb-1">Activating</div>
                 <div className="text-xl font-bold text-green-400">
                   {validatorInfo.stake.activatingStake > 0
-                    ? `◎${validatorInfo.stake.activatingStake.toLocaleString(
+                    ? `◎ ${validatorInfo.stake.activatingStake.toLocaleString(
                         "en-US",
                         { maximumFractionDigits: 2 }
                       )}`
@@ -514,7 +589,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 <div className="text-xs text-gray-400 mb-1">Deactivating</div>
                 <div className="text-xl font-bold text-red-400">
                   {validatorInfo.stake.deactivatingStake > 0
-                    ? `◎${validatorInfo.stake.deactivatingStake.toLocaleString(
+                    ? `◎ ${validatorInfo.stake.deactivatingStake.toLocaleString(
                         "en-US",
                         { maximumFractionDigits: 2 }
                       )}`
