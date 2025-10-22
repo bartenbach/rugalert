@@ -355,11 +355,16 @@ export async function POST(req: NextRequest) {
     
     // Fetch existing performance records for this epoch
     const existingPerfKeys = new Set<string>();
+    const existingPerfRecords = new Map<string, any>();
     await tb.performanceHistory.select({
       filterByFormula: `{epoch} = ${epoch}`,
       pageSize: 100
     }).eachPage((records, fetchNextPage) => {
-      records.forEach(r => existingPerfKeys.add(String(r.get('key'))));
+      records.forEach(r => {
+        const key = String(r.get('key'));
+        existingPerfKeys.add(key);
+        existingPerfRecords.set(key, r);
+      });
       fetchNextPage();
     });
     
@@ -396,6 +401,7 @@ export async function POST(req: NextRequest) {
     const validatorsToUpdate: {id: string, fields: any}[] = [];
     const stakeRecordsToCreate: any[] = [];
     const perfRecordsToCreate: any[] = [];
+    const perfRecordsToUpdate: {id: string, fields: any}[] = [];
     const mevSnapshotsToCreate: any[] = [];
     const mevEventsToCreate: any[] = [];
 
@@ -523,35 +529,48 @@ export async function POST(req: NextRequest) {
       // ---- PERFORMANCE HISTORY TRACKING ----
       const blockData = blockProductionData[v.nodePubkey];
       const perfKey = `${v.votePubkey}-${epoch}`;
-      if (!existingPerfKeys.has(perfKey)) {
-        let skipRate = 0;
-        if (blockData) {
-          const leaderSlots = Number(blockData[0] || 0);
-          const blocksProduced = Number(blockData[1] || 0);
-          
-          if (leaderSlots > 0) {
-            skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
-          }
+      
+      let skipRate = 0;
+      if (blockData) {
+        const leaderSlots = Number(blockData[0] || 0);
+        const blocksProduced = Number(blockData[1] || 0);
+        
+        if (leaderSlots > 0) {
+          skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
         }
-        
-        // Get vote credits from pre-fetched map and calculate percentage
-        const voteCredits = voteCreditsMap.get(v.votePubkey);
-        const voteCreditsPercentage = (voteCredits !== undefined && maxVoteCredits > 0)
-          ? (voteCredits / maxVoteCredits) * 100
-          : 0;
-        
+      }
+      
+      // Get vote credits from pre-fetched map and calculate percentage
+      const voteCredits = voteCreditsMap.get(v.votePubkey);
+      const voteCreditsPercentage = (voteCredits !== undefined && maxVoteCredits > 0)
+        ? (voteCredits / maxVoteCredits) * 100
+        : 0;
+      
+      const perfFields = {
+        key: perfKey,
+        votePubkey: v.votePubkey,
+        epoch,
+        skipRate: Math.max(0, Math.min(100, skipRate)),
+        ...(voteCredits !== undefined ? { 
+          voteCredits,
+          voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100, // 2 decimal places
+          maxPossibleCredits: maxVoteCredits,
+        } : {}),
+      };
+      
+      // For current epoch: update existing record, otherwise create new
+      if (existingPerfKeys.has(perfKey)) {
+        // Update the existing record
+        const existingRecord = existingPerfRecords.get(perfKey);
+        if (existingRecord) {
+          perfRecordsToUpdate.push({
+            id: existingRecord.id,
+            fields: perfFields
+          });
+        }
+      } else {
         perfRecordsToCreate.push({
-          fields: {
-            key: perfKey,
-            votePubkey: v.votePubkey,
-            epoch,
-            skipRate: Math.max(0, Math.min(100, skipRate)),
-            ...(voteCredits !== undefined ? { 
-              voteCredits,
-              voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100, // 2 decimal places
-              maxPossibleCredits: maxVoteCredits,
-            } : {}),
-          }
+          fields: perfFields
         });
       }
 
@@ -700,7 +719,7 @@ export async function POST(req: NextRequest) {
 
     // BATCH CREATE/UPDATE operations to avoid timeout
     console.log(`📦 Batching operations: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} validator updates`);
-    console.log(`📦 Batching: ${stakeRecordsToCreate.length} stake records, ${perfRecordsToCreate.length} perf records`);
+    console.log(`📦 Batching: ${stakeRecordsToCreate.length} stake records, ${perfRecordsToCreate.length} new perf records, ${perfRecordsToUpdate.length} perf updates`);
     
     // Airtable allows max 10 records per create/update call, so batch them
     const batchSize = 10;
@@ -731,6 +750,13 @@ export async function POST(req: NextRequest) {
       performanceRecordsCreated += batch.length;
     }
     
+    // Update performance records (current epoch)
+    for (let i = 0; i < perfRecordsToUpdate.length; i += batchSize) {
+      const batch = perfRecordsToUpdate.slice(i, i + batchSize);
+      await tb.performanceHistory.update(batch);
+      performanceRecordsCreated += batch.length; // Count updates as well
+    }
+    
     // Create MEV snapshots
     for (let i = 0; i < mevSnapshotsToCreate.length; i += batchSize) {
       const batch = mevSnapshotsToCreate.slice(i, i + batchSize);
@@ -747,6 +773,31 @@ export async function POST(req: NextRequest) {
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
     console.log(`✅ MEV snapshots created: ${mevSnapshotsCreated}`);
     console.log(`✅ MEV events created: ${mevEventsCreated}`);
+    
+    // Cleanup: Delete performance records older than 30 days (keep ~15 epochs of history)
+    // Solana epochs are ~2-3 days, so 15 epochs ≈ 30-45 days
+    const oldestEpochToKeep = epoch - 15;
+    console.log(`🧹 Cleaning up performance records older than epoch ${oldestEpochToKeep}...`);
+    
+    try {
+      const oldPerfRecords = await tb.performanceHistory.select({
+        filterByFormula: `{epoch} < ${oldestEpochToKeep}`,
+        maxRecords: 1000, // Limit per batch
+      }).firstPage();
+      
+      if (oldPerfRecords.length > 0) {
+        // Delete in batches of 10
+        for (let i = 0; i < oldPerfRecords.length; i += 10) {
+          const batch = oldPerfRecords.slice(i, i + 10).map(r => r.id);
+          await tb.performanceHistory.destroy(batch);
+        }
+        console.log(`🗑️  Deleted ${oldPerfRecords.length} old performance records`);
+      } else {
+        console.log(`✅ No old performance records to clean up`);
+      }
+    } catch (cleanupErr) {
+      console.error(`⚠️  Cleanup error (non-fatal):`, cleanupErr);
+    }
     
     return NextResponse.json({ 
       ok: true, 
