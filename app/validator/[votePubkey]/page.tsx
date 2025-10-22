@@ -411,7 +411,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                 maximumFractionDigits: 2,
                               })} SOL`}
                             >
-                              {delta > 0 ? "+" : ""}◎{" "}
+                              {delta > 0 ? "+" : "−"}◎{" "}
                               {Math.abs(delta).toLocaleString("en-US", {
                                 maximumFractionDigits: 2,
                               })}
@@ -580,7 +580,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       validatorInfo.stake.activatingStake -
                       validatorInfo.stake.deactivatingStake;
                     if (delta === 0) return "—";
-                    return `${delta > 0 ? "+" : ""}◎ ${Math.abs(
+                    return `${delta > 0 ? "+" : "−"}◎ ${Math.abs(
                       delta
                     ).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
                   })()}
