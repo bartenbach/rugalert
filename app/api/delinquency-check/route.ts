@@ -7,6 +7,7 @@ async function rpc(method: string, params: any[] = []) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    cache: 'no-store',
   });
   const json = await res.json();
   if (!res.ok || json.error) throw new Error(JSON.stringify(json.error || res.status));
@@ -14,6 +15,7 @@ async function rpc(method: string, params: any[] = []) {
 }
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 export const maxDuration = 60; // 60 seconds for Vercel Pro
 
 /**
@@ -58,6 +60,11 @@ export async function GET(req: NextRequest) {
 
     console.log(`📊 Network: ${activeValidators.length} active, ${delinquentValidators.length} delinquent`);
     console.log(`📅 Processing date: ${today}`);
+    
+    // Debug: Check simpdigit specifically
+    const simpdigitVote = 'Simpj3KyRQmpRkXuBvCQFS7DBBG6vqw93SkZb9UD1hp';
+    const simpdigitIsDelinquent = delinquentSet.has(simpdigitVote);
+    console.log(`🔍 Simpdigit check: isDelinquent=${simpdigitIsDelinquent}`);
 
     // Fetch existing records for today - SIMPLE: key ends with today's date
     // Key format: "votePubkey-YYYY-MM-DD"
