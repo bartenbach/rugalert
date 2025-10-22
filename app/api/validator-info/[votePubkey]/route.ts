@@ -70,21 +70,16 @@ export async function GET(
       maxRecords: 1,
     }).firstPage();
 
-    // Fetch validator record for current stake data (cached by snapshot job)
-    const validatorRecords = await tb.validators.select({
-      filterByFormula: `{votePubkey} = "${votePubkey}"`,
-      maxRecords: 1,
-    }).firstPage();
-
     // Convert lamports to SOL (1 SOL = 1,000,000,000 lamports)
     const LAMPORTS_PER_SOL = 1_000_000_000;
     
-    const stakeData = validatorRecords[0] ? {
-      activeStake: Number(validatorRecords[0].get('activeStake') || 0) / LAMPORTS_PER_SOL,
-      activatingStake: Number(validatorRecords[0].get('activatingStake') || 0) / LAMPORTS_PER_SOL,
-      deactivatingStake: Number(validatorRecords[0].get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
+    // Get stake data from validator record (cached by snapshot job)
+    const stakeData = {
+      activeStake: Number(validator.get('activeStake') || 0) / LAMPORTS_PER_SOL,
+      activatingStake: Number(validator.get('activatingStake') || 0) / LAMPORTS_PER_SOL,
+      deactivatingStake: Number(validator.get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
       epoch: currentEpoch,
-    } : null;
+    };
 
     const perfData = perfRecords[0] ? {
       skipRate: Number(perfRecords[0].get('skipRate') || 0),
