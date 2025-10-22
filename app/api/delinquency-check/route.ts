@@ -29,9 +29,14 @@ export async function GET(req: NextRequest) {
     console.log(`\n🩺 === DELINQUENCY CHECK START ===`);
     const startTime = Date.now();
 
-    // Verify cron secret
+    // Verify authorization (either from Vercel Cron or manual trigger with Bearer token)
     const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const userAgent = req.headers.get("user-agent");
+    const isVercelCron = userAgent?.includes("vercel-cron");
+    const hasValidAuth = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    
+    if (!isVercelCron && !hasValidAuth) {
+      console.error(`❌ Unauthorized request - UA: ${userAgent}, Auth: ${authHeader ? 'present' : 'missing'}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -119,15 +124,30 @@ export async function GET(req: NextRequest) {
     let updated = 0;
     for (let i = 0; i < recordsToUpdate.length; i += 10) {
       const batch = recordsToUpdate.slice(i, i + 10);
-      await tb.dailyUptime.update(batch);
-      updated += batch.length;
+      try {
+        await tb.dailyUptime.update(batch);
+        updated += batch.length;
+      } catch (error: any) {
+        console.error(`❌ Failed to update batch ${i}-${i+10}:`, error.message);
+        // Log first failed record for debugging
+        if (batch.length > 0) {
+          console.error(`First record in failed batch:`, JSON.stringify(batch[0], null, 2));
+        }
+      }
     }
 
     let created = 0;
     for (let i = 0; i < recordsToCreate.length; i += 10) {
       const batch = recordsToCreate.slice(i, i + 10);
-      await tb.dailyUptime.create(batch);
-      created += batch.length;
+      try {
+        await tb.dailyUptime.create(batch);
+        created += batch.length;
+      } catch (error: any) {
+        console.error(`❌ Failed to create batch ${i}-${i+10}:`, error.message);
+        if (batch.length > 0) {
+          console.error(`First record in failed batch:`, JSON.stringify(batch[0], null, 2));
+        }
+      }
     }
 
     // Also update validator's current delinquent status
@@ -156,10 +176,15 @@ export async function GET(req: NextRequest) {
 
     let validatorsUpdated = 0;
     if (validatorsToUpdate.length > 0) {
+      console.log(`📝 Updating ${validatorsToUpdate.length} validator delinquent statuses`);
       for (let i = 0; i < validatorsToUpdate.length; i += 10) {
         const batch = validatorsToUpdate.slice(i, i + 10);
-        await tb.validators.update(batch);
-        validatorsUpdated += batch.length;
+        try {
+          await tb.validators.update(batch);
+          validatorsUpdated += batch.length;
+        } catch (error: any) {
+          console.error(`❌ Failed to update validator batch ${i}-${i+10}:`, error.message);
+        }
       }
     }
 

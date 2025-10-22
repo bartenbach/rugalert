@@ -257,9 +257,10 @@ export async function POST(req: NextRequest) {
               data.activating += stake;
             }
             
-            // Stake is deactivating if deactivation epoch has been set (even if in future)
-            // Once set, the stake begins cooling down over multiple epochs
-            if (deactivationEpoch !== Number.MAX_SAFE_INTEGER) {
+            // Stake is deactivating if deactivation epoch equals CURRENT epoch
+            // Once past the deactivation epoch, stake is fully deactivated (not "deactivating")
+            // This prevents counting historical deactivations that are already complete
+            if (deactivationEpoch === epoch) {
               data.deactivating += stake;
             }
           }

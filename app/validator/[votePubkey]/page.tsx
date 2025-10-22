@@ -351,8 +351,11 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <div className="flex items-baseline gap-2">
                       <span className="text-gray-500">Stake:</span>
                       <span className="text-white font-semibold">
-                        {(validatorInfo.stake.activeStake / 1000000).toFixed(2)}
-                        M SOL
+                        ◎
+                        {validatorInfo.stake.activeStake.toLocaleString(
+                          "en-US",
+                          { maximumFractionDigits: 2 }
+                        )}
                       </span>
                     </div>
                   )}
@@ -484,45 +487,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             </div>
           )}
 
-          {/* Stake Info - Compact Cards */}
+          {/* Stake Info - Active stake only (activating/deactivating removed due to data reliability issues) */}
           {validatorInfo?.stake && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="glass rounded-xl p-4 border border-white/10">
-                <div className="text-xs text-gray-400 mb-1">Active Stake</div>
-                <div className="text-2xl font-bold text-white">
-                  {(validatorInfo.stake.activeStake / 1000000).toFixed(2)}M
-                </div>
-                <div className="text-xs text-gray-500 mt-1">SOL</div>
-              </div>
-              <div className="glass rounded-xl p-4 border border-white/10">
-                <div className="text-xs text-gray-400 mb-1">Activating</div>
-                <div className="text-2xl font-bold text-green-400">
-                  {validatorInfo.stake.activatingStake >= 1000000
-                    ? `${(
-                        validatorInfo.stake.activatingStake / 1000000
-                      ).toFixed(2)}M`
-                    : validatorInfo.stake.activatingStake >= 1000
-                    ? `${(validatorInfo.stake.activatingStake / 1000).toFixed(
-                        2
-                      )}K`
-                    : validatorInfo.stake.activatingStake.toFixed(2)}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">SOL</div>
-              </div>
-              <div className="glass rounded-xl p-4 border border-white/10">
-                <div className="text-xs text-gray-400 mb-1">Deactivating</div>
-                <div className="text-2xl font-bold text-red-400">
-                  {validatorInfo.stake.deactivatingStake >= 1000000
-                    ? `${(
-                        validatorInfo.stake.deactivatingStake / 1000000
-                      ).toFixed(2)}M`
-                    : validatorInfo.stake.deactivatingStake >= 1000
-                    ? `${(validatorInfo.stake.deactivatingStake / 1000).toFixed(
-                        2
-                      )}K`
-                    : validatorInfo.stake.deactivatingStake.toFixed(2)}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">SOL</div>
+            <div className="glass rounded-xl p-6 border border-white/10">
+              <div className="text-sm text-gray-400 mb-2">Active Stake</div>
+              <div className="text-3xl font-bold text-white">
+                ◎
+                {validatorInfo.stake.activeStake.toLocaleString("en-US", {
+                  maximumFractionDigits: 2,
+                })}
               </div>
             </div>
           )}
