@@ -17,17 +17,16 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // 60 seconds for Vercel Pro
 
 /**
- * NEW EFFICIENT DESIGN:
- * Instead of storing 1000+ updates per minute, we:
- * 1. Only store EVENTS when delinquency status CHANGES
- * 2. Track current state in validators table
- * 3. Calculate uptime from event history
+ * DAILY UPTIME TRACKING (Fixed Design):
+ * - One record per validator per day
+ * - UPSERT (update if exists, create if not) based on key = "votePubkey-date"
+ * - Increment uptimeChecks and delinquentChecks for today's record
  * 
- * This reduces writes from ~1M/day to ~100-1000/day
+ * Result: 1,000 new records per day (not per minute!)
  */
 export async function GET(req: NextRequest) {
   try {
-    console.log(`\n🩺 === DELINQUENCY CHECK START (Event-based) ===`);
+    console.log(`\n🩺 === DELINQUENCY CHECK START ===`);
     const startTime = Date.now();
 
     // Verify cron secret
@@ -36,21 +35,99 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const now = new Date().toISOString();
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
     // Get current delinquent validators from RPC
     const voteAccounts = await rpc("getVoteAccounts", []);
     const activeValidators = voteAccounts.current || [];
     const delinquentValidators = voteAccounts.delinquent || [];
 
-    const currentDelinquentSet = new Set(
+    const allVotePubkeys = [
+      ...activeValidators.map((v: any) => v.votePubkey),
+      ...delinquentValidators.map((v: any) => v.votePubkey)
+    ];
+
+    const delinquentSet = new Set(
       delinquentValidators.map((v: any) => v.votePubkey)
     );
 
-    console.log(`📊 Network status: ${activeValidators.length} active, ${delinquentValidators.length} delinquent`);
+    console.log(`📊 Network: ${activeValidators.length} active, ${delinquentValidators.length} delinquent`);
+    console.log(`📅 Processing date: ${today}`);
 
-    // Fetch current delinquency state from validators table
-    const validatorsMap = new Map<string, { id: string; wasDelinquent: boolean }>();
+    // Fetch existing records for today
+    const existingRecordsMap = new Map<string, { id: string; uptimeChecks: number; delinquentChecks: number }>();
+    await tb.dailyUptime
+      .select({
+        filterByFormula: `{date} = '${today}'`,
+        fields: ['votePubkey', 'date', 'uptimeChecks', 'delinquentChecks'],
+        pageSize: 100,
+      })
+      .eachPage((records, fetchNextPage) => {
+        records.forEach((record) => {
+          const votePubkey = record.get('votePubkey') as string;
+          existingRecordsMap.set(votePubkey, {
+            id: record.id,
+            uptimeChecks: Number(record.get('uptimeChecks') || 0),
+            delinquentChecks: Number(record.get('delinquentChecks') || 0),
+          });
+        });
+        fetchNextPage();
+      });
+
+    console.log(`📦 Found ${existingRecordsMap.size} existing records for today`);
+
+    // Prepare updates and creates
+    const recordsToUpdate: any[] = [];
+    const recordsToCreate: any[] = [];
+
+    for (const votePubkey of allVotePubkeys) {
+      const isDelinquent = delinquentSet.has(votePubkey);
+      const existing = existingRecordsMap.get(votePubkey);
+
+      if (existing) {
+        // UPDATE existing record
+        recordsToUpdate.push({
+          id: existing.id,
+          fields: {
+            uptimeChecks: existing.uptimeChecks + 1,
+            delinquentChecks: isDelinquent ? existing.delinquentChecks + 1 : existing.delinquentChecks,
+            uptimePercent: ((existing.uptimeChecks + 1 - (isDelinquent ? existing.delinquentChecks + 1 : existing.delinquentChecks)) / (existing.uptimeChecks + 1)) * 100,
+          }
+        });
+      } else {
+        // CREATE new record for today
+        recordsToCreate.push({
+          fields: {
+            key: `${votePubkey}-${today}`,
+            votePubkey,
+            date: today,
+            uptimeChecks: 1,
+            delinquentChecks: isDelinquent ? 1 : 0,
+            uptimePercent: isDelinquent ? 0 : 100,
+          }
+        });
+      }
+    }
+
+    console.log(`📝 Updating ${recordsToUpdate.length} records, creating ${recordsToCreate.length} records`);
+
+    // Batch operations (10 at a time)
+    let updated = 0;
+    for (let i = 0; i < recordsToUpdate.length; i += 10) {
+      const batch = recordsToUpdate.slice(i, i + 10);
+      await tb.dailyUptime.update(batch);
+      updated += batch.length;
+    }
+
+    let created = 0;
+    for (let i = 0; i < recordsToCreate.length; i += 10) {
+      const batch = recordsToCreate.slice(i, i + 10);
+      await tb.dailyUptime.create(batch);
+      created += batch.length;
+    }
+
+    // Also update validator's current delinquent status
+    const validatorsToUpdate: any[] = [];
     await tb.validators
       .select({
         fields: ['votePubkey', 'delinquent'],
@@ -59,78 +136,41 @@ export async function GET(req: NextRequest) {
       .eachPage((records, fetchNextPage) => {
         records.forEach((record) => {
           const votePubkey = record.get('votePubkey') as string;
-          const delinquent = Boolean(record.get('delinquent'));
-          validatorsMap.set(votePubkey, {
-            id: record.id,
-            wasDelinquent: delinquent,
-          });
+          const currentDelinquent = Boolean(record.get('delinquent'));
+          const shouldBeDelinquent = delinquentSet.has(votePubkey);
+          
+          // Only update if status changed
+          if (currentDelinquent !== shouldBeDelinquent) {
+            validatorsToUpdate.push({
+              id: record.id,
+              fields: { delinquent: shouldBeDelinquent }
+            });
+          }
         });
         fetchNextPage();
       });
 
-    console.log(`📦 Loaded ${validatorsMap.size} validators from DB`);
-
-    // Detect state changes and create events
-    const eventsToCreate: any[] = [];
-    const validatorsToUpdate: any[] = [];
-
-    for (const [votePubkey, state] of validatorsMap.entries()) {
-      const isNowDelinquent = currentDelinquentSet.has(votePubkey);
-      
-      // State changed - create event!
-      if (isNowDelinquent !== state.wasDelinquent) {
-        const eventType = isNowDelinquent ? 'WENT_DOWN' : 'CAME_UP';
-        eventsToCreate.push({
-          fields: {
-            votePubkey,
-            eventType,
-            timestamp: now,
-          }
-        });
-        
-        // Update validator state
-        validatorsToUpdate.push({
-          id: state.id,
-          fields: {
-            delinquent: isNowDelinquent,
-          }
-        });
-      }
-    }
-
-    console.log(`🔔 Detected ${eventsToCreate.length} state changes`);
-
-    // Write events to delinquency_events table (batched)
-    let eventsCreated = 0;
-    if (eventsToCreate.length > 0) {
-      for (let i = 0; i < eventsToCreate.length; i += 10) {
-        const batch = eventsToCreate.slice(i, i + 10);
-        await tb.delinquencyEvents.create(batch);
-        eventsCreated += batch.length;
-      }
-      console.log(`✅ Created ${eventsCreated} delinquency events`);
-
-      // Update validator states (batched)
-      let validatorsUpdated = 0;
+    let validatorsUpdated = 0;
+    if (validatorsToUpdate.length > 0) {
       for (let i = 0; i < validatorsToUpdate.length; i += 10) {
         const batch = validatorsToUpdate.slice(i, i + 10);
         await tb.validators.update(batch);
         validatorsUpdated += batch.length;
       }
-      console.log(`✅ Updated ${validatorsUpdated} validator states`);
-    } else {
-      console.log(`✅ No state changes - no writes needed`);
     }
 
     const elapsed = Date.now() - startTime;
+    console.log(`✅ Updated ${updated} records, created ${created} records, updated ${validatorsUpdated} validator statuses`);
     console.log(`🩺 === DELINQUENCY CHECK COMPLETE (${elapsed}ms) ===\n`);
 
     return NextResponse.json({
       success: true,
+      date: today,
       activeValidators: activeValidators.length,
       delinquentValidators: delinquentValidators.length,
-      stateChanges: eventsToCreate.length,
-      eventsCreated,
+      recordsUpdated: updated,
+      recordsCreated: created,
+      validatorsUpdated,
       elapsed: `${elapsed}ms`,
     });
 

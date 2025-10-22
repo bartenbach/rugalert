@@ -3,9 +3,17 @@ import { useEffect, useState } from "react";
 
 interface UptimeDay {
   date: string;
-  delinquentMinutes: number;
-  totalChecks: number;
+  uptimeChecks: number;
+  delinquentChecks: number;
   uptimePercent: number;
+}
+
+interface UptimeData {
+  days: UptimeDay[];
+  overallUptime: number;
+  totalChecks: number;
+  totalDelinquent: number;
+  daysTracked: number;
 }
 
 interface UptimeChartProps {
@@ -13,7 +21,7 @@ interface UptimeChartProps {
 }
 
 export default function UptimeChart({ votePubkey }: UptimeChartProps) {
-  const [data, setData] = useState<UptimeDay[]>([]);
+  const [data, setData] = useState<UptimeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +32,7 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
         const response = await fetch(`/api/uptime/${votePubkey}`);
         if (!response.ok) throw new Error("Failed to fetch uptime data");
         const json = await response.json();
-        setData(json.days || []);
+        setData(json);
       } catch (err: any) {
         console.error("Error fetching uptime:", err);
         setError(err.message);
@@ -40,10 +48,10 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
 
   // Determine color based on uptime percentage
   const getUptimeColor = (uptimePercent: number) => {
-    if (uptimePercent >= 99) return "bg-green-500"; // Perfect uptime
-    if (uptimePercent >= 95) return "bg-yellow-400"; // Minor downtime
-    if (uptimePercent >= 90) return "bg-orange-500"; // Moderate downtime
-    return "bg-red-500"; // Significant downtime
+    if (uptimePercent >= 99) return "bg-green-500";
+    if (uptimePercent >= 95) return "bg-yellow-400";
+    if (uptimePercent >= 90) return "bg-orange-500";
+    return "bg-red-500";
   };
 
   // Format date for tooltip
@@ -56,12 +64,12 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
     });
   };
 
-  // Format downtime in a readable way
-  const formatDowntime = (delinquentMinutes: number) => {
-    if (delinquentMinutes === 0) return "No downtime";
-    if (delinquentMinutes < 60) return `${delinquentMinutes} min downtime`;
-    const hours = Math.floor(delinquentMinutes / 60);
-    const mins = delinquentMinutes % 60;
+  // Format downtime
+  const formatDowntime = (delinquentChecks: number) => {
+    if (delinquentChecks === 0) return "No downtime";
+    if (delinquentChecks < 60) return `${delinquentChecks} min downtime`;
+    const hours = Math.floor(delinquentChecks / 60);
+    const mins = delinquentChecks % 60;
     return mins > 0 ? `${hours}h ${mins}m downtime` : `${hours}h downtime`;
   };
 
@@ -88,14 +96,14 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
     );
   }
 
-  if (data.length === 0) {
+  if (!data || data.days.length === 0) {
     return (
       <div className="glass rounded-2xl p-6">
         <h3 className="text-xl font-bold text-white mb-4">Uptime</h3>
         <div className="text-center text-gray-400 py-8">
-          <p>No uptime data available yet</p>
+          <p>Collecting uptime data...</p>
           <p className="text-sm text-gray-500 mt-2">
-            Data will appear as the monitoring system collects it
+            Check back soon for uptime statistics
           </p>
         </div>
       </div>
@@ -104,18 +112,9 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
 
   // Group days by week (7 days per row)
   const weeks: UptimeDay[][] = [];
-  for (let i = 0; i < data.length; i += 7) {
-    weeks.push(data.slice(i, i + 7));
+  for (let i = 0; i < data.days.length; i += 7) {
+    weeks.push(data.days.slice(i, i + 7));
   }
-
-  // Calculate overall uptime stats
-  const totalMinutes = data.reduce((sum, day) => sum + day.totalChecks, 0);
-  const totalDowntime = data.reduce(
-    (sum, day) => sum + day.delinquentMinutes,
-    0
-  );
-  const overallUptime =
-    totalMinutes > 0 ? 100 - (totalDowntime / totalMinutes) * 100 : 100;
 
   return (
     <div className="glass rounded-2xl p-6">
@@ -123,30 +122,24 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
         <h3 className="text-xl font-bold text-white">Uptime</h3>
         <div className="text-right">
           <div className="text-2xl font-bold text-white">
-            {overallUptime.toFixed(2)}%
+            {data.overallUptime.toFixed(2)}%
           </div>
           <div className="text-xs text-gray-400">
-            {data.length} {data.length === 1 ? "day" : "days"} tracked
+            {data.daysTracked} {data.daysTracked === 1 ? "day" : "days"} tracked
           </div>
         </div>
       </div>
 
       {/* Heatmap Grid */}
-      <div className="space-y-1">
+      <div className="space-y-1 mb-4">
         {weeks.map((week, weekIdx) => (
           <div key={weekIdx} className="flex gap-1">
-            {week.map((day, dayIdx) => (
+            {week.map((day) => (
               <div key={day.date} className="group relative">
                 <div
-                  className={`w-4 h-4 rounded-sm ${getUptimeColor(
-                    day.uptimePercent
-                  )} 
+                  className={`w-4 h-4 rounded-sm ${getUptimeColor(day.uptimePercent)} 
                     transition-all duration-200 hover:ring-2 hover:ring-white/50 hover:scale-150
-                    ${day.totalChecks === 0 ? "opacity-30" : "opacity-100"}
                   `}
-                  title={`${formatDate(day.date)}: ${day.uptimePercent.toFixed(
-                    2
-                  )}% uptime`}
                 />
 
                 {/* Tooltip */}
@@ -159,13 +152,11 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
                       {day.uptimePercent.toFixed(2)}% uptime
                     </p>
                     <p className="text-gray-400 text-xs">
-                      {formatDowntime(day.delinquentMinutes)}
+                      {formatDowntime(day.delinquentChecks)}
                     </p>
-                    {day.totalChecks > 0 && (
-                      <p className="text-gray-500 text-xs mt-1">
-                        {day.totalChecks} checks
-                      </p>
-                    )}
+                    <p className="text-gray-500 text-xs mt-1">
+                      {day.uptimeChecks} checks
+                    </p>
                   </div>
                 </div>
               </div>
@@ -175,7 +166,7 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
       </div>
 
       {/* Legend */}
-      <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
+      <div className="flex items-center gap-4 text-xs text-gray-400">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-green-500"></div>
           <span>99-100%</span>
