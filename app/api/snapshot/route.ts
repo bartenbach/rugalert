@@ -283,41 +283,27 @@ export async function POST(req: NextRequest) {
       console.log(`⏭️ Stake tracking disabled (set ENABLE_STAKE_TRACKING=true to enable)`);
     }
     
-    // Fetch vote account data for all validators to get CURRENT EPOCH vote credits
-    console.log(`📊 Fetching vote credits for ${allVotes.length} validators (current epoch ${epoch})...`);
+    // Extract vote credits from the vote accounts we already fetched
+    console.log(`📊 Extracting vote credits for ${allVotes.length} validators (current epoch ${epoch})...`);
     const voteCreditsMap = new Map<string, number>();
     
-    // Batch the vote account fetches to avoid too many concurrent requests
-    const BATCH_SIZE = 100;
-    for (let i = 0; i < allVotes.length; i += BATCH_SIZE) {
-      const batch = allVotes.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map(async (v) => {
-        try {
-          const voteAccountInfo = await rpc("getAccountInfo", [
-            v.votePubkey,
-            { encoding: "jsonParsed" }
-          ]);
-          
-          const epochCreditsArray = voteAccountInfo?.value?.data?.parsed?.info?.epochCredits;
-          if (epochCreditsArray && Array.isArray(epochCreditsArray)) {
-            // epochCredits format: [[epoch, cumulative_credits, prev_epoch_cumulative], ...]
-            // Look for CURRENT epoch to show in-progress performance
-            const currentEpochCredits = epochCreditsArray.find((entry: any) => 
-              Number(entry[0]) === epoch
-            );
-            if (currentEpochCredits) {
-              // Get credits earned SO FAR in current epoch (current cumulative - previous cumulative)
-              const earnedCredits = Number(currentEpochCredits[1]) - Number(currentEpochCredits[2] || 0);
-              voteCreditsMap.set(v.votePubkey, earnedCredits);
-            }
-          }
-        } catch (e) {
-          // Silently skip validators with errors
+    // Rebuild the full vote account list with epochCredits
+    const allVoteAccounts = [...votes.current, ...votes.delinquent];
+    
+    for (const voteAccount of allVoteAccounts) {
+      const epochCreditsArray = voteAccount.epochCredits;
+      if (epochCreditsArray && Array.isArray(epochCreditsArray)) {
+        // epochCredits format: [[epoch, cumulative_credits, prev_epoch_cumulative], ...]
+        // Look for CURRENT epoch
+        const currentEpochCredits = epochCreditsArray.find((entry: any) => 
+          Number(entry[0]) === epoch
+        );
+        if (currentEpochCredits) {
+          // Get credits earned in current epoch (current cumulative - previous cumulative)
+          const earnedCredits = Number(currentEpochCredits[1]) - Number(currentEpochCredits[2] || 0);
+          voteCreditsMap.set(voteAccount.votePubkey, earnedCredits);
         }
-      });
-      
-      await Promise.all(batchPromises);
-      console.log(`  Processed ${Math.min(i + BATCH_SIZE, allVotes.length)}/${allVotes.length} vote accounts`);
+      }
     }
     
     // Find the max vote credits (best performing validator = 100%)
