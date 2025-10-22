@@ -230,18 +230,23 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       try {
         const u = await fetch(`/api/uptime/${params.votePubkey}`);
         const uj = await u.json();
-        if (uj.days && uj.days.length > 0) {
-          // Calculate average uptime from available data
-          const totalMinutes = uj.days.reduce(
-            (sum: number, day: any) => sum + day.totalChecks,
+        // Use overall uptime from API (works with any amount of data, even partial day)
+        if (uj.overallUptime !== undefined) {
+          setUptimePercentage(uj.overallUptime);
+        } else if (uj.days && uj.days.length > 0) {
+          // Fallback: calculate from days data if overallUptime not provided
+          const totalChecks = uj.days.reduce(
+            (sum: number, day: any) => sum + day.uptimeChecks,
             0
           );
-          const totalDowntime = uj.days.reduce(
-            (sum: number, day: any) => sum + day.delinquentMinutes,
+          const totalDelinquent = uj.days.reduce(
+            (sum: number, day: any) => sum + day.delinquentChecks,
             0
           );
           const avgUptime =
-            totalMinutes > 0 ? 100 - (totalDowntime / totalMinutes) * 100 : 100;
+            totalChecks > 0
+              ? ((totalChecks - totalDelinquent) / totalChecks) * 100
+              : 100;
           setUptimePercentage(avgUptime);
         }
       } catch (err) {
@@ -513,7 +518,17 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <CircularGauge
                       value={validatorInfo.performance.voteCreditsPercentage}
                       label="Vote Performance"
-                      sublabel={`${validatorInfo.performance.voteCredits.toLocaleString()} credits`}
+                      sublabel={`${
+                        validatorInfo.performance.voteCredits >= 1000000
+                          ? `${(
+                              validatorInfo.performance.voteCredits / 1000000
+                            ).toFixed(1)}M`
+                          : validatorInfo.performance.voteCredits >= 1000
+                          ? `${(
+                              validatorInfo.performance.voteCredits / 1000
+                            ).toFixed(1)}K`
+                          : validatorInfo.performance.voteCredits
+                      } credits`}
                       thresholds={{ good: 90, warning: 75 }}
                     />
                   </>
@@ -523,9 +538,6 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <CircularGauge
                     value={uptimePercentage}
                     label="Uptime"
-                    sublabel={
-                      uptimePercentage < 100 ? "Collecting data" : undefined
-                    }
                     thresholds={{ good: 99, warning: 95 }}
                   />
                 ) : (
