@@ -305,7 +305,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       <span>
                         {meta.name
                           .split(/([\u{1F300}-\u{1F9FF}])/u)
-                          .map((part, i) => {
+                          .map((part: string, i: number) => {
                             // Check if part is an emoji
                             if (/[\u{1F300}-\u{1F9FF}]/u.test(part)) {
                               return (
