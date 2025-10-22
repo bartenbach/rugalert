@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 async function rpc(method: string, params: any[] = []) {
   const res = await fetch(process.env.RPC_URL!, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    cache: 'no-store',
   });
   const json = await res.json();
   if (!res.ok || json.error) throw new Error(JSON.stringify(json.error || res.status));

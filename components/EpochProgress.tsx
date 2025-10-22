@@ -16,7 +16,12 @@ export default function EpochProgress() {
 
   const fetchEpochInfo = async () => {
     try {
-      const response = await fetch("/api/epoch-info");
+      const response = await fetch("/api/epoch-info", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch epoch info");
       }
@@ -33,8 +38,8 @@ export default function EpochProgress() {
 
   useEffect(() => {
     fetchEpochInfo();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchEpochInfo, 30000);
+    // Refresh every 10 seconds for more accurate epoch tracking
+    const interval = setInterval(fetchEpochInfo, 10000);
     return () => clearInterval(interval);
   }, []);
 
