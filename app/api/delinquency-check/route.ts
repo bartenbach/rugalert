@@ -27,9 +27,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get current date in YYYY-MM-DD format
+    // Get current date in YYYY-MM-DD format (UTC)
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0]; // e.g., "2025-10-22"
+    const dateStr = now.toISOString().split('T')[0];
 
     console.log(`📅 Date: ${dateStr}`);
 
@@ -52,26 +52,31 @@ export async function GET(req: NextRequest) {
     console.log(`❌ Delinquent: ${delinquentSet.size}`);
     console.log(`✅ Active: ${allVotePubkeys.length - delinquentSet.size}`);
 
-    // Fetch existing daily uptime records for today
+    // Fetch ALL existing records for today using the key field
     const existingRecordsMap = new Map<string, any>();
+    console.log(`🔍 Fetching existing records for ${dateStr}...`);
+    
     await tb.dailyUptime
       .select({
-        filterByFormula: `{date} = "${dateStr}"`,
+        filterByFormula: `{date} = '${dateStr}'`,
+        fields: ['key', 'votePubkey', 'date', 'delinquentMinutes', 'totalChecks'],
         pageSize: 100,
       })
       .eachPage((records, fetchNextPage) => {
         records.forEach((record) => {
           const votePubkey = record.get('votePubkey') as string;
-          existingRecordsMap.set(votePubkey, record);
+          if (votePubkey) {
+            existingRecordsMap.set(votePubkey, record);
+          }
         });
         fetchNextPage();
       });
 
-    console.log(`📦 Existing records for today: ${existingRecordsMap.size}`);
+    console.log(`📦 Found ${existingRecordsMap.size} existing records for today`);
 
-    // Update records in batches
-    const recordsToCreate: any[] = [];
+    // Prepare updates in batches
     const recordsToUpdate: any[] = [];
+    let needsCreateCount = 0;
 
     for (const votePubkey of allVotePubkeys) {
       const isDelinquent = delinquentSet.has(votePubkey);
@@ -84,55 +89,40 @@ export async function GET(req: NextRequest) {
         
         const newDelinquentMinutes = isDelinquent ? currentDelinquentMinutes + 1 : currentDelinquentMinutes;
         const newTotalChecks = currentTotalChecks + 1;
-        const newUptimePercent = 100 - ((newDelinquentMinutes / newTotalChecks) * 100);
+        const newUptimePercent = newTotalChecks > 0 
+          ? 100 - ((newDelinquentMinutes / newTotalChecks) * 100)
+          : 100;
 
         recordsToUpdate.push({
           id: existing.id,
           fields: {
             delinquentMinutes: newDelinquentMinutes,
             totalChecks: newTotalChecks,
-            uptimePercent: Math.round(newUptimePercent * 100) / 100, // 2 decimal places
+            uptimePercent: Math.round(newUptimePercent * 100) / 100,
           }
         });
       } else {
-        // Create new record
-        const key = `${votePubkey}-${dateStr}`;
-        const delinquentMinutes = isDelinquent ? 1 : 0;
-        const totalChecks = 1;
-        const uptimePercent = 100 - ((delinquentMinutes / totalChecks) * 100);
-
-        recordsToCreate.push({
-          fields: {
-            key,
-            votePubkey,
-            date: dateStr,
-            delinquentMinutes,
-            totalChecks,
-            uptimePercent: Math.round(uptimePercent * 100) / 100,
-          }
-        });
+        needsCreateCount++;
       }
     }
 
-    // Batch create (max 10 at a time for Airtable)
-    let created = 0;
-    for (let i = 0; i < recordsToCreate.length; i += 10) {
-      const batch = recordsToCreate.slice(i, i + 10);
-      await tb.dailyUptime.create(batch);
-      created += batch.length;
-    }
-
-    // Batch update (max 10 at a time for Airtable)
+    // Only update, NEVER create during normal operation
+    // (Records should only be created once per day at midnight or by snapshot job)
     let updated = 0;
-    for (let i = 0; i < recordsToUpdate.length; i += 10) {
-      const batch = recordsToUpdate.slice(i, i + 10);
-      await tb.dailyUptime.update(batch);
-      updated += batch.length;
+    if (recordsToUpdate.length > 0) {
+      console.log(`📝 Updating ${recordsToUpdate.length} records...`);
+      for (let i = 0; i < recordsToUpdate.length; i += 10) {
+        const batch = recordsToUpdate.slice(i, i + 10);
+        await tb.dailyUptime.update(batch);
+        updated += batch.length;
+      }
     }
 
     const elapsed = Date.now() - startTime;
-    console.log(`✅ Created ${created} records`);
     console.log(`✅ Updated ${updated} records`);
+    if (needsCreateCount > 0) {
+      console.log(`⚠️  ${needsCreateCount} validators need records created (will be handled by snapshot job)`);
+    }
     console.log(`⏱️  Total time: ${elapsed}ms`);
     console.log(`🩺 === DELINQUENCY CHECK COMPLETE ===\n`);
 
@@ -142,8 +132,8 @@ export async function GET(req: NextRequest) {
       totalValidators: allVotePubkeys.length,
       delinquent: delinquentSet.size,
       active: allVotePubkeys.length - delinquentSet.size,
-      created,
       updated,
+      skipped: needsCreateCount,
       elapsed: `${elapsed}ms`,
     });
 

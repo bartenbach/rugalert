@@ -157,6 +157,35 @@ function CircularGauge({
   );
 }
 
+// Helper to convert URLs in text to clickable links
+function LinkifyText({ text }: { text: string }) {
+  // Regex to match URLs
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  const parts = text.split(urlRegex);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.match(urlRegex)) {
+          return (
+            <a
+              key={index}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-orange-400 hover:text-orange-300 hover:underline"
+            >
+              {part}
+            </a>
+          );
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 export default function Detail({ params }: { params: { votePubkey: string } }) {
   const [series, setSeries] = useState<{ epoch: number; commission: number }[]>(
     []
@@ -189,7 +218,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       setValidatorInfo(ij.error ? null : ij);
       const sh = await fetch(`/api/stake-history/${params.votePubkey}`);
       const shj = await sh.json();
-      console.log("Stake history data:", shj);
+      console.log("📊 Stake History Response:", shj);
+      console.log("📊 Stake History Data:", shj.history);
+      console.log("📊 Stake History Length:", shj.history?.length || 0);
       setStakeHistory(shj.history || []);
 
       // Fetch uptime data
@@ -269,8 +300,30 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 flex-wrap mb-3">
-                  <h1 className="text-3xl font-bold gradient-text">
-                    {meta?.name || "Unknown Validator"}
+                  <h1 className="text-3xl font-bold text-white">
+                    {meta?.name ? (
+                      <span>
+                        {meta.name
+                          .split(/([\u{1F300}-\u{1F9FF}])/u)
+                          .map((part, i) => {
+                            // Check if part is an emoji
+                            if (/[\u{1F300}-\u{1F9FF}]/u.test(part)) {
+                              return (
+                                <span key={i} className="emoji">
+                                  {part}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span key={i} className="gradient-text">
+                                {part}
+                              </span>
+                            );
+                          })}
+                      </span>
+                    ) : (
+                      <span className="gradient-text">Unknown Validator</span>
+                    )}
                   </h1>
                   {validatorInfo?.validator?.delinquent && (
                     <span className="px-3 py-1 bg-red-500/20 border border-red-500 rounded-lg text-xs font-bold text-red-400 animate-pulse flex items-center gap-1.5">
@@ -283,7 +336,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 {/* Description */}
                 {meta?.description && (
                   <p className="text-gray-300 text-sm mb-3 leading-relaxed">
-                    {meta.description}
+                    <LinkifyText text={meta.description} />
                   </p>
                 )}
 
