@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { tb } from "../../../lib/airtable";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300; // 5 minutes for Vercel Pro (max allowed)
+
 // ---- raw JSON-RPC helper (works for vote/epoch and jsonParsed GPA) ----
 async function rpc(method: string, params: any[] = []) {
   const res = await fetch(process.env.RPC_URL!, {
@@ -190,6 +193,7 @@ export async function POST(req: NextRequest) {
         const allStakeAccounts: any[] = [];
         let paginationKey: string | null = null;
         let pageCount = 0;
+        const MAX_PAGES = 200; // Limit to prevent timeouts/rate limits (~1M accounts)
         
         do {
           pageCount++;
@@ -203,16 +207,27 @@ export async function POST(req: NextRequest) {
             params.paginationKey = paginationKey;
           }
           
-          const response = await rpc("getProgramAccountsV2", [
-            "Stake11111111111111111111111111111111111111",
-            params,
-          ]);
+          try {
+            const response = await rpc("getProgramAccountsV2", [
+              "Stake11111111111111111111111111111111111111",
+              params,
+            ]);
+            
+            const accounts = response.accounts || [];
+            allStakeAccounts.push(...accounts);
+            paginationKey = response.paginationKey || null;
+            
+            console.log(`  Fetched page ${pageCount}: ${accounts.length} accounts (total: ${allStakeAccounts.length})`);
+          } catch (pageError: any) {
+            console.log(`⚠️  Page ${pageCount} failed (${pageError.message}), continuing with ${allStakeAccounts.length} accounts`);
+            break; // Stop pagination on error, use what we have
+          }
           
-          const accounts = response.accounts || [];
-          allStakeAccounts.push(...accounts);
-          paginationKey = response.paginationKey || null;
-          
-          console.log(`  Fetched page ${pageCount}: ${accounts.length} accounts (total: ${allStakeAccounts.length})`);
+          // Stop if we hit page limit
+          if (pageCount >= MAX_PAGES) {
+            console.log(`⚠️  Reached page limit (${MAX_PAGES}), continuing with ${allStakeAccounts.length} accounts`);
+            break;
+          }
         } while (paginationKey);
         
         console.log(`📊 Processing ${allStakeAccounts.length} stake accounts from ${pageCount} pages...`);
@@ -619,22 +634,22 @@ export async function POST(req: NextRequest) {
         
         // Only create snapshot if we don't have one for this epoch
         if (!existingMevKeys.has(mevKey)) {
-          mevSnapshotsToCreate.push({
-            fields: {
-              key: mevKey,
-              votePubkey: v.votePubkey,
-              epoch,
-              mevCommission: jitoInfo.mevCommission || 0,
-              priorityFeeCommission: jitoInfo.priorityFeeCommission || 0,
-              mevRewards: jitoInfo.mevRewards || 0,
-              priorityFeeRewards: jitoInfo.priorityFeeRewards || 0,
-            }
-          });
+            mevSnapshotsToCreate.push({
+              fields: {
+                key: mevKey,
+                votePubkey: v.votePubkey,
+                epoch,
+                mevCommission: jitoInfo.mevCommission || 0,
+                priorityFeeCommission: jitoInfo.priorityFeeCommission || 0,
+                mevRewards: jitoInfo.mevRewards || 0,
+                priorityFeeRewards: jitoInfo.priorityFeeRewards || 0,
+              }
+            });
           mevSnapshotsCreated++;
           
           // Debug: Log first few MEV snapshots
           if (mevSnapshotsCreated <= 3) {
-            console.log(`  Creating MEV snapshot for ${v.votePubkey.substring(0, 8)}... - MEV: ${jitoInfo.mevCommission}%, Priority: ${jitoInfo.priorityFeeCommission}%`);
+            console.log(`  Creating MEV snapshot for ${v.votePubkey.substring(0, 8)}... - MEV: ${jitoInfo.mevCommission}%, Priority: ${jitoInfo.priorityFeeCommission || 0}%`);
           }
           
           // Check for MEV commission changes

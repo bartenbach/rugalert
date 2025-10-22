@@ -398,11 +398,11 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400 text-gray-400"
                       }`}
                     >
-                      <span className="text-gray-500">Identity:</span>
-                      <span className="truncate max-w-[200px]">
+                      <span className="text-gray-500 flex-shrink-0">Identity:</span>
+                      <span className="break-all">
                         {validatorInfo.validator.identityPubkey}
                       </span>
-                      {copiedIdentity ? "✓" : "📋"}
+                      <span className="flex-shrink-0">{copiedIdentity ? "✓" : "📋"}</span>
                     </button>
                   )}
                   <button
@@ -417,11 +417,11 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400 text-gray-400"
                     }`}
                   >
-                    <span className="text-gray-500">Vote:</span>
-                    <span className="truncate max-w-[200px]">
+                    <span className="text-gray-500 flex-shrink-0">Vote:</span>
+                    <span className="break-all">
                       {params.votePubkey}
                     </span>
-                    {copiedVote ? "✓" : "📋"}
+                    <span className="flex-shrink-0">{copiedVote ? "✓" : "📋"}</span>
                   </button>
                 </div>
               </div>
