@@ -79,14 +79,17 @@ export async function GET(req: NextRequest) {
     });
 
     // Calculate totals
-    const totals = accountDetails.reduce((acc, acct: any) => {
-      if (acct.delegatedStake) {
-        acc.total += acct.delegatedStake;
-        if (acct.isActivating) acc.activating += acct.delegatedStake;
-        if (acct.isDeactivating) acc.deactivating += acct.delegatedStake;
-      }
-      return acc;
-    }, { total: 0, activating: 0, deactivating: 0 });
+    const totals = accountDetails.reduce(
+      (acc: { total: number; activating: number; deactivating: number }, acct: any) => {
+        if (acct.delegatedStake) {
+          acc.total += acct.delegatedStake;
+          if (acct.isActivating) acc.activating += acct.delegatedStake;
+          if (acct.isDeactivating) acc.deactivating += acct.delegatedStake;
+        }
+        return acc;
+      },
+      { total: 0, activating: 0, deactivating: 0 }
+    );
 
     return NextResponse.json({
       votePubkey,
