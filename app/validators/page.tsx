@@ -376,11 +376,11 @@ export default function ValidatorsPage() {
                         <td className="px-4 py-2">
                           <span
                             className={`text-sm font-semibold ${
-                              validator.commission >= 90
-                                ? "text-red-400"
-                                : validator.commission >= 10
+                              validator.commission <= 5
+                                ? "text-green-400"
+                                : validator.commission <= 10
                                 ? "text-yellow-400"
-                                : "text-green-400"
+                                : "text-red-400"
                             }`}
                           >
                             {validator.commission}%
