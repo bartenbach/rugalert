@@ -23,6 +23,13 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
     min-height: 100vh;
   }
+  
+  /* Force native emoji rendering */
+  .emoji {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji', 'EmojiSymbols', sans-serif;
+    font-style: normal;
+    font-weight: normal;
+  }
 }
 
 @layer utilities {

@@ -227,10 +227,8 @@ export async function POST(req: NextRequest) {
             const deactivationEpoch = Number(delegation.deactivationEpoch || Number.MAX_SAFE_INTEGER);
             const stake = Number(delegation.stake || 0);
             
-            // Count stake accounts per validator (only if stake > 0)
-            if (stake > 0) {
-              stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
-            }
+            // Count ALL stake accounts per validator (including inactive, activating, deactivating)
+            stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
             
             if (!stakeByVoter.has(voter)) {
               stakeByVoter.set(voter, { activating: 0, deactivating: 0 });
@@ -238,13 +236,15 @@ export async function POST(req: NextRequest) {
             
             const data = stakeByVoter.get(voter)!;
             
-            // Stake is activating if it was activated recently (within last 3 epochs)
-            if (activationEpoch === epoch || (activationEpoch < epoch && activationEpoch > epoch - 3)) {
+            // Stake is activating if activation epoch is current or future (still warming up)
+            // Stake takes multiple epochs to fully activate
+            if (activationEpoch >= epoch) {
               data.activating += stake;
             }
             
-            // Stake is deactivating if deactivation epoch has been set and is in the past
-            if (deactivationEpoch !== Number.MAX_SAFE_INTEGER && deactivationEpoch <= epoch) {
+            // Stake is deactivating if deactivation epoch has been set (even if in future)
+            // Once set, the stake begins cooling down over multiple epochs
+            if (deactivationEpoch !== Number.MAX_SAFE_INTEGER) {
               data.deactivating += stake;
             }
           }
@@ -258,8 +258,8 @@ export async function POST(req: NextRequest) {
       console.log(`⏭️ Stake tracking disabled (set ENABLE_STAKE_TRACKING=true to enable)`);
     }
     
-    // Fetch vote account data for all validators at once to get vote credits
-    console.log(`📊 Fetching vote credits for ${allVotes.length} validators...`);
+    // Fetch vote account data for all validators to get CURRENT EPOCH vote credits
+    console.log(`📊 Fetching vote credits for ${allVotes.length} validators (current epoch ${epoch})...`);
     const voteCreditsMap = new Map<string, number>();
     
     // Batch the vote account fetches to avoid too many concurrent requests
@@ -276,30 +276,18 @@ export async function POST(req: NextRequest) {
           const epochCreditsArray = voteAccountInfo?.value?.data?.parsed?.info?.epochCredits;
           if (epochCreditsArray && Array.isArray(epochCreditsArray)) {
             // epochCredits format: [[epoch, cumulative_credits, prev_epoch_cumulative], ...]
-            // We want the cumulative credits for the current epoch
+            // Look for CURRENT epoch to show in-progress performance
             const currentEpochCredits = epochCreditsArray.find((entry: any) => 
               Number(entry[0]) === epoch
             );
             if (currentEpochCredits) {
-              const credits = Number(currentEpochCredits[1]);
-              voteCreditsMap.set(v.votePubkey, credits);
-              // Debug first few validators
-              if (voteCreditsMap.size <= 3) {
-                console.log(`  Sample: ${v.votePubkey.substring(0, 8)}... epoch ${epoch} credits: ${credits}`);
-              }
-            } else if (voteCreditsMap.size === 0) {
-              // Debug why we're not finding credits
-              console.log(`  No credits found for ${v.votePubkey.substring(0, 8)}...`);
-              console.log(`  Looking for epoch ${epoch}, available epochs:`, epochCreditsArray.slice(0, 3).map((e: any) => e[0]));
+              // Get credits earned SO FAR in current epoch (current cumulative - previous cumulative)
+              const earnedCredits = Number(currentEpochCredits[1]) - Number(currentEpochCredits[2] || 0);
+              voteCreditsMap.set(v.votePubkey, earnedCredits);
             }
-          } else if (voteCreditsMap.size === 0) {
-            console.log(`  No epochCredits array for ${v.votePubkey.substring(0, 8)}...`);
           }
         } catch (e) {
-          // Log errors for first validator to help debug
-          if (voteCreditsMap.size === 0) {
-            console.log(`  Error fetching credits for ${v.votePubkey.substring(0, 8)}...:`, e);
-          }
+          // Silently skip validators with errors
         }
       });
       
@@ -307,7 +295,16 @@ export async function POST(req: NextRequest) {
       console.log(`  Processed ${Math.min(i + BATCH_SIZE, allVotes.length)}/${allVotes.length} vote accounts`);
     }
     
+    // Find the max vote credits (best performing validator = 100%)
+    let maxVoteCredits = 0;
+    for (const credits of voteCreditsMap.values()) {
+      if (credits > maxVoteCredits) {
+        maxVoteCredits = credits;
+      }
+    }
+    
     console.log(`✅ Fetched vote credits for ${voteCreditsMap.size} validators`);
+    console.log(`📊 Max vote credits (best performer): ${maxVoteCredits}`);
     
     // PRE-FETCH existing records to avoid timeout from too many sequential calls
     console.log(`📊 Pre-fetching existing records for ${allVotes.length} validators...`);
@@ -383,10 +380,10 @@ export async function POST(req: NextRequest) {
       { encoding: "jsonParsed", commitment: "confirmed" },
     ]);
 
-    // identityPubkey -> { name, iconUrl, website }
+    // identityPubkey -> { name, iconUrl, website, description }
     const infoMap = new Map<
       string,
-      { name?: string; iconUrl?: string; website?: string }
+      { name?: string; iconUrl?: string; website?: string; description?: string }
     >();
 
     for (const item of gpa as any[]) {
@@ -399,8 +396,9 @@ export async function POST(req: NextRequest) {
       const name = typeof cfg.name === "string" && cfg.name.length ? cfg.name : undefined;
       const iconUrl = typeof cfg.iconUrl === "string" && cfg.iconUrl.length ? cfg.iconUrl : undefined;
       const website = typeof cfg.website === "string" && cfg.website.length ? cfg.website : undefined;
-      if (identity && (name || iconUrl || website)) {
-        infoMap.set(identity, { name, iconUrl, website });
+      const description = typeof cfg.details === "string" && cfg.details.length ? cfg.details : undefined;
+      if (identity && (name || iconUrl || website || description)) {
+        infoMap.set(identity, { name, iconUrl, website, description });
       }
     }
 
@@ -411,6 +409,7 @@ export async function POST(req: NextRequest) {
       // No fallback icon - let validators with no icon show empty square
       const iconUrl = meta.iconUrl;
       const website = meta.website;
+      const description = meta.description;
       const version = versionMap.get(v.nodePubkey);
 
       // Check if validator is delinquent
@@ -440,6 +439,7 @@ export async function POST(req: NextRequest) {
         }
         
         if (website)   patch.website = website;
+        if (description) patch.description = description;
         if (version && existing.get("version") !== version) patch.version = version;
         // Update delinquent status (changes frequently)
         patch.delinquent = isDelinquent;
@@ -464,6 +464,7 @@ export async function POST(req: NextRequest) {
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),
             ...(website   ? { website } : {}),
+            ...(description ? { description } : {}),
             ...(version ? { version } : {}),
           }
         });
@@ -501,8 +502,11 @@ export async function POST(req: NextRequest) {
           }
         }
         
-        // Get vote credits from pre-fetched map
+        // Get vote credits from pre-fetched map and calculate percentage
         const voteCredits = voteCreditsMap.get(v.votePubkey);
+        const voteCreditsPercentage = (voteCredits !== undefined && maxVoteCredits > 0)
+          ? (voteCredits / maxVoteCredits) * 100
+          : 0;
         
         perfRecordsToCreate.push({
           fields: {
@@ -510,7 +514,11 @@ export async function POST(req: NextRequest) {
             votePubkey: v.votePubkey,
             epoch,
             skipRate: Math.max(0, Math.min(100, skipRate)),
-            ...(voteCredits !== undefined ? { voteCredits } : {}),
+            ...(voteCredits !== undefined ? { 
+              voteCredits,
+              voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100, // 2 decimal places
+              maxPossibleCredits: maxVoteCredits,
+            } : {}),
           }
         });
       }
@@ -609,6 +617,11 @@ export async function POST(req: NextRequest) {
             }
           });
           mevSnapshotsCreated++;
+          
+          // Debug: Log first few MEV snapshots
+          if (mevSnapshotsCreated <= 3) {
+            console.log(`  Creating MEV snapshot for ${v.votePubkey.substring(0, 8)}... - MEV: ${jitoInfo.mevCommission}%, Priority: ${jitoInfo.priorityFeeCommission}%`);
+          }
           
           // Check for MEV commission changes
           const latestMev = latestMevByValidator.get(v.votePubkey);
