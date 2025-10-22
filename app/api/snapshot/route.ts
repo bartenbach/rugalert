@@ -447,6 +447,11 @@ export async function POST(req: NextRequest) {
       const existing = existingValidators.get(v.votePubkey);
       const accountCount = stakeAccountCounts.get(v.votePubkey) || 0;
       
+      // Get activating/deactivating stake from pre-fetched data
+      const stakeData = stakeByVoter.get(v.votePubkey);
+      const activatingStake = stakeData?.activating || 0;
+      const deactivatingStake = stakeData?.deactivating || 0;
+      
       if (existing) {
         const patch: any = {};
         if (existing.get("identityPubkey") !== v.nodePubkey)
@@ -469,6 +474,9 @@ export async function POST(req: NextRequest) {
         patch.delinquent = isDelinquent;
         // Cache activeStake (locked at epoch boundaries)
         patch.activeStake = Number(v.activatedStake || 0);
+        // Cache activating/deactivating stake (ephemeral current state, not historical)
+        patch.activatingStake = activatingStake;
+        patch.deactivatingStake = deactivatingStake;
         // Update Jito status
         patch.jitoEnabled = isJitoEnabled;
         // Update stake account count
@@ -483,6 +491,8 @@ export async function POST(req: NextRequest) {
             identityPubkey: v.nodePubkey,
             delinquent: isDelinquent,
             activeStake: Number(v.activatedStake || 0),
+            activatingStake,
+            deactivatingStake,
             jitoEnabled: isJitoEnabled,
             stakeAccountCount: accountCount,
             ...(chainName ? { name: chainName } : {}),
@@ -495,24 +505,16 @@ export async function POST(req: NextRequest) {
       }
 
       // ---- STAKE HISTORY TRACKING ----
+      // Only track ACTUAL historical stake (active stake at epoch boundaries)
+      // activating/deactivating are cached in validators table as current state
       const stakeKey = `${v.votePubkey}-${epoch}`;
       if (!existingStakeKeys.has(stakeKey) && v.activatedStake !== undefined) {
-        // Get activating/deactivating stake from pre-fetched data
-        const stakeData = stakeByVoter.get(v.votePubkey);
-        
-        // Debug: Log first few stake records with activating/deactivating
-        if (stakeData && (stakeData.activating > 0 || stakeData.deactivating > 0) && stakeRecordsToCreate.length < 3) {
-          console.log(`  Creating stake record for ${v.votePubkey.substring(0, 8)}... - Active: ${(Number(v.activatedStake) / 1_000_000_000).toFixed(2)} SOL, Activating: ${(stakeData.activating / 1_000_000_000).toFixed(2)} SOL, Deactivating: ${(stakeData.deactivating / 1_000_000_000).toFixed(2)} SOL`);
-        }
-        
         stakeRecordsToCreate.push({
           fields: {
             key: stakeKey,
             votePubkey: v.votePubkey,
             epoch,
             activeStake: Number(v.activatedStake || 0),
-            ...(stakeData?.activating ? { activatingStake: stakeData.activating } : {}),
-            ...(stakeData?.deactivating ? { deactivatingStake: stakeData.deactivating } : {}),
           }
         });
       }

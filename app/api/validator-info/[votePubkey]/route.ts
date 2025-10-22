@@ -70,21 +70,20 @@ export async function GET(
       maxRecords: 1,
     }).firstPage();
 
-    // Fetch latest stake data (most recent epoch)
-    const stakeRecords = await tb.stakeHistory.select({
+    // Fetch validator record for current stake data (cached by snapshot job)
+    const validatorRecords = await tb.validators.select({
       filterByFormula: `{votePubkey} = "${votePubkey}"`,
-      sort: [{ field: 'epoch', direction: 'desc' }],
       maxRecords: 1,
     }).firstPage();
 
     // Convert lamports to SOL (1 SOL = 1,000,000,000 lamports)
     const LAMPORTS_PER_SOL = 1_000_000_000;
     
-    const stakeData = stakeRecords[0] ? {
-      activeStake: Number(stakeRecords[0].get('activeStake') || 0) / LAMPORTS_PER_SOL,
-      activatingStake: Number(stakeRecords[0].get('activatingStake') || 0) / LAMPORTS_PER_SOL,
-      deactivatingStake: Number(stakeRecords[0].get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
-      epoch: Number(stakeRecords[0].get('epoch')),
+    const stakeData = validatorRecords[0] ? {
+      activeStake: Number(validatorRecords[0].get('activeStake') || 0) / LAMPORTS_PER_SOL,
+      activatingStake: Number(validatorRecords[0].get('activatingStake') || 0) / LAMPORTS_PER_SOL,
+      deactivatingStake: Number(validatorRecords[0].get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
+      epoch: currentEpoch,
     } : null;
 
     const perfData = perfRecords[0] ? {

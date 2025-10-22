@@ -24,11 +24,11 @@ export async function GET(
     // Convert lamports to SOL
     const LAMPORTS_PER_SOL = 1_000_000_000;
     
+    // Note: activatingStake and deactivatingStake are NOT in stake_history
+    // They are cached in the validators table as current ephemeral state
     const history = stakeRecords.map(r => ({
       epoch: Number(r.get('epoch')),
       activeStake: Number(r.get('activeStake') || 0) / LAMPORTS_PER_SOL,
-      activatingStake: Number(r.get('activatingStake') || 0) / LAMPORTS_PER_SOL,
-      deactivatingStake: Number(r.get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
     }));
 
     return NextResponse.json({

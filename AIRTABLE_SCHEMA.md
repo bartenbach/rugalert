@@ -40,17 +40,41 @@ For optimal performance, consider adding indexes on:
 
 ---
 
-## `validators` Table (Uptime-Related Fields)
+## `validators` Table (Cached Fields)
 
-**Additional fields needed:**
+**Fields cached for performance:**
 
 | Field Name | Airtable Type | Description |
 |------------|---------------|-------------|
 | `delinquent` | Checkbox | Current delinquency status (boolean) |
+| `activeStake` | Number | Current active stake in lamports (cached from RPC) |
+| `activatingStake` | Number | Stake currently activating (ephemeral, resets at epoch boundary) |
+| `deactivatingStake` | Number | Stake currently deactivating (ephemeral, resets at epoch boundary) |
+| `stakeAccountCount` | Number | Number of stake accounts delegated to this validator |
+| `jitoEnabled` | Checkbox | Whether validator is Jito MEV-enabled |
 | `uptimeChecks` | Number | DEPRECATED - Not used in V3 |
 | `delinquentChecks` | Number | DEPRECATED - Not used in V3 |
 
-**Note:** In V3, uptime counters are in `daily_uptime` table, not `validators` table.
+**Note:** 
+- In V3, uptime counters are in `daily_uptime` table, not `validators` table
+- `activatingStake` and `deactivatingStake` are ephemeral current state, NOT historical data
+
+---
+
+---
+
+## `stake_history` Table
+
+**Purpose:** Track historical active stake at epoch boundaries
+
+| Field Name | Airtable Type | Description |
+|------------|---------------|-------------|
+| `key` | Single line text | Format: `{votePubkey}-{epoch}` - Unique composite key |
+| `votePubkey` | Single line text | Validator's vote account pubkey |
+| `epoch` | Number | Epoch number |
+| `activeStake` | Number | Active stake in lamports at this epoch |
+
+**Note:** This table tracks ONLY active stake history. `activatingStake` and `deactivatingStake` are NOT stored here (they're cached in `validators` table as current state).
 
 ---
 
@@ -58,6 +82,8 @@ For optimal performance, consider adding indexes on:
 
 - [ ] Verify `daily_uptime` table exists
 - [ ] Verify all 6 fields exist in `daily_uptime` with correct types
+- [ ] Verify `validators` table has `activatingStake` and `deactivatingStake` fields
+- [ ] Remove `activatingStake` and `deactivatingStake` fields from `stake_history` table (if they exist)
 - [ ] Clear any broken records (optional)
 - [ ] Ensure `validators.delinquent` field exists
 - [ ] Deploy new code

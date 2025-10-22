@@ -17,12 +17,21 @@ export async function GET() {
   try {
     const epochInfo = await rpc("getEpochInfo", []);
     
-    return NextResponse.json({
-      epoch: Number(epochInfo.epoch),
-      slotIndex: Number(epochInfo.slotIndex),
-      slotsInEpoch: Number(epochInfo.slotsInEpoch),
-      absoluteSlot: Number(epochInfo.absoluteSlot),
-    });
+    return NextResponse.json(
+      {
+        epoch: Number(epochInfo.epoch),
+        slotIndex: Number(epochInfo.slotIndex),
+        slotsInEpoch: Number(epochInfo.slotsInEpoch),
+        absoluteSlot: Number(epochInfo.absoluteSlot),
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
+        },
+      }
+    );
   } catch (error: any) {
     console.error('❌ epoch-info error:', error);
     return NextResponse.json(

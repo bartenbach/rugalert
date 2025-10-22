@@ -337,21 +337,6 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   </p>
                 )}
 
-                {/* Website */}
-                {meta?.website && (
-                  <div className="mb-3">
-                    <a
-                      href={meta.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-orange-400 hover:text-orange-300 text-sm hover:underline inline-flex items-center gap-1.5"
-                    >
-                      <span className="emoji">🌐</span>
-                      <span>{meta.website}</span>
-                    </a>
-                  </div>
-                )}
-
                 {/* Inline Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
                   <div className="flex items-baseline gap-2">
@@ -379,6 +364,21 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       </span>
                     </div>
                   )}
+                  {meta?.website && (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-gray-500">Website:</span>
+                      <a
+                        href={meta.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-orange-400 hover:text-orange-300 font-semibold hover:underline truncate"
+                      >
+                        {meta.website
+                          .replace(/^https?:\/\//, "")
+                          .replace(/\/$/, "")}
+                      </a>
+                    </div>
+                  )}
                 </div>
 
                 {/* Copy buttons - More compact */}
@@ -398,11 +398,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400 text-gray-400"
                       }`}
                     >
-                      <span className="text-gray-500 flex-shrink-0">Identity:</span>
+                      <span className="text-gray-500 flex-shrink-0">
+                        Identity:
+                      </span>
                       <span className="break-all">
                         {validatorInfo.validator.identityPubkey}
                       </span>
-                      <span className="flex-shrink-0">{copiedIdentity ? "✓" : "📋"}</span>
+                      <span className="flex-shrink-0">
+                        {copiedIdentity ? "✓" : "📋"}
+                      </span>
                     </button>
                   )}
                   <button
@@ -418,10 +422,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     }`}
                   >
                     <span className="text-gray-500 flex-shrink-0">Vote:</span>
-                    <span className="break-all">
-                      {params.votePubkey}
+                    <span className="break-all">{params.votePubkey}</span>
+                    <span className="flex-shrink-0">
+                      {copiedVote ? "✓" : "📋"}
                     </span>
-                    <span className="flex-shrink-0">{copiedVote ? "✓" : "📋"}</span>
                   </button>
                 </div>
               </div>

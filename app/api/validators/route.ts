@@ -99,40 +99,21 @@ export async function GET(request: NextRequest) {
         fetchNextPage();
       });
 
-    // Fetch latest stake data for current epoch
-    const stakeHistoryMap = new Map<string, any>();
-    await base(STAKE_HISTORY_TABLE)
-      .select({
-        fields: ['votePubkey', 'activeStake', 'activatingStake', 'deactivatingStake', 'epoch'],
-        filterByFormula: `{epoch} = ${currentEpoch}`,
-        pageSize: 100,
-      })
-      .eachPage((pageRecords, fetchNextPage) => {
-        pageRecords.forEach((record) => {
-          stakeHistoryMap.set(record.fields.votePubkey as string, record);
-        });
-        fetchNextPage();
-      });
+    // Note: Stake (including activating/deactivating) is cached in the validators table
+    // for performance. No need to join with stake_history for current values.
 
-    // Note: Stake account counts are now populated by the snapshot job
-    // and cached in the validators table for performance
-
-    // Merge ALL validators with their stake and commission data
-    // Use stake_history if available, otherwise fall back to RPC stake data
+    // Merge ALL validators with their commission data
     const validatorsWithStake: any[] = [];
     const processedVotePubkeys = new Set<string>();
     
     // First, process validators from our database
     validatorsMap.forEach((validator, votePubkey) => {
       processedVotePubkeys.add(votePubkey);
-      const stakeRecord = stakeHistoryMap.get(votePubkey);
       const commissionData = commissionMap.get(votePubkey);
       const rpcStake = rpcStakeMap.get(votePubkey) || 0;
       
-      // Use stake_history if available, otherwise use RPC data
-      const activeStake = stakeRecord 
-        ? Number(stakeRecord.fields.activeStake || 0)
-        : rpcStake;
+      // Use cached activeStake from validator record, fallback to RPC
+      const activeStake = Number(validator.activeStake || rpcStake);
       
       // Only include validators with stake > 0
       if (activeStake > 0) {
@@ -140,8 +121,9 @@ export async function GET(request: NextRequest) {
           ...validator,
           commission: commissionData?.commission || 0,
           activeStake,
-          activatingStake: stakeRecord ? Number(stakeRecord.fields.activatingStake || 0) : 0,
-          deactivatingStake: stakeRecord ? Number(stakeRecord.fields.deactivatingStake || 0) : 0,
+          // activatingStake and deactivatingStake are already in validator object (cached by snapshot job)
+          activatingStake: Number(validator.activatingStake || 0),
+          deactivatingStake: Number(validator.deactivatingStake || 0),
           // Override delinquent status with real-time RPC data
           delinquent: delinquentSet.has(votePubkey),
           // stakeAccountCount comes from validator object (cached in DB)
