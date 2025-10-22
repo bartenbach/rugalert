@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 type StakeDataPoint = {
   epoch: number;
@@ -10,172 +19,59 @@ type StakeDataPoint = {
 };
 
 export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Data is already in SOL (converted by API)
+  const chartData = data.map((d) => ({
+    epoch: d.epoch,
+    activeStake: d.activeStake,
+    activatingStake: d.activatingStake,
+    deactivatingStake: d.deactivatingStake,
+  }));
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || data.length === 0) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Set canvas size
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-
-    const width = rect.width;
-    const height = rect.height;
-    const padding = { top: 20, right: 20, bottom: 40, left: 80 };
-
-    // Clear canvas
-    ctx.clearRect(0, 0, width, height);
-
-    // Find min/max for scaling
-    const maxStake = Math.max(...data.map((d) => d.activeStake));
-    const minStake = Math.min(...data.map((d) => d.activeStake));
-    const minEpoch = data[0].epoch;
-    const maxEpoch = data[data.length - 1].epoch;
-
-    // Handle single data point case
-    const epochRange = maxEpoch - minEpoch || 1; // Prevent division by zero
-    const stakeRange = maxStake - minStake || maxStake * 0.1; // 10% range if single value
-    const adjustedMinStake = maxStake === minStake ? minStake * 0.95 : minStake; // Add 5% padding
-    const adjustedMaxStake = maxStake === minStake ? maxStake * 1.05 : maxStake;
-
-    // Helper functions
-    const xScale = (epoch: number) => {
-      if (data.length === 1) {
-        // Center single point
-        return padding.left + (width - padding.left - padding.right) / 2;
-      }
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
       return (
-        padding.left +
-        ((epoch - minEpoch) / epochRange) *
-          (width - padding.left - padding.right)
+        <div className="glass rounded-lg p-3 border border-white/20">
+          <p className="text-gray-300 text-sm mb-1">Epoch {label}</p>
+          <p className="text-white font-bold text-lg mb-2">
+            {formatStake(data.activeStake)} SOL
+          </p>
+          {data.activatingStake !== undefined && data.activatingStake > 0 && (
+            <p className="text-green-400 text-sm">
+              +{formatStake(data.activatingStake)} activating
+            </p>
+          )}
+          {data.deactivatingStake !== undefined &&
+            data.deactivatingStake > 0 && (
+              <p className="text-red-400 text-sm">
+                -{formatStake(data.deactivatingStake)} deactivating
+              </p>
+            )}
+        </div>
       );
-    };
-
-    const yScale = (stake: number) => {
-      if (adjustedMaxStake === adjustedMinStake) {
-        // Center single point vertically
-        return (height - padding.top - padding.bottom) / 2 + padding.top;
-      }
-      return (
-        height -
-        padding.bottom -
-        ((stake - adjustedMinStake) / (adjustedMaxStake - adjustedMinStake)) *
-          (height - padding.top - padding.bottom)
-      );
-    };
-
-    // Draw grid lines
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 5; i++) {
-      const y = padding.top + ((height - padding.top - padding.bottom) * i) / 5;
-      ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(width - padding.right, y);
-      ctx.stroke();
     }
+    return null;
+  };
 
-    // Draw axes
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(padding.left, padding.top);
-    ctx.lineTo(padding.left, height - padding.bottom);
-    ctx.lineTo(width - padding.right, height - padding.bottom);
-    ctx.stroke();
-
-    // Draw stake line with gradient
-    const gradient = ctx.createLinearGradient(0, 0, 0, height);
-    gradient.addColorStop(0, "rgba(34, 197, 94, 0.8)"); // green
-    gradient.addColorStop(1, "rgba(34, 197, 94, 0.2)");
-
-    // Draw area under the line
-    ctx.beginPath();
-    ctx.moveTo(xScale(data[0].epoch), height - padding.bottom);
-    data.forEach((d) => {
-      ctx.lineTo(xScale(d.epoch), yScale(d.activeStake));
-    });
-    ctx.lineTo(xScale(data[data.length - 1].epoch), height - padding.bottom);
-    ctx.closePath();
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    // Draw the line
-    ctx.beginPath();
-    ctx.moveTo(xScale(data[0].epoch), yScale(data[0].activeStake));
-    data.forEach((d) => {
-      ctx.lineTo(xScale(d.epoch), yScale(d.activeStake));
-    });
-    ctx.strokeStyle = "rgba(34, 197, 94, 1)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // Draw points
-    data.forEach((d) => {
-      ctx.beginPath();
-      ctx.arc(xScale(d.epoch), yScale(d.activeStake), 4, 0, 2 * Math.PI);
-      ctx.fillStyle = "rgba(34, 197, 94, 1)";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    });
-
-    // Draw Y-axis labels (stake amounts)
-    ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
-    ctx.font = "12px monospace";
-    ctx.textAlign = "right";
-    for (let i = 0; i <= 5; i++) {
-      const stake =
-        adjustedMinStake +
-        ((adjustedMaxStake - adjustedMinStake) * (5 - i)) / 5;
-      const y = padding.top + ((height - padding.top - padding.bottom) * i) / 5;
-
-      // Format stake amounts: M for millions, K for thousands
-      let label: string;
-      if (stake >= 1000000) {
-        label = `${(stake / 1000000).toFixed(2)}M`;
-      } else if (stake >= 1000) {
-        label = `${(stake / 1000).toFixed(0)}K`;
-      } else {
-        label = stake.toFixed(0);
-      }
-
-      ctx.fillText(label, padding.left - 10, y + 4);
+  // Helper function to format stake
+  const formatStake = (stake: number): string => {
+    if (stake >= 1000000) {
+      return `${(stake / 1000000).toFixed(2)}M`;
+    } else if (stake >= 1000) {
+      return `${(stake / 1000).toFixed(2)}K`;
     }
+    return stake.toFixed(2);
+  };
 
-    // Draw X-axis labels (epochs)
-    ctx.textAlign = "center";
-    const epochStep = Math.max(1, Math.floor(data.length / 8));
-    data.forEach((d, i) => {
-      if (i % epochStep === 0 || i === data.length - 1) {
-        ctx.fillText(
-          `${d.epoch}`,
-          xScale(d.epoch),
-          height - padding.bottom + 20
-        );
-      }
-    });
-
-    // Draw axis labels
-    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.font = "14px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Epoch", width / 2, height - 5);
-
-    ctx.save();
-    ctx.translate(15, height / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText("Active Stake (SOL)", 0, 0);
-    ctx.restore();
-  }, [data]);
+  // Format Y-axis ticks
+  const formatYAxis = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}M`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(1)}K`;
+    }
+    return value.toFixed(0);
+  };
 
   if (data.length === 0) {
     return (
@@ -186,12 +82,67 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
   }
 
   return (
-    <div className="relative w-full h-[400px]">
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full"
-        style={{ width: "100%", height: "100%" }}
-      />
+    <div className="w-full h-[400px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={chartData}
+          margin={{ left: 0, right: 0, top: 12, bottom: 12 }}
+        >
+          <defs>
+            <linearGradient id="stakeGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="rgba(255, 255, 255, 0.1)"
+            vertical={false}
+          />
+          <XAxis
+            dataKey="epoch"
+            tick={{ fontSize: 12, fill: "#9ca3af" }}
+            stroke="rgba(255, 255, 255, 0.1)"
+            tickLine={false}
+          />
+          <YAxis
+            tickFormatter={formatYAxis}
+            tick={{ fontSize: 12, fill: "#9ca3af" }}
+            stroke="rgba(255, 255, 255, 0.1)"
+            tickLine={false}
+            label={{
+              value: "Active Stake (SOL)",
+              angle: -90,
+              position: "insideLeft",
+              fill: "#9ca3af",
+              fontSize: 12,
+            }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Area
+            type="monotone"
+            dataKey="activeStake"
+            stroke="#3b82f6"
+            strokeWidth={3}
+            fill="url(#stakeGradient)"
+            animationDuration={1000}
+          />
+          <Line
+            type="monotone"
+            dataKey="activeStake"
+            stroke="#3b82f6"
+            strokeWidth={3}
+            dot={{ fill: "#3b82f6", strokeWidth: 2, r: 4, stroke: "#1a1a1a" }}
+            activeDot={{
+              r: 6,
+              fill: "#2563eb",
+              stroke: "#1a1a1a",
+              strokeWidth: 2,
+            }}
+            animationDuration={1000}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 }

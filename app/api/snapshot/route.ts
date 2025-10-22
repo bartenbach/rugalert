@@ -251,8 +251,17 @@ export async function POST(req: NextRequest) {
         }
         console.log(`✅ Processed stake accounts for ${stakeByVoter.size} voters`);
         console.log(`✅ Counted ${stakeAccountCounts.size} validators with active stake accounts`);
-      } catch (e) {
-        console.log(`⚠️ Could not fetch stake accounts (continuing without activating/deactivating data):`, e);
+        
+        // Debug: Show some examples of activating/deactivating stake
+        let exampleCount = 0;
+        for (const [voter, data] of stakeByVoter.entries()) {
+          if ((data.activating > 0 || data.deactivating > 0) && exampleCount < 3) {
+            console.log(`  Example: ${voter.substring(0, 8)}... - Activating: ${(data.activating / 1_000_000_000).toFixed(2)} SOL, Deactivating: ${(data.deactivating / 1_000_000_000).toFixed(2)} SOL`);
+            exampleCount++;
+          }
+        }
+      } catch (e: any) {
+        console.log(`⚠️ Could not fetch stake accounts (continuing without activating/deactivating data):`, e?.message || e);
       }
     } else {
       console.log(`⏭️ Stake tracking disabled (set ENABLE_STAKE_TRACKING=true to enable)`);
@@ -475,6 +484,11 @@ export async function POST(req: NextRequest) {
       if (!existingStakeKeys.has(stakeKey) && v.activatedStake !== undefined) {
         // Get activating/deactivating stake from pre-fetched data
         const stakeData = stakeByVoter.get(v.votePubkey);
+        
+        // Debug: Log first few stake records with activating/deactivating
+        if (stakeData && (stakeData.activating > 0 || stakeData.deactivating > 0) && stakeRecordsToCreate.length < 3) {
+          console.log(`  Creating stake record for ${v.votePubkey.substring(0, 8)}... - Active: ${(Number(v.activatedStake) / 1_000_000_000).toFixed(2)} SOL, Activating: ${(stakeData.activating / 1_000_000_000).toFixed(2)} SOL, Deactivating: ${(stakeData.deactivating / 1_000_000_000).toFixed(2)} SOL`);
+        }
         
         stakeRecordsToCreate.push({
           fields: {

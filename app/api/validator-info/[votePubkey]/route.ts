@@ -62,16 +62,17 @@ export async function GET(
       (v: any) => v.votePubkey === votePubkey
     ) || false;
 
-    // Fetch latest performance data
+    // Fetch latest performance data (most recent epoch, not necessarily current)
+    // This ensures we always show data even if snapshot job hasn't run yet this epoch
     const perfRecords = await tb.performanceHistory.select({
-      filterByFormula: `AND({votePubkey} = "${votePubkey}", {epoch} = ${currentEpoch})`,
+      filterByFormula: `{votePubkey} = "${votePubkey}"`,
       sort: [{ field: 'epoch', direction: 'desc' }],
       maxRecords: 1,
     }).firstPage();
 
-    // Fetch latest stake data
+    // Fetch latest stake data (most recent epoch)
     const stakeRecords = await tb.stakeHistory.select({
-      filterByFormula: `AND({votePubkey} = "${votePubkey}", {epoch} = ${currentEpoch})`,
+      filterByFormula: `{votePubkey} = "${votePubkey}"`,
       sort: [{ field: 'epoch', direction: 'desc' }],
       maxRecords: 1,
     }).firstPage();
@@ -90,14 +91,17 @@ export async function GET(
       skipRate: Number(perfRecords[0].get('skipRate') || 0),
       voteCredits: Number(perfRecords[0].get('voteCredits') || 0),
       epoch: Number(perfRecords[0].get('epoch')),
-      // Calculate vote credits percentage vs expected
-      // Max credits = 16 per slot, so expected = slots elapsed × 16
-      voteCreditsPercentage: slotIndex > 0 
-        ? (Number(perfRecords[0].get('voteCredits') || 0) / (slotIndex * 16)) * 100 
-        : 0,
-      slotsElapsed: slotIndex,
-      maxPossibleCredits: slotIndex * 16,
+      // Use the pre-calculated percentage from snapshot job (relative to best performer)
+      voteCreditsPercentage: Number(perfRecords[0].get('voteCreditsPercentage') || 0),
+      maxPossibleCredits: Number(perfRecords[0].get('maxPossibleCredits') || 0),
     } : null;
+
+    // Debug logging for vote credits
+    if (perfData) {
+      console.log(`📊 ${votePubkey.substring(0, 8)}... - Epoch ${perfData.epoch}: voteCredits=${perfData.voteCredits}, percentage=${perfData.voteCreditsPercentage}%, max=${perfData.maxPossibleCredits}`);
+    } else {
+      console.log(`⚠️  ${votePubkey.substring(0, 8)}... - No performance data found in database`);
+    }
 
     return NextResponse.json({
       validator: {
