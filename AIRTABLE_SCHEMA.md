@@ -78,6 +78,24 @@ For optimal performance, consider adding indexes on:
 
 ---
 
+## `performance_history` Table
+
+**Purpose:** Track validator performance metrics per epoch (30-day rolling window)
+
+| Field Name | Airtable Type | Description |
+|------------|---------------|-------------|
+| `key` | Single line text | Format: `{votePubkey}-{epoch}` - Unique composite key |
+| `votePubkey` | Single line text | Validator's vote account pubkey |
+| `epoch` | Number | Epoch number |
+| `skipRate` | Number | Block skip rate percentage (0-100) |
+| `voteCredits` | Number | Vote credits earned in this epoch |
+| `voteCreditsPercentage` | Number | Vote credits as % of best performer (0-100) |
+| `maxPossibleCredits` | Number | Best performer's vote credits for this epoch |
+
+**Note:** Automatically pruned to keep only last 15 epochs (~30 days). Updated every 15 minutes during current epoch.
+
+---
+
 ## Migration Checklist
 
 - [ ] Verify `daily_uptime` table exists

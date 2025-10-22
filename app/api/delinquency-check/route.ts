@@ -97,24 +97,32 @@ export async function GET(req: NextRequest) {
 
       if (existing) {
         // UPDATE existing record
+        const newUptimeChecks = existing.uptimeChecks + 1;
+        const newDelinquentChecks = isDelinquent ? existing.delinquentChecks + 1 : existing.delinquentChecks;
+        const uptimePercent = Math.round(((newUptimeChecks - newDelinquentChecks) / newUptimeChecks) * 10000) / 100; // Round to 2 decimals
+        
         recordsToUpdate.push({
           id: existing.id,
           fields: {
-            uptimeChecks: existing.uptimeChecks + 1,
-            delinquentChecks: isDelinquent ? existing.delinquentChecks + 1 : existing.delinquentChecks,
-            uptimePercent: ((existing.uptimeChecks + 1 - (isDelinquent ? existing.delinquentChecks + 1 : existing.delinquentChecks)) / (existing.uptimeChecks + 1)) * 100,
+            uptimeChecks: newUptimeChecks,
+            delinquentChecks: newDelinquentChecks,
+            uptimePercent: Math.max(0, Math.min(100, uptimePercent)), // Clamp to 0-100
           }
         });
       } else {
         // CREATE new record for today
+        const uptimeChecks = 1;
+        const delinquentChecks = isDelinquent ? 1 : 0;
+        const uptimePercent = Math.round(((uptimeChecks - delinquentChecks) / uptimeChecks) * 10000) / 100;
+        
         recordsToCreate.push({
           fields: {
             key: `${votePubkey}-${today}`,
             votePubkey,
             date: today,
-            uptimeChecks: 1,
-            delinquentChecks: isDelinquent ? 1 : 0,
-            uptimePercent: isDelinquent ? 0 : 100,
+            uptimeChecks,
+            delinquentChecks,
+            uptimePercent: Math.max(0, Math.min(100, uptimePercent)),
           }
         });
       }
@@ -131,6 +139,7 @@ export async function GET(req: NextRequest) {
         updated += batch.length;
       } catch (error: any) {
         console.error(`❌ Failed to update batch ${i}-${i+10}:`, error.message);
+        console.error(`Full error:`, JSON.stringify(error, null, 2));
         // Log first failed record for debugging
         if (batch.length > 0) {
           console.error(`First record in failed batch:`, JSON.stringify(batch[0], null, 2));
