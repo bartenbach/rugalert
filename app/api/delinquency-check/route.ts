@@ -106,8 +106,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Only update, NEVER create during normal operation
-    // (Records should only be created once per day at midnight or by snapshot job)
+    // Update existing records
     let updated = 0;
     if (recordsToUpdate.length > 0) {
       console.log(`📝 Updating ${recordsToUpdate.length} records...`);
@@ -117,12 +116,38 @@ export async function GET(req: NextRequest) {
         updated += batch.length;
       }
     }
+    
+    // Create missing records (backup if snapshot job didn't create them)
+    let created = 0;
+    if (needsCreateCount > 0) {
+      console.log(`📝 Creating ${needsCreateCount} missing records...`);
+      const recordsToCreate: any[] = [];
+      for (const votePubkey of allVotePubkeys) {
+        if (!existingRecordsMap.has(votePubkey)) {
+          const isDelinquent = delinquentSet.has(votePubkey);
+          recordsToCreate.push({
+            fields: {
+              key: `${votePubkey}-${dateStr}`,
+              votePubkey,
+              date: dateStr,
+              delinquentMinutes: isDelinquent ? 1 : 0,
+              totalChecks: 1,
+              uptimePercent: isDelinquent ? 0 : 100,
+            }
+          });
+        }
+      }
+      
+      for (let i = 0; i < recordsToCreate.length; i += 10) {
+        const batch = recordsToCreate.slice(i, i + 10);
+        await tb.dailyUptime.create(batch);
+        created += batch.length;
+      }
+    }
 
     const elapsed = Date.now() - startTime;
     console.log(`✅ Updated ${updated} records`);
-    if (needsCreateCount > 0) {
-      console.log(`⚠️  ${needsCreateCount} validators need records created (will be handled by snapshot job)`);
-    }
+    console.log(`✅ Created ${created} records`);
     console.log(`⏱️  Total time: ${elapsed}ms`);
     console.log(`🩺 === DELINQUENCY CHECK COMPLETE ===\n`);
 
@@ -133,7 +158,7 @@ export async function GET(req: NextRequest) {
       delinquent: delinquentSet.size,
       active: allVotePubkeys.length - delinquentSet.size,
       updated,
-      skipped: needsCreateCount,
+      created,
       elapsed: `${elapsed}ms`,
     });
 

@@ -218,9 +218,6 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       setValidatorInfo(ij.error ? null : ij);
       const sh = await fetch(`/api/stake-history/${params.votePubkey}`);
       const shj = await sh.json();
-      console.log("📊 Stake History Response:", shj);
-      console.log("📊 Stake History Data:", shj.history);
-      console.log("📊 Stake History Length:", shj.history?.length || 0);
       setStakeHistory(shj.history || []);
 
       // Fetch uptime data

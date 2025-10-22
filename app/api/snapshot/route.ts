@@ -719,55 +719,61 @@ export async function POST(req: NextRequest) {
     // ---- INITIALIZE DAILY UPTIME RECORDS ----
     // Create today's uptime records if they don't exist yet
     // The delinquency-check cron will update these every minute
-    const todayStr = new Date().toISOString().split('T')[0];
-    console.log(`\n📅 Checking daily uptime records for ${todayStr}...`);
-    
-    // Check if we already have records for today
-    const existingUptimeRecords = new Set<string>();
-    await tb.dailyUptime
-      .select({
-        filterByFormula: `{date} = '${todayStr}'`,
-        fields: ['votePubkey'],
-        pageSize: 100,
-      })
-      .eachPage((records, fetchNextPage) => {
-        records.forEach((record) => {
-          const vp = record.get('votePubkey') as string;
-          if (vp) existingUptimeRecords.add(vp);
-        });
-        fetchNextPage();
-      });
-    
-    console.log(`📦 Found ${existingUptimeRecords.size} existing uptime records for today`);
-    
-    // Create records for validators that don't have one yet
-    const uptimeRecordsToCreate: any[] = [];
-    for (const v of allVotes) {
-      if (!existingUptimeRecords.has(v.votePubkey)) {
-        uptimeRecordsToCreate.push({
-          fields: {
-            key: `${v.votePubkey}-${todayStr}`,
-            votePubkey: v.votePubkey,
-            date: todayStr,
-            delinquentMinutes: 0,
-            totalChecks: 0,
-            uptimePercent: 100,
-          }
-        });
-      }
-    }
-    
+    // This is non-critical, so we wrap in try-catch to not break the whole job
     let uptimeRecordsCreated = 0;
-    if (uptimeRecordsToCreate.length > 0) {
-      console.log(`📝 Creating ${uptimeRecordsToCreate.length} new uptime records...`);
-      for (let i = 0; i < uptimeRecordsToCreate.length; i += batchSize) {
-        const batch = uptimeRecordsToCreate.slice(i, i + batchSize);
-        await tb.dailyUptime.create(batch);
-        uptimeRecordsCreated += batch.length;
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      console.log(`\n📅 Checking daily uptime records for ${todayStr}...`);
+      
+      // Check if we already have records for today
+      const existingUptimeRecords = new Set<string>();
+      await tb.dailyUptime
+        .select({
+          filterByFormula: `{date} = '${todayStr}'`,
+          fields: ['votePubkey'],
+          pageSize: 100,
+        })
+        .eachPage((records, fetchNextPage) => {
+          records.forEach((record) => {
+            const vp = record.get('votePubkey') as string;
+            if (vp) existingUptimeRecords.add(vp);
+          });
+          fetchNextPage();
+        });
+      
+      console.log(`📦 Found ${existingUptimeRecords.size} existing uptime records for today`);
+      
+      // Create records for validators that don't have one yet
+      const uptimeRecordsToCreate: any[] = [];
+      for (const v of allVotes) {
+        if (!existingUptimeRecords.has(v.votePubkey)) {
+          uptimeRecordsToCreate.push({
+            fields: {
+              key: `${v.votePubkey}-${todayStr}`,
+              votePubkey: v.votePubkey,
+              date: todayStr,
+              delinquentMinutes: 0,
+              totalChecks: 0,
+              uptimePercent: 100,
+            }
+          });
+        }
       }
-      console.log(`✅ Daily uptime records created: ${uptimeRecordsCreated}`);
-    } else {
-      console.log(`✅ All daily uptime records already exist`);
+      
+      if (uptimeRecordsToCreate.length > 0) {
+        console.log(`📝 Creating ${uptimeRecordsToCreate.length} new uptime records...`);
+        for (let i = 0; i < uptimeRecordsToCreate.length; i += batchSize) {
+          const batch = uptimeRecordsToCreate.slice(i, i + batchSize);
+          await tb.dailyUptime.create(batch);
+          uptimeRecordsCreated += batch.length;
+        }
+        console.log(`✅ Daily uptime records created: ${uptimeRecordsCreated}`);
+      } else {
+        console.log(`✅ All daily uptime records already exist`);
+      }
+    } catch (uptimeError: any) {
+      console.error(`⚠️  Failed to create uptime records (non-critical):`, uptimeError.message);
+      // Don't fail the whole job - uptime records will be created by delinquency-check
     }
     
     return NextResponse.json({ 

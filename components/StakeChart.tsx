@@ -39,17 +39,37 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
     const minEpoch = data[0].epoch;
     const maxEpoch = data[data.length - 1].epoch;
 
-    // Helper functions
-    const xScale = (epoch: number) =>
-      padding.left +
-      ((epoch - minEpoch) / (maxEpoch - minEpoch)) *
-        (width - padding.left - padding.right);
+    // Handle single data point case
+    const epochRange = maxEpoch - minEpoch || 1; // Prevent division by zero
+    const stakeRange = maxStake - minStake || maxStake * 0.1; // 10% range if single value
+    const adjustedMinStake = maxStake === minStake ? minStake * 0.95 : minStake; // Add 5% padding
+    const adjustedMaxStake = maxStake === minStake ? maxStake * 1.05 : maxStake;
 
-    const yScale = (stake: number) =>
-      height -
-      padding.bottom -
-      ((stake - minStake) / (maxStake - minStake)) *
-        (height - padding.top - padding.bottom);
+    // Helper functions
+    const xScale = (epoch: number) => {
+      if (data.length === 1) {
+        // Center single point
+        return padding.left + (width - padding.left - padding.right) / 2;
+      }
+      return (
+        padding.left +
+        ((epoch - minEpoch) / epochRange) *
+          (width - padding.left - padding.right)
+      );
+    };
+
+    const yScale = (stake: number) => {
+      if (adjustedMaxStake === adjustedMinStake) {
+        // Center single point vertically
+        return (height - padding.top - padding.bottom) / 2 + padding.top;
+      }
+      return (
+        height -
+        padding.bottom -
+        ((stake - adjustedMinStake) / (adjustedMaxStake - adjustedMinStake)) *
+          (height - padding.top - padding.bottom)
+      );
+    };
 
     // Draw grid lines
     ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
@@ -113,7 +133,9 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
     ctx.font = "12px monospace";
     ctx.textAlign = "right";
     for (let i = 0; i <= 5; i++) {
-      const stake = minStake + ((maxStake - minStake) * (5 - i)) / 5;
+      const stake =
+        adjustedMinStake +
+        ((adjustedMaxStake - adjustedMinStake) * (5 - i)) / 5;
       const y = padding.top + ((height - padding.top - padding.bottom) * i) / 5;
 
       // Format stake amounts: M for millions, K for thousands
