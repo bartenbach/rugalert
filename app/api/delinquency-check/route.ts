@@ -54,27 +54,31 @@ export async function GET(req: NextRequest) {
     console.log(`📊 Network: ${activeValidators.length} active, ${delinquentValidators.length} delinquent`);
     console.log(`📅 Processing date: ${today}`);
 
-    // Fetch existing records for today
+    // Fetch existing records for today - SIMPLE: key ends with today's date
+    // Key format: "votePubkey-YYYY-MM-DD"
     const existingRecordsMap = new Map<string, { id: string; uptimeChecks: number; delinquentChecks: number }>();
+    
     await tb.dailyUptime
       .select({
-        filterByFormula: `{date} = '${today}'`,
-        fields: ['votePubkey', 'date', 'uptimeChecks', 'delinquentChecks'],
+        filterByFormula: `FIND("-${today}", {key}) > 0`,
+        fields: ['key', 'votePubkey', 'uptimeChecks', 'delinquentChecks'],
         pageSize: 100,
       })
       .eachPage((records, fetchNextPage) => {
         records.forEach((record) => {
           const votePubkey = record.get('votePubkey') as string;
-          existingRecordsMap.set(votePubkey, {
-            id: record.id,
-            uptimeChecks: Number(record.get('uptimeChecks') || 0),
-            delinquentChecks: Number(record.get('delinquentChecks') || 0),
-          });
+          if (votePubkey) {
+            existingRecordsMap.set(votePubkey, {
+              id: record.id,
+              uptimeChecks: Number(record.get('uptimeChecks') || 0),
+              delinquentChecks: Number(record.get('delinquentChecks') || 0),
+            });
+          }
         });
         fetchNextPage();
       });
 
-    console.log(`📦 Found ${existingRecordsMap.size} existing records for today`);
+    console.log(`📦 Found ${existingRecordsMap.size}/${allVotePubkeys.length} existing records for ${today}`);
 
     // Prepare updates and creates
     const recordsToUpdate: any[] = [];
