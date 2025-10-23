@@ -58,9 +58,10 @@ type ValidatorInfo = {
   };
   performance: {
     skipRate: number;
+    leaderSlots: number;
+    blocksProduced: number;
     voteCredits: number;
     voteCreditsPercentage: number;
-    slotsElapsed: number;
     maxPossibleCredits: number;
     epoch: number;
   } | null;
@@ -107,7 +108,7 @@ function CircularGauge({
   value: number;
   max?: number;
   label: string;
-  sublabel?: string;
+  sublabel?: React.ReactNode;
   size?: number;
   thresholds?: { good: number; warning: number }; // e.g., { good: 90, warning: 75 }
 }) {
@@ -775,12 +776,25 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <CircularGauge
                       value={100 - validatorInfo.performance.skipRate}
                       label="Block Success"
-                      sublabel={`${
-                        validatorInfo.performance.leaderSlots
-                          ? validatorInfo.performance.leaderSlots -
-                            validatorInfo.performance.blocksProduced
-                          : 0
-                      } skipped`}
+                      sublabel={
+                        validatorInfo.performance.leaderSlots ? (
+                          <span className="text-xs">
+                            <span className="text-green-400 font-medium">
+                              {validatorInfo.performance.blocksProduced}
+                            </span>
+                            {" produced - "}
+                            <span className="text-red-400 font-medium">
+                              {validatorInfo.performance.leaderSlots -
+                                validatorInfo.performance.blocksProduced}
+                            </span>
+                            {` (${validatorInfo.performance.skipRate.toFixed(
+                              2
+                            )}%) skipped`}
+                          </span>
+                        ) : (
+                          "No data"
+                        )
+                      }
                       thresholds={{ good: 95, warning: 85 }}
                     />
                     <CircularGauge

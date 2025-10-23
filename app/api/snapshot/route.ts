@@ -549,6 +549,7 @@ export async function POST(req: NextRequest) {
             deactivatingStake,
             jitoEnabled: isJitoEnabled,
             stakeAccountCount: accountCount,
+            firstSeenEpoch: epoch, // Track when validator first appeared
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),
             ...(website   ? { website } : {}),
