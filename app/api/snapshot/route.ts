@@ -133,8 +133,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const startTime = Date.now();
+  const logProgress = (step: string) => {
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`⏱️  [${elapsed}s] ${step}`);
+  };
+
   try {
+    logProgress("Starting snapshot job");
+    
     // 1) Pull current vote accounts + epoch/slot + cluster nodes for versions
+    // OPTIMIZATION: Parallelize initial RPC calls instead of sequential
+    logProgress("Fetching initial RPC data (parallelized)...");
     const [votes, epochInfo, clusterNodes] = await Promise.all([
       rpc("getVoteAccounts", []),
       rpc("getEpochInfo", []),
@@ -142,6 +152,7 @@ export async function POST(req: NextRequest) {
     ]);
     const epoch = Number(epochInfo.epoch);
     const slot = Number(epochInfo.absoluteSlot);
+    logProgress(`Fetched RPC data: epoch ${epoch}, slot ${slot}`);
     
     // Track which validators are delinquent
     const delinquentSet = new Set<string>();
@@ -165,9 +176,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch Jito MEV commission data for all validators
-    console.log(`🎯 Fetching Jito MEV data...`);
+    logProgress("Fetching Jito MEV data...");
     const jitoValidators = await fetchAllJitoValidators();
-    console.log(`✅ Found ${jitoValidators.size} Jito-enabled validators`);
+    logProgress(`Found ${jitoValidators.size} Jito-enabled validators`);
 
     // Track stake and performance metrics
     let stakeRecordsCreated = 0;
@@ -176,8 +187,10 @@ export async function POST(req: NextRequest) {
     let mevEventsCreated = 0;
     
     // Get block production data for skip rate calculation (current epoch only)
+    logProgress("Fetching block production data...");
     const blockProduction = await rpc("getBlockProduction", [{ epoch }]);
     const blockProductionData = blockProduction?.value?.byIdentity || {};
+    logProgress("Block production data fetched");
     
     // Fetch ALL stake accounts at once to avoid per-validator RPC calls
     // WARNING: This can be very expensive on mainnet (millions of accounts)
@@ -187,13 +200,15 @@ export async function POST(req: NextRequest) {
     const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
     
     if (enableStakeTracking) {
-      console.log(`📊 Fetching all stake accounts with pagination (this may take a while)...`);
+      logProgress("Fetching all stake accounts with pagination...");
       try {
         // Use Helius getProgramAccountsV2 with pagination
         const allStakeAccounts: any[] = [];
         let paginationKey: string | null = null;
         let pageCount = 0;
-        const MAX_PAGES = 200; // Limit to prevent timeouts/rate limits (~1M accounts)
+        // Increased limit - we need ALL accounts for accurate data
+        // Each page = 5K accounts, so 250 pages = 1.25M accounts
+        const MAX_PAGES = 250; // Was 200 (1M accounts), now 250 (1.25M accounts)
         
         do {
           pageCount++;
@@ -217,7 +232,10 @@ export async function POST(req: NextRequest) {
             allStakeAccounts.push(...accounts);
             paginationKey = response.paginationKey || null;
             
-            console.log(`  Fetched page ${pageCount}: ${accounts.length} accounts (total: ${allStakeAccounts.length})`);
+            // Log progress every 50 pages to reduce noise
+            if (pageCount % 50 === 0 || !paginationKey) {
+              logProgress(`Fetched ${pageCount} pages: ${allStakeAccounts.length} accounts`);
+            }
           } catch (pageError: any) {
             console.log(`⚠️  Page ${pageCount} failed (${pageError.message}), continuing with ${allStakeAccounts.length} accounts`);
             break; // Stop pagination on error, use what we have
@@ -225,12 +243,12 @@ export async function POST(req: NextRequest) {
           
           // Stop if we hit page limit
           if (pageCount >= MAX_PAGES) {
-            console.log(`⚠️  Reached page limit (${MAX_PAGES}), continuing with ${allStakeAccounts.length} accounts`);
+            logProgress(`⚠️  Reached page limit (${MAX_PAGES}), continuing with ${allStakeAccounts.length} accounts`);
             break;
           }
         } while (paginationKey);
         
-        console.log(`📊 Processing ${allStakeAccounts.length} stake accounts from ${pageCount} pages...`);
+        logProgress(`Processing ${allStakeAccounts.length} stake accounts from ${pageCount} pages...`);
         
         // Group stake by voter pubkey and count accounts
         for (const account of allStakeAccounts as any[]) {
@@ -265,8 +283,7 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-        console.log(`✅ Processed stake accounts for ${stakeByVoter.size} voters`);
-        console.log(`✅ Counted ${stakeAccountCounts.size} validators with active stake accounts`);
+        logProgress(`Processed stake for ${stakeByVoter.size} voters, ${stakeAccountCounts.size} validators with accounts`);
         
         // Debug: Show some examples of activating/deactivating stake
         let exampleCount = 0;
@@ -380,7 +397,7 @@ export async function POST(req: NextRequest) {
       fetchNextPage();
     });
     
-    console.log(`✅ Pre-fetch complete. Found ${existingValidators.size} validators, ${existingStakeKeys.size} stake records, ${existingPerfKeys.size} perf records, ${existingMevKeys.size} MEV records`);
+    logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingMevKeys.size} MEV`);
     
     // Batch arrays for bulk creation
     const validatorsToCreate: any[] = [];
@@ -460,6 +477,7 @@ export async function POST(req: NextRequest) {
     const infoHistoryToCreate: any[] = [];
 
     // 3) Process each validator
+    logProgress(`Processing ${allVotes.length} validators...`);
     for (const v of allVotes) {
       const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
@@ -809,7 +827,7 @@ export async function POST(req: NextRequest) {
 
     // BATCH CREATE/UPDATE operations to avoid timeout
     console.log(`📦 Batching operations: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} validator updates`);
-    console.log(`📦 Batching: ${stakeRecordsToCreate.length} stake records, ${perfRecordsToCreate.length} new perf records, ${perfRecordsToUpdate.length} perf updates`);
+    logProgress(`Batching: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
     
     // Airtable allows max 10 records per create/update call, so batch them
     const batchSize = 10;
@@ -819,12 +837,14 @@ export async function POST(req: NextRequest) {
       const batch = validatorsToCreate.slice(i, i + batchSize);
       await tb.validators.create(batch);
     }
+    logProgress(`Created ${validatorsToCreate.length} new validators`);
     
     // Update existing validators
     for (let i = 0; i < validatorsToUpdate.length; i += batchSize) {
       const batch = validatorsToUpdate.slice(i, i + batchSize);
       await tb.validators.update(batch);
     }
+    logProgress(`Updated ${validatorsToUpdate.length} validators`);
     
     // Create stake records
     for (let i = 0; i < stakeRecordsToCreate.length; i += batchSize) {
@@ -832,6 +852,7 @@ export async function POST(req: NextRequest) {
       await tb.stakeHistory.create(batch);
       stakeRecordsCreated += batch.length;
     }
+    if (stakeRecordsCreated > 0) logProgress(`Created ${stakeRecordsCreated} stake records`);
     
     // Create performance records
     for (let i = 0; i < perfRecordsToCreate.length; i += batchSize) {
@@ -846,18 +867,21 @@ export async function POST(req: NextRequest) {
       await tb.performanceHistory.update(batch);
       performanceRecordsCreated += batch.length; // Count updates as well
     }
+    logProgress(`Performance: ${perfRecordsToCreate.length} created, ${perfRecordsToUpdate.length} updated`);
     
     // Create MEV snapshots
     for (let i = 0; i < mevSnapshotsToCreate.length; i += batchSize) {
       const batch = mevSnapshotsToCreate.slice(i, i + batchSize);
       await tb.mevSnapshots.create(batch);
     }
+    if (mevSnapshotsToCreate.length > 0) logProgress(`Created ${mevSnapshotsToCreate.length} MEV snapshots`);
     
     // Create MEV events
     for (let i = 0; i < mevEventsToCreate.length; i += batchSize) {
       const batch = mevEventsToCreate.slice(i, i + batchSize);
       await tb.mevEvents.create(batch);
     }
+    if (mevEventsToCreate.length > 0) logProgress(`Created ${mevEventsToCreate.length} MEV events`);
     
     // Create validator info history records (if enabled)
     let infoHistoryCreated = 0;
@@ -906,6 +930,7 @@ export async function POST(req: NextRequest) {
       console.error(`⚠️  Cleanup error (non-fatal):`, cleanupErr);
     }
     
+    logProgress(`✅ Snapshot complete!`);
     return NextResponse.json({ 
       ok: true, 
       epoch, 
@@ -918,7 +943,13 @@ export async function POST(req: NextRequest) {
       }
     });
   } catch (err: any) {
-    console.error("snapshot error:", err);
-    return NextResponse.json({ error: String(err?.message || err) }, { status: 500 });
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.error(`❌ [${elapsed}s] Snapshot error:`, err.message || err);
+    console.error("Stack trace:", err.stack);
+    return NextResponse.json({ 
+      error: String(err?.message || err),
+      elapsed: `${elapsed}s`,
+      hint: "Check logs above for where the job stopped"
+    }, { status: 500 });
   }
 }
