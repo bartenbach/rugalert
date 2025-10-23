@@ -649,39 +649,41 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             )}
           </div>
 
-          {/* Commission History - Simplified */}
+          {/* Commission History - Compact */}
           {series.length > 0 && (
-            <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
-              <h2 className="text-2xl font-bold text-white mb-6">
+            <div className="glass rounded-2xl p-5 border border-white/10 shadow-sm">
+              <h2 className="text-lg font-bold text-white mb-3">
                 Commission History
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-                  <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
                     Current
                   </div>
-                  <div className="text-3xl font-bold text-white">
+                  <div className="text-xl font-bold text-white">
                     {currentCommission}%
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-                  <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
-                    Minimum
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                    Min
                   </div>
-                  <div className="text-3xl font-bold text-green-400">
+                  <div className="text-xl font-bold text-green-400">
                     {Math.min(...series.map((s) => s.commission))}%
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-                  <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
-                    Maximum
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                    Max
                   </div>
-                  <div className="text-3xl font-bold text-red-400">
+                  <div className="text-xl font-bold text-red-400">
                     {Math.max(...series.map((s) => s.commission))}%
                   </div>
                 </div>
               </div>
-              <CommissionChart data={series} />
+              <div className="h-[200px]">
+                <CommissionChart data={series} />
+              </div>
             </div>
           )}
 

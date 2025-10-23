@@ -30,11 +30,11 @@ export default function CommissionChart({
   };
 
   return (
-    <div className="w-full h-80">
+    <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
-          margin={{ left: 0, right: 0, top: 12, bottom: 12 }}
+          margin={{ left: 10, right: 0, top: 12, bottom: 12 }}
         >
           <defs>
             <linearGradient id="commissionGradient" x1="0" y1="0" x2="0" y2="1">
@@ -58,12 +58,14 @@ export default function CommissionChart({
             tick={{ fontSize: 12, fill: "#9ca3af" }}
             stroke="rgba(255, 255, 255, 0.1)"
             tickLine={false}
+            width={60}
             label={{
               value: "Commission %",
               angle: -90,
               position: "insideLeft",
               fill: "#9ca3af",
               fontSize: 12,
+              offset: 10,
             }}
           />
           <Tooltip content={<CustomTooltip />} />

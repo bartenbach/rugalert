@@ -86,7 +86,7 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={chartData}
-          margin={{ left: 0, right: 0, top: 12, bottom: 12 }}
+          margin={{ left: 10, right: 0, top: 12, bottom: 12 }}
         >
           <defs>
             <linearGradient id="stakeGradient" x1="0" y1="0" x2="0" y2="1">
@@ -110,12 +110,14 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
             tick={{ fontSize: 12, fill: "#9ca3af" }}
             stroke="rgba(255, 255, 255, 0.1)"
             tickLine={false}
+            width={80}
             label={{
               value: "Active Stake (SOL)",
               angle: -90,
               position: "insideLeft",
               fill: "#9ca3af",
               fontSize: 12,
+              offset: 10,
             }}
           />
           <Tooltip content={<CustomTooltip />} />

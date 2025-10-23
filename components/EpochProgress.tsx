@@ -84,7 +84,7 @@ export default function EpochProgress() {
         <span className="text-xs font-semibold text-gray-300 whitespace-nowrap">
           Epoch {epochInfo.epoch}
         </span>
-        <div className="relative flex-1 h-1.5 bg-gray-800/50 rounded-full overflow-hidden">
+        <div className="relative flex-1 h-1.5 bg-gray-800/50 rounded-full overflow-hidden border border-white/10">
           <div
             className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-1000 ease-out"
             style={{ width: `${progressPercentage}%` }}
