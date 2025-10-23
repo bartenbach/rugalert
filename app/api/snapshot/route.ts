@@ -505,6 +505,8 @@ export async function POST(req: NextRequest) {
         if (version && existing.get("version") !== version) patch.version = version;
         // Update delinquent status (changes frequently)
         patch.delinquent = isDelinquent;
+        // Cache current commission for fast access
+        patch.commission = v.commission;
         // Cache activeStake (locked at epoch boundaries)
         patch.activeStake = Number(v.activatedStake || 0);
         // Cache activating/deactivating stake (ephemeral current state, not historical)
@@ -522,6 +524,7 @@ export async function POST(req: NextRequest) {
           fields: {
             votePubkey: v.votePubkey,
             identityPubkey: v.nodePubkey,
+            commission: v.commission,
             delinquent: isDelinquent,
             activeStake: Number(v.activatedStake || 0),
             activatingStake,

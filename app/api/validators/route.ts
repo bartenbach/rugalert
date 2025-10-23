@@ -7,8 +7,6 @@ const base = new Airtable({
 }).base(process.env.AIRTABLE_BASE_ID!);
 
 const VALIDATORS_TABLE = "validators";
-const STAKE_HISTORY_TABLE = "stake_history";
-const SNAPSHOTS_TABLE = "snapshots";
 const MEV_SNAPSHOTS_TABLE = "mev_snapshots";
 
 export const dynamic = 'force-dynamic';
@@ -56,7 +54,7 @@ export async function GET(request: NextRequest) {
     const validatorsMap = new Map<string, any>();
     await base(VALIDATORS_TABLE)
       .select({
-        fields: ['votePubkey', 'identityPubkey', 'name', 'iconUrl', 'version', 'stakeAccountCount', 'jitoEnabled', 'activeStake', 'activatingStake', 'deactivatingStake'],
+        fields: ['votePubkey', 'identityPubkey', 'name', 'iconUrl', 'version', 'commission', 'stakeAccountCount', 'jitoEnabled', 'activeStake', 'activatingStake', 'deactivatingStake'],
         pageSize: 100,
       })
       .eachPage((pageRecords, fetchNextPage) => {
@@ -72,37 +70,13 @@ export async function GET(request: NextRequest) {
             iconUrl: record.fields.iconUrl || null,
             version: record.fields.version || null,
             stakeAccountCount: Number(record.fields.stakeAccountCount || 0),
-            commission: 0, // Will be filled from snapshots
+            commission: Number(record.fields.commission || 0),
             jitoEnabled,
             activeStake: Number(record.fields.activeStake || 0),
             activatingStake: Number(record.fields.activatingStake || 0),
             deactivatingStake: Number(record.fields.deactivatingStake || 0),
             // Delinquent status will be set from real-time RPC data below
           });
-        });
-        fetchNextPage();
-      });
-
-    // Fetch latest commission from snapshots
-    // Sorted by epoch desc to get most recent first
-    const commissionMap = new Map<string, { commission: number; epoch: number }>();
-    await base(SNAPSHOTS_TABLE)
-      .select({
-        fields: ['votePubkey', 'commission', 'epoch'],
-        pageSize: 100,
-        sort: [{ field: 'epoch', direction: 'desc' }],
-        maxRecords: 2000, // Limit to recent records for performance
-      })
-      .eachPage((pageRecords, fetchNextPage) => {
-        pageRecords.forEach((record) => {
-          const votePubkey = record.fields.votePubkey as string;
-          const commission = Number(record.fields.commission || 0);
-          const epoch = Number(record.fields.epoch || 0);
-          
-          // Keep only the most recent snapshot for each validator (first occurrence since sorted desc)
-          if (!commissionMap.has(votePubkey)) {
-            commissionMap.set(votePubkey, { commission, epoch });
-          }
         });
         fetchNextPage();
       });
@@ -140,7 +114,6 @@ export async function GET(request: NextRequest) {
     // First, process validators from our database
     validatorsMap.forEach((validator, votePubkey) => {
       processedVotePubkeys.add(votePubkey);
-      const commissionData = commissionMap.get(votePubkey);
       const rpcStake = rpcStakeMap.get(votePubkey) || 0;
       
       // Use cached activeStake from validator record, fallback to RPC
@@ -150,7 +123,8 @@ export async function GET(request: NextRequest) {
       if (activeStake > 0) {
         validatorsWithStake.push({
           ...validator,
-          commission: commissionData?.commission || 0,
+          // commission is already in validator object (cached by snapshot job)
+          commission: Number(validator.commission || 0),
           activeStake,
           // activatingStake and deactivatingStake are already in validator object (cached by snapshot job)
           activatingStake: Number(validator.activatingStake || 0),
@@ -168,14 +142,13 @@ export async function GET(request: NextRequest) {
     // (This catches delinquent validators that haven't been processed)
     rpcStakeMap.forEach((rpcStake, votePubkey) => {
       if (!processedVotePubkeys.has(votePubkey) && rpcStake > 0) {
-        const commissionData = commissionMap.get(votePubkey);
         validatorsWithStake.push({
           votePubkey,
           identityPubkey: null,
           name: null,
           iconUrl: null,
           version: null,
-          commission: commissionData?.commission || 0,
+          commission: 0, // Will be populated by snapshot job
           activeStake: rpcStake,
           activatingStake: 0,
           deactivatingStake: 0,

@@ -222,6 +222,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
     null
   );
   const [uptimePercentage, setUptimePercentage] = useState<number | null>(null);
+  const [uptimeDaysTracked, setUptimeDaysTracked] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [copiedIdentity, setCopiedIdentity] = useState(false);
   const [copiedVote, setCopiedVote] = useState(false);
@@ -276,6 +277,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
         // Use overall uptime from API (works with any amount of data, even partial day)
         if (uj.overallUptime !== undefined) {
           setUptimePercentage(uj.overallUptime);
+          setUptimeDaysTracked(uj.daysTracked || 0);
         } else if (uj.days && uj.days.length > 0) {
           // Fallback: calculate from days data if overallUptime not provided
           const totalChecks = uj.days.reduce(
@@ -291,10 +293,12 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               ? ((totalChecks - totalDelinquent) / totalChecks) * 100
               : 100;
           setUptimePercentage(avgUptime);
+          setUptimeDaysTracked(uj.days.length);
         }
       } catch (err) {
         console.error("Failed to fetch uptime:", err);
         setUptimePercentage(null);
+        setUptimeDaysTracked(0);
       }
 
       setLoading(false);
@@ -771,10 +775,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <CircularGauge
                       value={100 - validatorInfo.performance.skipRate}
                       label="Block Success"
-                      sublabel={`${Math.round(
-                        (validatorInfo.performance.skipRate / 100) *
-                          validatorInfo.performance.slotsElapsed
-                      )} skipped`}
+                      sublabel={`${
+                        validatorInfo.performance.skipRate &&
+                        validatorInfo.performance.slotsElapsed
+                          ? Math.round(
+                              (validatorInfo.performance.skipRate / 100) *
+                                validatorInfo.performance.slotsElapsed
+                            )
+                          : 0
+                      } skipped`}
                       thresholds={{ good: 95, warning: 85 }}
                     />
                     <CircularGauge
@@ -800,7 +809,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <CircularGauge
                     value={uptimePercentage}
                     label="Uptime"
-                    sublabel="(1 year)"
+                    sublabel={
+                      uptimeDaysTracked === 1
+                        ? "(1 day)"
+                        : uptimeDaysTracked >= 365
+                        ? "(1 year)"
+                        : `(${uptimeDaysTracked} days)`
+                    }
                     thresholds={{ good: 99, warning: 95 }}
                   />
                 ) : (
