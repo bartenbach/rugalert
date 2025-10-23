@@ -189,39 +189,66 @@ export default function ValidatorsPage() {
 
       {/* Stats */}
       {!loading && networkStats && (
-        <div className="glass rounded-2xl p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="glass rounded-2xl p-4 sm:p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
             <div className="text-center">
-              <div className="text-gray-400 text-sm mb-1">Total Validators</div>
-              <div className="text-3xl font-bold text-white">
+              <div className="text-gray-400 text-xs sm:text-sm mb-1">
+                Total Validators
+              </div>
+              <div className="text-xl sm:text-3xl font-bold text-white">
                 {networkStats.totalValidators.toLocaleString()}
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                {networkStats.activeValidators.toLocaleString()} active •{" "}
-                {networkStats.delinquentValidators.toLocaleString()} delinquent
+              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
+                <span className="hidden sm:inline">
+                  {networkStats.activeValidators.toLocaleString()} active •{" "}
+                </span>
+                <span className="hidden sm:inline">
+                  {networkStats.delinquentValidators.toLocaleString()}{" "}
+                  delinquent
+                </span>
+                <span className="sm:hidden">
+                  {networkStats.activeValidators.toLocaleString()} active
+                </span>
               </div>
             </div>
             <div className="text-center">
-              <div className="text-gray-400 text-sm mb-1">Total Stake</div>
-              <div className="text-3xl font-bold text-orange-400">
-                {networkStats.totalStake.toLocaleString(undefined, {
-                  maximumFractionDigits: 0,
-                })}{" "}
-                <span className="text-xl">SOL</span>
+              <div className="text-gray-400 text-xs sm:text-sm mb-1">
+                Total Stake
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                Network-wide (real-time)
+              <div className="text-xl sm:text-3xl font-bold text-orange-400">
+                <span className="hidden sm:inline">
+                  {networkStats.totalStake.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}{" "}
+                  <span className="text-xl">SOL</span>
+                </span>
+                <span className="sm:hidden">
+                  {(networkStats.totalStake / 1000000).toFixed(1)}M
+                </span>
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
+                <span className="hidden sm:inline">
+                  Network-wide (real-time)
+                </span>
+                <span className="sm:hidden">SOL</span>
               </div>
             </div>
             <div className="text-center">
-              <div className="text-gray-400 text-sm mb-1">Active Stake</div>
-              <div className="text-3xl font-bold text-green-400">
-                {networkStats.activeStake.toLocaleString(undefined, {
-                  maximumFractionDigits: 0,
-                })}{" "}
-                <span className="text-xl">SOL</span>
+              <div className="text-gray-400 text-xs sm:text-sm mb-1">
+                Active Stake
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xl sm:text-3xl font-bold text-green-400">
+                <span className="hidden sm:inline">
+                  {networkStats.activeStake.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}{" "}
+                  <span className="text-xl">SOL</span>
+                </span>
+                <span className="sm:hidden">
+                  {(networkStats.activeStake / 1000000).toFixed(1)}M
+                </span>
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
                 {(
                   (networkStats.activeStake / networkStats.totalStake) *
                   100
@@ -230,14 +257,21 @@ export default function ValidatorsPage() {
               </div>
             </div>
             <div className="text-center">
-              <div className="text-gray-400 text-sm mb-1">Delinquent Stake</div>
-              <div className="text-3xl font-bold text-red-400">
-                {networkStats.delinquentStake.toLocaleString(undefined, {
-                  maximumFractionDigits: 0,
-                })}{" "}
-                <span className="text-xl">SOL</span>
+              <div className="text-gray-400 text-xs sm:text-sm mb-1">
+                Delinquent Stake
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xl sm:text-3xl font-bold text-red-400">
+                <span className="hidden sm:inline">
+                  {networkStats.delinquentStake.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}{" "}
+                  <span className="text-xl">SOL</span>
+                </span>
+                <span className="sm:hidden">
+                  {(networkStats.delinquentStake / 1000000).toFixed(1)}M
+                </span>
+              </div>
+              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
                 {(
                   (networkStats.delinquentStake / networkStats.totalStake) *
                   100
@@ -249,8 +283,8 @@ export default function ValidatorsPage() {
         </div>
       )}
 
-      {/* Validators Table */}
-      <div className="glass rounded-2xl shadow-2xl shadow-black/30">
+      {/* Validators Table - Desktop */}
+      <div className="hidden md:block glass rounded-2xl shadow-2xl shadow-black/30">
         <table className="w-full">
           <thead className="sticky top-20 z-40 shadow-lg backdrop-blur-xl">
             <tr className="bg-[#0a0a0a]/95 border-b-2 border-white/10">
@@ -490,6 +524,176 @@ export default function ValidatorsPage() {
           </tbody>
         </table>
 
+        {/* Infinite scroll trigger */}
+        <div ref={observerTarget} className="h-4"></div>
+      </div>
+
+      {/* Validators Cards - Mobile */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center gap-3">
+              <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-gray-400">Loading validators...</span>
+            </div>
+          </div>
+        ) : displayedValidators.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-2">🔍</div>
+            <p className="text-gray-400">No validators found</p>
+          </div>
+        ) : (
+          <>
+            {displayedValidators.map((validator, index) => {
+              const previousValidator =
+                index > 0 ? displayedValidators[index - 1] : null;
+              const showNakamotoDivider =
+                previousValidator &&
+                previousValidator.cumulativeStakePercent < 33.33 &&
+                validator.cumulativeStakePercent >= 33.33;
+
+              return (
+                <>
+                  {showNakamotoDivider && (
+                    <div
+                      key={`nakamoto-mobile-${validator.votePubkey}`}
+                      className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50 rounded-xl p-3"
+                    >
+                      <div className="text-center">
+                        <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-1">
+                          ⚠️ Nakamoto Coefficient
+                        </div>
+                        <div className="text-[10px] text-cyan-300/80">
+                          Cumulative stake above forms a superminority
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    key={validator.votePubkey}
+                    onClick={() =>
+                      (window.location.href = `/validator/${validator.votePubkey}`)
+                    }
+                    className={`glass rounded-xl p-4 border cursor-pointer transition-all ${
+                      validator.delinquent
+                        ? "border-red-500/50 bg-red-500/5"
+                        : "border-white/10 hover:border-orange-500/50"
+                    }`}
+                  >
+                    {/* Header */}
+                    <div className="flex items-start gap-3 mb-3">
+                      {validator.iconUrl ? (
+                        <img
+                          src={validator.iconUrl}
+                          alt={validator.name || "Validator"}
+                          loading="lazy"
+                          className="w-12 h-12 rounded-lg object-cover border-2 border-white/10 flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/0 flex-shrink-0"></div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-mono text-gray-500">
+                            #{validator.rank}
+                          </span>
+                          {validator.delinquent && (
+                            <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-[9px] font-bold text-red-300">
+                              OFFLINE
+                            </span>
+                          )}
+                        </div>
+                        <div className="font-semibold text-sm text-white truncate">
+                          {validator.name || validator.votePubkey}
+                        </div>
+                        {validator.version && (
+                          <div className="text-[10px] text-gray-500 font-mono">
+                            v{validator.version}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <div className="text-gray-500 mb-1">Stake</div>
+                        <div className="text-white font-semibold">
+                          ◎{" "}
+                          {validator.activeStake.toLocaleString(undefined, {
+                            maximumFractionDigits: 0,
+                          })}
+                        </div>
+                        <div className="text-[10px] text-gray-600">
+                          {validator.stakePercent.toFixed(2)}%
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 mb-1">Cumulative</div>
+                        <div className="text-white font-semibold">
+                          {validator.cumulativeStakePercent.toFixed(1)}%
+                        </div>
+                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1">
+                          <div
+                            className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
+                            style={{
+                              width: `${Math.min(
+                                validator.cumulativeStakePercent,
+                                100
+                              )}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 mb-1">Commission</div>
+                        <span
+                          className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
+                            validator.commission <= 5
+                              ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                              : validator.commission <= 10
+                              ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                              : "bg-red-500/15 text-red-300 border border-red-500/30"
+                          }`}
+                        >
+                          {validator.commission}%
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-gray-500 mb-1">MEV</div>
+                        {validator.jitoEnabled &&
+                        validator.mevCommission !== null &&
+                        validator.mevCommission !== undefined ? (
+                          <span
+                            className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
+                              validator.mevCommission <= 5
+                                ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                : validator.mevCommission <= 10
+                                ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                : "bg-red-500/15 text-red-300 border border-red-500/30"
+                            }`}
+                          >
+                            {validator.mevCommission}%
+                          </span>
+                        ) : (
+                          <span className="text-gray-600 text-xs">—</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })}
+            {displayCount < filteredValidators.length && (
+              <div className="flex items-center justify-center gap-3 py-6">
+                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-gray-400 text-sm">
+                  Loading more validators...
+                </span>
+              </div>
+            )}
+          </>
+        )}
         {/* Infinite scroll trigger */}
         <div ref={observerTarget} className="h-4"></div>
       </div>

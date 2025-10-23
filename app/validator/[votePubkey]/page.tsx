@@ -85,6 +85,16 @@ type StakeHistory = {
   deactivatingStake?: number;
 };
 
+type InfoHistory = {
+  identityPubkey: string;
+  name: string | null;
+  description: string | null;
+  website: string | null;
+  iconUrl: string | null;
+  changedAt: string;
+  epoch: number;
+};
+
 // Circular Progress Gauge Component with dynamic coloring
 function CircularGauge({
   value,
@@ -205,6 +215,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
     []
   );
   const [stakeHistory, setStakeHistory] = useState<StakeHistory[]>([]);
+  const [infoHistory, setInfoHistory] = useState<InfoHistory[]>([]);
   const [meta, setMeta] = useState<any>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [validatorInfo, setValidatorInfo] = useState<ValidatorInfo | null>(
@@ -250,6 +261,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       const sh = await fetch(`/api/stake-history/${params.votePubkey}`);
       const shj = await sh.json();
       setStakeHistory(shj.history || []);
+
+      // Fetch validator info history
+      const ih = await fetch(
+        `/api/validator-info-history/${params.votePubkey}`
+      );
+      const ihj = await ih.json();
+      setInfoHistory(ihj.history || []);
 
       // Fetch uptime data
       try {
@@ -358,9 +376,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
     series.length > 0 ? series[series.length - 1].commission : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Back Button and Search */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
         <button
           onClick={() => {
             if (window.history.length > 1) {
@@ -369,14 +387,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               window.location.href = "/validators";
             }
           }}
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-orange-400 transition-colors font-medium flex-shrink-0"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-orange-400 transition-colors font-medium flex-shrink-0 text-sm sm:text-base"
         >
           <span>←</span>
-          <span>Back to Validators</span>
+          <span className="hidden sm:inline">Back to Validators</span>
+          <span className="sm:hidden">Back</span>
         </button>
 
         {/* Validator Search */}
-        <div className="flex-1 max-w-2xl mx-auto">
+        <div className="flex-1 max-w-full sm:max-w-2xl sm:mx-auto">
           <div className="relative">
             <input
               ref={searchInputRef}
@@ -512,27 +531,27 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       ) : (
         <>
           {/* Validator Header */}
-          <div className="glass rounded-2xl p-6 border border-white/10 shadow-sm">
-            <div className="flex items-start gap-4">
+          <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm">
+            <div className="flex items-start gap-3 sm:gap-4">
               {/* Icon */}
               <div className="flex-shrink-0">
                 {meta?.avatarUrl ? (
                   <img
                     src={meta.avatarUrl}
-                    className="w-20 h-20 rounded-xl object-cover border-2 border-white/10"
+                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-white/10"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
                     }}
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-xl border-2 border-white/10 bg-white/5"></div>
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl border-2 border-white/10 bg-white/5"></div>
                 )}
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 flex-wrap mb-3">
-                  <h1 className="text-3xl font-bold text-white">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap mb-2 sm:mb-3">
+                  <h1 className="text-xl sm:text-3xl font-bold text-white">
                     {meta?.name ? (
                       <span>
                         {meta.name
@@ -704,7 +723,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       <span className="text-gray-500 flex-shrink-0">
                         Identity:
                       </span>
-                      <span className="break-all">
+                      <span className="truncate">
                         {validatorInfo.validator.identityPubkey}
                       </span>
                       <span className="flex-shrink-0">
@@ -725,7 +744,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     }`}
                   >
                     <span className="text-gray-500 flex-shrink-0">Vote:</span>
-                    <span className="break-all">{params.votePubkey}</span>
+                    <span className="truncate">{params.votePubkey}</span>
                     <span className="flex-shrink-0">
                       {copiedVote ? "✓" : "📋"}
                     </span>
@@ -737,16 +756,16 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Performance Gauges */}
           {validatorInfo && (
-            <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold text-white mb-1">
+            <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30">
+              <div className="mb-6 sm:mb-8">
+                <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">
                   Current Performance
                 </h2>
                 <p className="text-sm text-gray-400">
                   Epoch {validatorInfo.currentEpoch}
                 </p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10">
                 {validatorInfo.performance && (
                   <>
                     <CircularGauge
@@ -798,13 +817,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Stake Info - Compact Cards */}
           {validatorInfo?.stake && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="glass rounded-2xl p-6 border border-white/10 shadow-xl shadow-black/20">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20">
                 <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
                   Stake Delta
                 </div>
                 <div
-                  className={`text-2xl font-bold ${
+                  className={`text-xl sm:text-2xl font-bold ${
                     validatorInfo.stake.activatingStake -
                       validatorInfo.stake.deactivatingStake >
                     0
@@ -827,11 +846,11 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   })()}
                 </div>
               </div>
-              <div className="glass rounded-2xl p-6 border border-white/10 shadow-xl shadow-black/20">
+              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20">
                 <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
                   Activating
                 </div>
-                <div className="text-3xl font-bold text-green-400">
+                <div className="text-2xl sm:text-3xl font-bold text-green-400">
                   {validatorInfo.stake.activatingStake > 0
                     ? `◎ ${validatorInfo.stake.activatingStake.toLocaleString(
                         "en-US",
@@ -840,11 +859,11 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     : "—"}
                 </div>
               </div>
-              <div className="glass rounded-2xl p-6 border border-white/10 shadow-xl shadow-black/20">
+              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20">
                 <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
                   Deactivating
                 </div>
-                <div className="text-3xl font-bold text-red-400">
+                <div className="text-2xl sm:text-3xl font-bold text-red-400">
                   {validatorInfo.stake.deactivatingStake > 0
                     ? `◎ ${validatorInfo.stake.deactivatingStake.toLocaleString(
                         "en-US",
@@ -860,8 +879,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
           <UptimeChart votePubkey={params.votePubkey} />
 
           {/* Stake History Chart */}
-          <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
-            <h2 className="text-2xl font-bold text-white mb-6">
+          <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30">
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
               Stake History
             </h2>
             {stakeHistory.length > 0 ? (
@@ -875,32 +894,32 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Commission History - Compact */}
           {series.length > 0 && (
-            <div className="glass rounded-2xl p-5 border border-white/10 shadow-sm">
-              <h2 className="text-lg font-bold text-white mb-3">
+            <div className="glass rounded-2xl p-4 sm:p-5 border border-white/10 shadow-sm">
+              <h2 className="text-base sm:text-lg font-bold text-white mb-3">
                 Commission History
               </h2>
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
+                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
                     Current
                   </div>
-                  <div className="text-xl font-bold text-white">
+                  <div className="text-base sm:text-xl font-bold text-white">
                     {currentCommission}%
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
+                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
                     Min
                   </div>
-                  <div className="text-xl font-bold text-green-400">
+                  <div className="text-base sm:text-xl font-bold text-green-400">
                     {Math.min(...series.map((s) => s.commission))}%
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                  <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
+                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
                     Max
                   </div>
-                  <div className="text-xl font-bold text-red-400">
+                  <div className="text-base sm:text-xl font-bold text-red-400">
                     {Math.max(...series.map((s) => s.commission))}%
                   </div>
                 </div>
@@ -911,10 +930,128 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             </div>
           )}
 
+          {/* Validator Info History - Only show if there are changes */}
+          {infoHistory.length > 1 && (
+            <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-base sm:text-lg font-bold text-white">
+                  📜 Validator Info History
+                </h2>
+                <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">
+                  {infoHistory.length}{" "}
+                  {infoHistory.length === 1 ? "change" : "changes"}
+                </span>
+              </div>
+              <p className="text-sm text-gray-400 mb-4">
+                Historical changes to validator name, description, website, and
+                icon. Useful for tracking rebrands or identifying validators
+                after rugs.
+              </p>
+
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {infoHistory.map((record, index) => {
+                  const isLatest = index === 0;
+                  const prevRecord =
+                    index < infoHistory.length - 1
+                      ? infoHistory[index + 1]
+                      : null;
+
+                  // Determine what changed
+                  const changes: string[] = [];
+                  if (prevRecord) {
+                    if (record.name !== prevRecord.name) changes.push("Name");
+                    if (record.description !== prevRecord.description)
+                      changes.push("Description");
+                    if (record.website !== prevRecord.website)
+                      changes.push("Website");
+                    if (record.iconUrl !== prevRecord.iconUrl)
+                      changes.push("Icon");
+                    if (record.identityPubkey !== prevRecord.identityPubkey)
+                      changes.push("Identity");
+                  }
+
+                  return (
+                    <div
+                      key={`${record.changedAt}-${index}`}
+                      className={`border rounded-lg p-3 sm:p-4 transition-all ${
+                        isLatest
+                          ? "border-green-500/50 bg-green-500/5"
+                          : "border-white/10 bg-white/5 hover:bg-white/10"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 mb-2">
+                        {record.iconUrl ? (
+                          <img
+                            src={record.iconUrl}
+                            alt={record.name || "Icon"}
+                            className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg border border-white/20 bg-white/5 flex-shrink-0"></div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <div>
+                              <div className="font-semibold text-white text-sm truncate">
+                                {record.name || "(No name)"}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {new Date(record.changedAt).toLocaleDateString(
+                                  "en-US",
+                                  {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )}
+                                {" · "}Epoch {record.epoch}
+                              </div>
+                            </div>
+                            {isLatest ? (
+                              <span className="text-xs font-bold text-green-400 bg-green-500/20 px-2 py-1 rounded">
+                                CURRENT
+                              </span>
+                            ) : changes.length > 0 ? (
+                              <span className="text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded">
+                                Changed: {changes.join(", ")}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {record.website && (
+                            <a
+                              href={record.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-orange-400 hover:text-orange-300 mt-1 block truncate"
+                            >
+                              🔗{" "}
+                              {record.website
+                                .replace(/^https?:\/\//, "")
+                                .replace(/\/$/, "")}
+                            </a>
+                          )}
+
+                          {record.description && (
+                            <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                              {record.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Commission Change Events Table - Only if events exist */}
           {events.length > 0 && (
-            <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
-              <h2 className="text-2xl font-bold text-white mb-6">
+            <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30">
+              <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
                 Commission Changes
               </h2>
 

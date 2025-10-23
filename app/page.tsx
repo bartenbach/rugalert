@@ -530,29 +530,35 @@ export default function Page() {
       </div>
 
       {/* Commission Events Table Section */}
-      <div className="glass rounded-2xl p-6 space-y-6">
+      <div className="glass rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Table Header with Stats and Controls */}
         <div className="space-y-4">
           {/* Title and Stats Row */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
               <span>📊</span>
               Commission Events
             </h2>
-            <div className="flex gap-4">
-              <div className="text-center px-4 py-2 rounded-lg bg-white/5 border border-white/10">
-                <div className="text-xs text-gray-400">Total</div>
-                <div className="text-lg font-bold text-white">
+            <div className="flex gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-start">
+              <div className="text-center px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 flex-1 sm:flex-none">
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  Total
+                </div>
+                <div className="text-base sm:text-lg font-bold text-white">
                   {filtered.length}
                 </div>
               </div>
-              <div className="text-center px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
-                <div className="text-xs text-gray-400">Rugs</div>
-                <div className="text-lg font-bold text-red-400">{rugCount}</div>
+              <div className="text-center px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-red-500/10 border border-red-500/30 flex-1 sm:flex-none">
+                <div className="text-[10px] sm:text-xs text-gray-400">Rugs</div>
+                <div className="text-base sm:text-lg font-bold text-red-400">
+                  {rugCount}
+                </div>
               </div>
-              <div className="text-center px-4 py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
-                <div className="text-xs text-gray-400">Cautions</div>
-                <div className="text-lg font-bold text-yellow-400">
+              <div className="text-center px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex-1 sm:flex-none">
+                <div className="text-[10px] sm:text-xs text-gray-400">
+                  Cautions
+                </div>
+                <div className="text-base sm:text-lg font-bold text-yellow-400">
                   {cautionCount}
                 </div>
               </div>
@@ -983,7 +989,7 @@ export default function Page() {
       </div>
 
       {/* Email Subscription */}
-      <div className="glass rounded-2xl p-8 max-w-2xl mx-auto border-2 border-orange-500/20 mt-8">
+      <div className="glass rounded-2xl p-4 sm:p-8 max-w-2xl mx-auto border-2 border-orange-500/20 mt-8">
         <div className="text-center space-y-4">
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="text-3xl">🔔</span>

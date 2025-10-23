@@ -43,21 +43,24 @@ export default function RootLayout({
 
         {/* Dark header with orange accent */}
         <header className="sticky top-0 z-50 w-full glass border-b border-white/10 backdrop-blur-xl">
-          <div className="mx-auto max-w-7xl px-6 h-20 flex items-center justify-between">
-            <a href="/" className="flex items-center gap-3 group">
+          <div className="mx-auto max-w-7xl px-3 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
+            <a
+              href="/"
+              className="flex items-center gap-2 sm:gap-3 group flex-shrink-0"
+            >
               <div className="relative">
                 <img
                   src="/rugalert-logo.png"
                   alt="RugAlert Logo"
-                  className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
+                  className="w-12 h-12 sm:w-20 sm:h-20 object-contain transition-transform duration-300 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </div>
               <div>
-                <span className="text-2xl font-bold gradient-text block">
+                <span className="text-lg sm:text-2xl font-bold gradient-text block">
                   RugAlert
                 </span>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-400 hidden sm:block">
                   Commission Guardian
                 </span>
               </div>
@@ -68,43 +71,48 @@ export default function RootLayout({
               <EpochProgress />
             </div>
 
-            <nav className="flex items-center gap-2">
+            <nav className="flex items-center gap-1 sm:gap-2">
               <a
                 href="/"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
                   isActive("/") && pathname === "/"
                     ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
                     : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
                 }`}
               >
-                Dashboard
+                <span className="hidden sm:inline">Dashboard</span>
+                <span className="sm:hidden">🏠</span>
               </a>
               <a
                 href="/validators"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
                   isActive("/validators")
                     ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
                     : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
                 }`}
               >
-                Validators
+                <span className="hidden sm:inline">Validators</span>
+                <span className="sm:hidden">📋</span>
               </a>
               <a
                 href="/history"
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
                   isActive("/history")
                     ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
                     : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
                 }`}
               >
-                History
+                <span className="hidden sm:inline">History</span>
+                <span className="sm:hidden">📊</span>
               </a>
             </nav>
           </div>
         </header>
 
         {/* Page container with padding */}
-        <main className="mx-auto max-w-7xl px-6 py-12">{children}</main>
+        <main className="mx-auto max-w-7xl px-3 sm:px-6 py-6 sm:py-12">
+          {children}
+        </main>
 
         {/* Dark footer */}
         <footer className="mx-auto max-w-7xl px-6 py-12 mt-20">

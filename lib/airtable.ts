@@ -25,6 +25,7 @@ const TB_PERFORMANCE_HISTORY = process.env.AIRTABLE_TB_PERFORMANCE_HISTORY || 'p
 const TB_MEV_SNAPSHOTS = process.env.AIRTABLE_TB_MEV_SNAPSHOTS || 'mev_snapshots'
 const TB_MEV_EVENTS = process.env.AIRTABLE_TB_MEV_EVENTS || 'mev_events'
 const TB_DAILY_UPTIME = process.env.AIRTABLE_TB_DAILY_UPTIME || 'daily_uptime'
+const TB_VALIDATOR_INFO_HISTORY = process.env.AIRTABLE_TB_VALIDATOR_INFO_HISTORY || 'validator_info_history'
 
 export const tb = {
   validators: base(TB_VALIDATORS),
@@ -36,6 +37,7 @@ export const tb = {
   mevSnapshots: base(TB_MEV_SNAPSHOTS),
   mevEvents: base(TB_MEV_EVENTS),
   dailyUptime: base(TB_DAILY_UPTIME),
+  validatorInfoHistory: base(TB_VALIDATOR_INFO_HISTORY),
 }
 
 // ---------- Utilities ----------
