@@ -621,15 +621,15 @@ export async function POST(req: NextRequest) {
           const validatorName = chainName || v.votePubkey;
           
           if (type === "RUG") {
-            const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+            const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
             await sendEmail("🚨 Solana Validator Commission Rug Detected", msg, "RUG");
           } else if (type === "CAUTION") {
-            const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+            const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
             await sendEmail("⚠️ Solana Validator Large Commission Jump Detected", msg, "CAUTION");
           } else if (type === "INFO") {
-            const msg = `📊 Commission Change\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+            const msg = `📊 Commission Change\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendEmail("📊 Solana Validator Commission Change", msg, "INFO");
           }
         }
@@ -689,11 +689,11 @@ export async function POST(req: NextRequest) {
               const validatorName = chainName || v.votePubkey;
               
               if (eventType === "RUG") {
-                const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}%\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+                const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
                 await sendEmail("🚨 Solana Validator MEV Commission Rug Detected", msg, "RUG");
               } else if (eventType === "CAUTION") {
-                const msg = `⚠️ CAUTION: Large MEV Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: ${validatorUrl}`;
+                const msg = `⚠️ CAUTION: Large MEV Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
                 await sendEmail("⚠️ Solana Validator MEV Commission Increase", msg, "CAUTION");
               }

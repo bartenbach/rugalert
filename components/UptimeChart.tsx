@@ -117,15 +117,17 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
   }
 
   return (
-    <div className="glass rounded-2xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-white">Uptime</h3>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-white">
-            {data.overallUptime.toFixed(2)}%
-          </div>
-          <div className="text-xs text-gray-400">
+    <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-2xl font-bold text-white mb-1">Uptime</h3>
+          <p className="text-sm text-gray-400">
             {data.daysTracked} {data.daysTracked === 1 ? "day" : "days"} tracked
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="text-4xl font-bold text-white">
+            {data.overallUptime.toFixed(2)}%
           </div>
         </div>
       </div>
@@ -137,24 +139,26 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
             {week.map((day) => (
               <div key={day.date} className="group relative">
                 <div
-                  className={`w-4 h-4 rounded-sm ${getUptimeColor(day.uptimePercent)} 
+                  className={`w-4 h-4 rounded-sm ${getUptimeColor(
+                    day.uptimePercent
+                  )} 
                     transition-all duration-200 hover:ring-2 hover:ring-white/50 hover:scale-150
                   `}
                 />
 
                 {/* Tooltip */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                  <div className="glass rounded-lg p-3 border border-white/20 whitespace-nowrap shadow-xl">
-                    <p className="text-white font-semibold text-sm mb-1">
+                  <div className="bg-[#0a0a0a] rounded-xl p-3 border-2 border-white/30 whitespace-nowrap shadow-2xl backdrop-blur-xl">
+                    <p className="text-white font-bold text-base mb-2">
                       {formatDate(day.date)}
                     </p>
-                    <p className="text-gray-300 text-xs mb-1">
+                    <p className="text-green-400 font-semibold text-sm mb-1">
                       {day.uptimePercent.toFixed(2)}% uptime
                     </p>
-                    <p className="text-gray-400 text-xs">
+                    <p className="text-red-400 font-medium text-xs mb-1">
                       {formatDowntime(day.delinquentChecks)}
                     </p>
-                    <p className="text-gray-500 text-xs mt-1">
+                    <p className="text-gray-400 text-xs">
                       {day.uptimeChecks} checks
                     </p>
                   </div>

@@ -272,7 +272,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             window.location.href = "/validators";
           }
         }}
-        className="inline-flex items-center gap-2 text-gray-400 hover:text-orange-400 transition-colors"
+        className="inline-flex items-center gap-2 text-gray-400 hover:text-orange-400 transition-colors font-medium"
       >
         <span>←</span>
         <span>Back to Validators</span>
@@ -287,7 +287,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
         </div>
       ) : (
         <>
-          {/* Validator Header - Compact */}
+          {/* Validator Header */}
           <div className="glass rounded-2xl p-6 border border-white/10 shadow-sm">
             <div className="flex items-start gap-4">
               {/* Icon */}
@@ -350,6 +350,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
                 {/* Inline Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                  {/* Row 1: Commission | MEV Commission | Version */}
                   <div className="flex items-baseline gap-2">
                     <span className="text-gray-500">Commission:</span>
                     <span
@@ -367,22 +368,57 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         ? `${currentCommission}%`
                         : "—"}
                     </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
                     {validatorInfo?.validator?.jitoEnabled &&
-                      validatorInfo?.mev && (
+                    validatorInfo?.mev ? (
+                      <>
+                        <span className="text-gray-500">MEV Commission:</span>
                         <span
-                          className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold cursor-help ${
+                          className={`font-semibold cursor-help ${
                             validatorInfo.mev.mevCommission <= 5
-                              ? "bg-green-500/20 border border-green-500/50 text-green-300"
+                              ? "text-green-400"
                               : validatorInfo.mev.mevCommission <= 10
-                              ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-300"
-                              : "bg-red-500/20 border border-red-500/50 text-red-300"
+                              ? "text-yellow-400"
+                              : "text-red-400"
                           }`}
                           title="MEV Commission: The percentage this validator charges on Maximum Extractable Value (MEV) rewards from priority fees and bundles"
                         >
-                          MEV Commission {validatorInfo.mev.mevCommission}%
+                          {validatorInfo.mev.mevCommission}%
                         </span>
-                      )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-gray-500">MEV Commission:</span>
+                        <span className="text-gray-600">—</span>
+                      </>
+                    )}
                   </div>
+                  {validatorInfo?.validator?.version && (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-gray-500">Version:</span>
+                      <span className="text-white font-mono font-semibold text-xs">
+                        {validatorInfo.validator.version}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Row 2: Website | Stake */}
+                  {meta?.website && (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-gray-500">Website:</span>
+                      <a
+                        href={meta.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-orange-400 hover:text-orange-300 font-semibold hover:underline truncate"
+                      >
+                        {meta.website
+                          .replace(/^https?:\/\//, "")
+                          .replace(/\/$/, "")}
+                      </a>
+                    </div>
+                  )}
                   {validatorInfo?.stake && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-gray-500">Stake:</span>
@@ -420,29 +456,6 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         }
                         return null;
                       })()}
-                    </div>
-                  )}
-                  {validatorInfo?.validator?.version && (
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-gray-500">Version:</span>
-                      <span className="text-white font-mono font-semibold text-xs">
-                        {validatorInfo.validator.version}
-                      </span>
-                    </div>
-                  )}
-                  {meta?.website && (
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-gray-500">Website:</span>
-                      <a
-                        href={meta.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-orange-400 hover:text-orange-300 font-semibold hover:underline truncate"
-                      >
-                        {meta.website
-                          .replace(/^https?:\/\//, "")
-                          .replace(/\/$/, "")}
-                      </a>
                     </div>
                   )}
                 </div>
@@ -500,14 +513,16 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Performance Gauges */}
           {validatorInfo && (
-            <div className="glass rounded-2xl p-6 border border-white/10 shadow-sm">
-              <h2 className="text-lg font-bold text-white mb-6">
-                Current Performance
-                <span className="text-sm text-gray-400 ml-2 font-normal">
+            <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-white mb-1">
+                  Current Performance
+                </h2>
+                <p className="text-sm text-gray-400">
                   Epoch {validatorInfo.currentEpoch}
-                </span>
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                 {validatorInfo.performance && (
                   <>
                     <CircularGauge
@@ -560,10 +575,12 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
           {/* Stake Info - Compact Cards */}
           {validatorInfo?.stake && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="glass rounded-xl p-4 border border-white/10">
-                <div className="text-xs text-gray-400 mb-1">Stake Delta</div>
+              <div className="glass rounded-2xl p-6 border border-white/10 shadow-xl shadow-black/20">
+                <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+                  Stake Delta
+                </div>
                 <div
-                  className={`text-xl font-bold ${
+                  className={`text-2xl font-bold ${
                     validatorInfo.stake.activatingStake -
                       validatorInfo.stake.deactivatingStake >
                     0
@@ -582,28 +599,32 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     if (delta === 0) return "—";
                     return `${delta > 0 ? "+" : "−"}◎ ${Math.abs(
                       delta
-                    ).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+                    ).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
                   })()}
                 </div>
               </div>
-              <div className="glass rounded-xl p-4 border border-white/10">
-                <div className="text-xs text-gray-400 mb-1">Activating</div>
-                <div className="text-xl font-bold text-green-400">
+              <div className="glass rounded-2xl p-6 border border-white/10 shadow-xl shadow-black/20">
+                <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+                  Activating
+                </div>
+                <div className="text-3xl font-bold text-green-400">
                   {validatorInfo.stake.activatingStake > 0
                     ? `◎ ${validatorInfo.stake.activatingStake.toLocaleString(
                         "en-US",
-                        { maximumFractionDigits: 2 }
+                        { maximumFractionDigits: 0 }
                       )}`
                     : "—"}
                 </div>
               </div>
-              <div className="glass rounded-xl p-4 border border-white/10">
-                <div className="text-xs text-gray-400 mb-1">Deactivating</div>
-                <div className="text-xl font-bold text-red-400">
+              <div className="glass rounded-2xl p-6 border border-white/10 shadow-xl shadow-black/20">
+                <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+                  Deactivating
+                </div>
+                <div className="text-3xl font-bold text-red-400">
                   {validatorInfo.stake.deactivatingStake > 0
                     ? `◎ ${validatorInfo.stake.deactivatingStake.toLocaleString(
                         "en-US",
-                        { maximumFractionDigits: 2 }
+                        { maximumFractionDigits: 0 }
                       )}`
                     : "—"}
                 </div>
@@ -615,8 +636,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
           <UptimeChart votePubkey={params.votePubkey} />
 
           {/* Stake History Chart */}
-          <div className="glass rounded-2xl p-6 border border-white/10 shadow-sm">
-            <h2 className="text-lg font-bold text-white mb-4">Stake History</h2>
+          <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
+            <h2 className="text-2xl font-bold text-white mb-6">
+              Stake History
+            </h2>
             {stakeHistory.length > 0 ? (
               <StakeChart data={stakeHistory} />
             ) : (
@@ -628,26 +651,32 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Commission History - Simplified */}
           {series.length > 0 && (
-            <div className="glass rounded-2xl p-6 border border-white/10 shadow-sm">
-              <h2 className="text-lg font-bold text-white mb-4">
+            <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
+              <h2 className="text-2xl font-bold text-white mb-6">
                 Commission History
               </h2>
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-xs text-gray-400 mb-1">Current</div>
-                  <div className="text-2xl font-bold text-white">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                  <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+                    Current
+                  </div>
+                  <div className="text-3xl font-bold text-white">
                     {currentCommission}%
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-xs text-gray-400 mb-1">Minimum</div>
-                  <div className="text-2xl font-bold text-green-400">
+                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                  <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+                    Minimum
+                  </div>
+                  <div className="text-3xl font-bold text-green-400">
                     {Math.min(...series.map((s) => s.commission))}%
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-lg p-4">
-                  <div className="text-xs text-gray-400 mb-1">Maximum</div>
-                  <div className="text-2xl font-bold text-red-400">
+                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                  <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+                    Maximum
+                  </div>
+                  <div className="text-3xl font-bold text-red-400">
                     {Math.max(...series.map((s) => s.commission))}%
                   </div>
                 </div>
@@ -658,8 +687,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Commission Change Events Table - Only if events exist */}
           {events.length > 0 && (
-            <div className="glass rounded-2xl p-6 border border-white/10 shadow-sm">
-              <h2 className="text-lg font-bold text-white mb-4">
+            <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30">
+              <h2 className="text-2xl font-bold text-white mb-6">
                 Commission Changes
               </h2>
 
