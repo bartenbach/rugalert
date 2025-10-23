@@ -40,6 +40,7 @@ export default function ValidatorsPage() {
   const [networkStats, setNetworkStats] = useState<NetworkStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [displayCount, setDisplayCount] = useState(200); // How many to show
+  const [searchQuery, setSearchQuery] = useState("");
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -68,16 +69,33 @@ export default function ValidatorsPage() {
     }
   };
 
+  // Filter validators based on search query
+  const filteredValidators = allValidators.filter((v) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      v.name?.toLowerCase().includes(query) ||
+      v.votePubkey.toLowerCase().includes(query) ||
+      v.identityPubkey?.toLowerCase().includes(query)
+    );
+  });
+
   // Load more validators from the already-fetched list
   const loadMore = useCallback(() => {
     const nextCount = displayCount + PAGE_SIZE;
-    setDisplayedValidators(allValidators.slice(0, nextCount));
+    setDisplayedValidators(filteredValidators.slice(0, nextCount));
     setDisplayCount(nextCount);
-  }, [allValidators, displayCount, PAGE_SIZE]);
+  }, [filteredValidators, displayCount, PAGE_SIZE]);
+
+  // Update displayed validators when search changes
+  useEffect(() => {
+    setDisplayCount(200); // Reset to initial count on search
+    setDisplayedValidators(filteredValidators.slice(0, 200));
+  }, [searchQuery, filteredValidators]);
 
   // Intersection observer for infinite scroll
   useEffect(() => {
-    const hasMore = displayCount < allValidators.length;
+    const hasMore = displayCount < filteredValidators.length;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -192,31 +210,83 @@ export default function ValidatorsPage() {
         </div>
       )}
 
+      {/* Search Box */}
+      <div className="mb-6">
+        <div className="relative max-w-lg mx-auto">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search validators by name or pubkey..."
+            className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-orange-500/20"
+          />
+          <svg
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <div className="text-sm text-gray-400 mt-2 text-center">
+            Found {filteredValidators.length} validator
+            {filteredValidators.length !== 1 ? "s" : ""}
+          </div>
+        )}
+      </div>
+
       {/* Validators Table */}
-      <div className="glass rounded-2xl">
+      <div className="glass rounded-2xl shadow-2xl shadow-black/30">
         <table className="w-full">
-          <thead className="sticky top-20 z-40 shadow-lg">
-            <tr className="bg-[#0a0a0a] border-b-2 border-white/10">
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-16 bg-[#0a0a0a] rounded-tl-2xl">
-                #
+          <thead className="sticky top-20 z-40 shadow-lg backdrop-blur-xl">
+            <tr className="bg-[#0a0a0a]/95 border-b-2 border-white/10">
+              <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-16 bg-[#0a0a0a]/95 first:rounded-tl-2xl">
+                Rank
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 bg-[#0a0a0a]">
+              <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider bg-[#0a0a0a]/95">
                 Validator
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-48 bg-[#0a0a0a]">
-                Stake
+              <th className="px-4 py-3.5 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-44 bg-[#0a0a0a]/95">
+                Active Stake
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a]">
+              <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-32 bg-[#0a0a0a]/95">
                 Cumulative
               </th>
-              <th className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a]">
+              <th className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95">
                 Commission
               </th>
               <th
-                className="px-4 py-2 text-left text-sm font-semibold text-gray-300 w-32 bg-[#0a0a0a] rounded-tr-2xl"
+                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 last:rounded-tr-2xl"
                 title="MEV Commission on priority fees and bundles"
               >
-                MEV Commission
+                MEV
               </th>
             </tr>
           </thead>
@@ -280,28 +350,34 @@ export default function ValidatorsPage() {
                         onClick={() =>
                           (window.location.href = `/validator/${validator.votePubkey}`)
                         }
-                        className={`transition-all duration-200 cursor-pointer group border-b border-white/5 ${
+                        className={`transition-all duration-150 cursor-pointer group border-b border-white/5 ${
                           validator.delinquent
-                            ? "bg-red-500/10 hover:bg-red-500/20 border-l-4 border-red-500"
-                            : "hover:bg-white/5 hover:shadow-lg hover:shadow-orange-500/5 hover:scale-[1.01]"
+                            ? "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500"
+                            : "hover:bg-white/[0.03] hover:border-l-2 hover:border-l-orange-500/50"
                         }`}
                       >
-                        <td className="px-4 py-2">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 group-hover:border-orange-400/50 transition-all">
-                            <span className="text-gray-300 font-bold text-xs">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center">
+                            <span
+                              className={`font-mono text-sm font-semibold transition-colors ${
+                                validator.rank <= 10
+                                  ? "text-orange-400"
+                                  : "text-gray-500 group-hover:text-gray-300"
+                              }`}
+                            >
                               {validator.rank}
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-2">
-                          <div className="flex items-center gap-2">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
                             {validator.iconUrl ? (
                               <>
                                 <img
                                   src={validator.iconUrl}
                                   alt={validator.name || "Validator"}
                                   loading="lazy"
-                                  className="w-8 h-8 rounded-lg object-cover border border-white/10 group-hover:border-orange-400 transition-all shadow-lg group-hover:shadow-orange-500/20 group-hover:scale-110"
+                                  className="w-10 h-10 rounded-xl object-cover border-2 border-white/10 group-hover:border-orange-400/50 transition-all shadow-md group-hover:shadow-orange-500/30"
                                   onError={(e) => {
                                     e.currentTarget.style.display = "none";
                                     e.currentTarget.nextElementSibling?.classList.remove(
@@ -309,10 +385,10 @@ export default function ValidatorsPage() {
                                     );
                                   }}
                                 />
-                                <div className="hidden w-8 h-8 rounded-lg border border-white/10 group-hover:border-orange-400 transition-colors"></div>
+                                <div className="hidden w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0"></div>
                               </>
                             ) : (
-                              <div className="w-8 h-8 rounded-lg border border-white/10 group-hover:border-orange-400 transition-colors"></div>
+                              <div className="w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0"></div>
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
@@ -320,46 +396,50 @@ export default function ValidatorsPage() {
                                   {validator.name || validator.votePubkey}
                                 </div>
                                 {validator.delinquent && (
-                                  <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-[10px] font-bold text-red-400 whitespace-nowrap">
-                                    DELINQUENT
+                                  <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/50 rounded-md text-[10px] font-bold text-red-300 whitespace-nowrap">
+                                    OFFLINE
                                   </span>
                                 )}
                               </div>
                               {validator.version && (
-                                <div className="text-[10px] text-gray-500 font-mono">
+                                <div className="text-[10px] text-gray-500 font-mono mt-0.5">
                                   v{validator.version}
                                 </div>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-2 w-48">
+                        <td className="px-4 py-3 w-44 text-right">
                           <div>
-                            <div className="text-white font-bold text-base whitespace-nowrap group-hover:text-orange-400 transition-colors">
+                            <div className="text-white font-semibold text-sm whitespace-nowrap group-hover:text-orange-400 transition-colors">
+                              ◎{" "}
                               {validator.activeStake.toLocaleString(undefined, {
                                 maximumFractionDigits: 0,
-                              })}{" "}
-                              <span className="text-sm text-gray-400">SOL</span>
+                              })}
                             </div>
-                            <div className="text-[10px] text-gray-500 flex items-center gap-1">
-                              <span>{validator.stakePercent.toFixed(2)}%</span>
+                            <div className="text-[10px] text-gray-500 flex items-center justify-end gap-1 mt-0.5">
+                              <span className="font-mono">
+                                {validator.stakePercent.toFixed(2)}%
+                              </span>
                               {validator.stakeAccountCount > 0 && (
                                 <>
-                                  <span>•</span>
+                                  <span className="text-gray-600">•</span>
                                   <span>
                                     {validator.stakeAccountCount.toLocaleString()}{" "}
-                                    accts
+                                    {validator.stakeAccountCount === 1
+                                      ? "acct"
+                                      : "accts"}
                                   </span>
                                 </>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
+                            <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner">
                               <div
-                                className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
+                                className="h-full bg-gradient-to-r from-orange-500 via-orange-400 to-orange-300 transition-all duration-300"
                                 style={{
                                   width: `${Math.min(
                                     validator.cumulativeStakePercent,
@@ -368,42 +448,42 @@ export default function ValidatorsPage() {
                                 }}
                               ></div>
                             </div>
-                            <span className="text-xs text-gray-400 font-mono w-10 text-right">
+                            <span className="text-xs text-gray-400 font-mono w-10 text-right font-semibold">
                               {validator.cumulativeStakePercent.toFixed(1)}%
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-3 text-center">
                           <span
-                            className={`text-sm font-semibold ${
+                            className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                               validator.commission <= 5
-                                ? "text-green-400"
+                                ? "bg-green-500/15 text-green-300 border border-green-500/30"
                                 : validator.commission <= 10
-                                ? "text-yellow-400"
-                                : "text-red-400"
+                                ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                : "bg-red-500/15 text-red-300 border border-red-500/30"
                             }`}
                           >
                             {validator.commission}%
                           </span>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-4 py-3 text-center">
                           {validator.jitoEnabled &&
                           validator.mevCommission !== null &&
                           validator.mevCommission !== undefined ? (
                             <span
-                              className={`text-sm font-semibold ${
+                              className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                                 validator.mevCommission <= 5
-                                  ? "text-green-400"
+                                  ? "bg-green-500/15 text-green-300 border border-green-500/30"
                                   : validator.mevCommission <= 10
-                                  ? "text-yellow-400"
-                                  : "text-red-400"
+                                  ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                  : "bg-red-500/15 text-red-300 border border-red-500/30"
                               }`}
                               title="MEV Commission"
                             >
                               {validator.mevCommission}%
                             </span>
                           ) : (
-                            <span className="text-gray-600 text-sm">—</span>
+                            <span className="text-gray-600 text-xs">—</span>
                           )}
                         </td>
                       </tr>
@@ -412,7 +492,7 @@ export default function ValidatorsPage() {
                 })}
 
                 {/* Scroll sentinel for infinite scroll */}
-                {displayCount < allValidators.length && (
+                {displayCount < filteredValidators.length && (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center">
                       <div className="flex items-center justify-center gap-3">

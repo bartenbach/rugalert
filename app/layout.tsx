@@ -10,10 +10,10 @@ export const metadata = {
     "Real-time monitoring of Solana validator commission changes to protect your stake",
   icons: {
     icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/rugalert-logo.png", type: "image/png" },
-      { url: "/favicon.ico" },
     ],
-    shortcut: "/rugalert-logo.png",
+    shortcut: "/favicon.svg",
     apple: "/rugalert-logo.png",
   },
   openGraph: {
