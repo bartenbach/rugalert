@@ -405,103 +405,127 @@ export default function Page() {
 
       {/* Global Validator Search */}
       <div className="max-w-2xl mx-auto mb-12">
-        <div className="glass rounded-2xl p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xl">🔍</span>
-            <h2 className="text-lg font-semibold text-white">
-              Search Validators
-            </h2>
-          </div>
-          <div className="relative">
-            <span className="absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none text-base">
-              {searching ? (
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <>🔍</>
-              )}
-            </span>
-            <input
-              ref={searchInputRef}
-              placeholder="Search validator name or pubkey..."
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onFocus={() => {
-                if (searchResults.length > 0) {
-                  updateDropdownPosition();
-                  setShowSearchResults(true);
-                }
-              }}
-              className="input-modern w-full bg-white/5 text-white pl-11"
-              style={{ paddingLeft: "2.75rem" }}
-            />
+        <div className="relative">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onFocus={() => {
+              if (searchResults.length > 0) {
+                updateDropdownPosition();
+                setShowSearchResults(true);
+              }
+            }}
+            placeholder="Search validators by name or pubkey..."
+            className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-orange-500/20"
+          />
+          {searching ? (
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <svg
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          )}
+          {q && (
+            <button
+              onClick={() => setQ("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          )}
 
-            {/* Validator Search Results Dropdown - Rendered via Portal */}
-            {isMounted &&
-              showSearchResults &&
-              searchResults.length > 0 &&
-              dropdownPosition &&
-              createPortal(
-                <>
-                  <div
-                    className="fixed inset-0"
-                    style={{ zIndex: 999998 }}
-                    onClick={() => setShowSearchResults(false)}
-                  />
-                  <div
-                    className="fixed rounded-xl border-2 border-orange-500 overflow-hidden max-h-96 overflow-y-auto shadow-2xl"
-                    style={{
-                      zIndex: 999999,
-                      backgroundColor: "#0a0a0a",
-                      top: `${dropdownPosition.top}px`,
-                      left: `${dropdownPosition.left}px`,
-                      width: `${dropdownPosition.width}px`,
-                    }}
-                  >
-                    <div className="p-3 border-b border-orange-500/50 bg-gradient-to-r from-orange-500/30 to-orange-600/30">
-                      <span className="text-sm text-orange-300 font-bold px-2">
-                        🔍 Validators matching "{q}"
-                      </span>
-                    </div>
-                    {searchResults.map((result) => (
-                      <a
-                        key={result.votePubkey}
-                        href={`/validator/${result.votePubkey}`}
-                        className="flex items-center gap-3 p-4 hover:bg-orange-500/30 transition-all border-b border-white/10 last:border-0 group"
-                        style={{ backgroundColor: "#1a1a1a" }}
-                        onClick={() => {
-                          setShowSearchResults(false);
-                          setQ("");
-                        }}
-                      >
-                        {result.iconUrl ? (
-                          <img
-                            src={result.iconUrl}
-                            alt={result.name}
-                            className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-orange-500/30 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
-                            <span className="text-lg">🔷</span>
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white text-base font-bold truncate group-hover:text-orange-300 transition-colors">
-                            {result.name}
-                          </div>
-                          <div className="text-xs text-gray-300 font-mono truncate bg-black/30 px-2 py-0.5 rounded mt-1 inline-block">
-                            {result.votePubkey}
-                          </div>
-                        </div>
-                        <span className="text-gray-400 group-hover:text-orange-400 transition-colors text-xl flex-shrink-0">
-                          →
-                        </span>
-                      </a>
-                    ))}
+          {/* Validator Search Results Dropdown - Rendered via Portal */}
+          {isMounted &&
+            showSearchResults &&
+            searchResults.length > 0 &&
+            dropdownPosition &&
+            createPortal(
+              <>
+                <div
+                  className="fixed inset-0"
+                  style={{ zIndex: 999998 }}
+                  onClick={() => setShowSearchResults(false)}
+                />
+                <div
+                  className="fixed rounded-xl border-2 border-orange-500 overflow-hidden max-h-96 overflow-y-auto shadow-2xl"
+                  style={{
+                    zIndex: 999999,
+                    backgroundColor: "#0a0a0a",
+                    top: `${dropdownPosition.top}px`,
+                    left: `${dropdownPosition.left}px`,
+                    width: `${dropdownPosition.width}px`,
+                  }}
+                >
+                  <div className="p-3 border-b border-orange-500/50 bg-gradient-to-r from-orange-500/30 to-orange-600/30">
+                    <span className="text-sm text-orange-300 font-bold px-2">
+                      🔍 Validators matching "{q}"
+                    </span>
                   </div>
-                </>,
-                document.body
-              )}
-          </div>
+                  {searchResults.map((result) => (
+                    <a
+                      key={result.votePubkey}
+                      href={`/validator/${result.votePubkey}`}
+                      className="flex items-center gap-3 p-4 hover:bg-orange-500/30 transition-all border-b border-white/10 last:border-0 group"
+                      style={{ backgroundColor: "#1a1a1a" }}
+                      onClick={() => {
+                        setShowSearchResults(false);
+                        setQ("");
+                      }}
+                    >
+                      {result.iconUrl ? (
+                        <img
+                          src={result.iconUrl}
+                          alt={result.name}
+                          className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-orange-500/30 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
+                          <span className="text-lg">🔷</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-base font-bold truncate group-hover:text-orange-300 transition-colors">
+                          {result.name}
+                        </div>
+                        <div className="text-xs text-gray-300 font-mono truncate bg-black/30 px-2 py-0.5 rounded mt-1 inline-block">
+                          {result.votePubkey}
+                        </div>
+                      </div>
+                      <span className="text-gray-400 group-hover:text-orange-400 transition-colors text-xl flex-shrink-0">
+                        →
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </>,
+              document.body
+            )}
         </div>
       </div>
 
