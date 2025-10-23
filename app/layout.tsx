@@ -1,35 +1,37 @@
+"use client";
 import EpochProgress from "@/components/EpochProgress";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { usePathname } from "next/navigation";
 import React from "react";
 import "./globals.css";
-
-export const metadata = {
-  title: "RugAlert - Solana Validator Commission Monitor",
-  description:
-    "Real-time monitoring of Solana validator commission changes to protect your stake",
-  icons: {
-    icon: [
-      { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/rugalert-logo.png", type: "image/png" },
-    ],
-    shortcut: "/favicon.svg",
-    apple: "/rugalert-logo.png",
-  },
-  openGraph: {
-    title: "RugAlert - Solana Validator Commission Monitor",
-    description: "Real-time monitoring of Solana validator commission changes",
-    images: ["/rugalert-logo.png"],
-  },
-};
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  const isActive = (path: string) => {
+    if (path === "/") {
+      return pathname === "/";
+    }
+    return pathname?.startsWith(path);
+  };
+
   return (
     <html lang="en">
+      <head>
+        <title>RugAlert - Solana Validator Commission Monitor</title>
+        <meta
+          name="description"
+          content="Real-time monitoring of Solana validator commission changes to protect your stake"
+        />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="shortcut icon" href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/rugalert-logo.png" />
+      </head>
       <body className="antialiased min-h-screen">
         <Analytics />
         <SpeedInsights />
@@ -69,19 +71,31 @@ export default function RootLayout({
             <nav className="flex items-center gap-2">
               <a
                 href="/"
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-orange-500/20 hover:text-orange-400 transition-all duration-300"
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  isActive("/") && pathname === "/"
+                    ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
+                    : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
+                }`}
               >
                 Dashboard
               </a>
               <a
                 href="/validators"
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-orange-500/20 hover:text-orange-400 transition-all duration-300"
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  isActive("/validators")
+                    ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
+                    : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
+                }`}
               >
                 Validators
               </a>
               <a
                 href="/history"
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-orange-500/20 hover:text-orange-400 transition-all duration-300"
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                  isActive("/history")
+                    ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
+                    : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
+                }`}
               >
                 History
               </a>

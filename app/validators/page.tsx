@@ -134,18 +134,57 @@ export default function ValidatorsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="text-center space-y-4">
-        <div className="inline-block">
-          <h1 className="text-5xl md:text-6xl font-bold gradient-text mb-4">
-            All Validators
-          </h1>
-          <div className="h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 rounded-full"></div>
+    <div className="space-y-6">
+      {/* Search Box */}
+      <div>
+        <div className="relative max-w-lg mx-auto">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search validators by name or pubkey..."
+            className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-orange-500/20"
+          />
+          <svg
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          )}
         </div>
-        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-          Complete list of all Solana validators sorted by stake
-        </p>
+        {searchQuery && (
+          <div className="text-sm text-gray-400 mt-2 text-center">
+            Found {filteredValidators.length} validator
+            {filteredValidators.length !== 1 ? "s" : ""}
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -209,58 +248,6 @@ export default function ValidatorsPage() {
           </div>
         </div>
       )}
-
-      {/* Search Box */}
-      <div className="mb-6">
-        <div className="relative max-w-lg mx-auto">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search validators by name or pubkey..."
-            className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-orange-500/20"
-          />
-          <svg
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          )}
-        </div>
-        {searchQuery && (
-          <div className="text-sm text-gray-400 mt-2 text-center">
-            Found {filteredValidators.length} validator
-            {filteredValidators.length !== 1 ? "s" : ""}
-          </div>
-        )}
-      </div>
 
       {/* Validators Table */}
       <div className="glass rounded-2xl shadow-2xl shadow-black/30">
@@ -358,13 +345,7 @@ export default function ValidatorsPage() {
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center">
-                            <span
-                              className={`font-mono text-sm font-semibold transition-colors ${
-                                validator.rank <= 10
-                                  ? "text-orange-400"
-                                  : "text-gray-500 group-hover:text-gray-300"
-                              }`}
-                            >
+                            <span className="font-mono text-sm font-semibold text-gray-500 group-hover:text-gray-300 transition-colors">
                               {validator.rank}
                             </span>
                           </div>

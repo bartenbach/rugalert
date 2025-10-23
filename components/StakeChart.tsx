@@ -27,6 +27,22 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
     deactivatingStake: d.deactivatingStake,
   }));
 
+  // Calculate dynamic Y-axis domain with padding to show meaningful changes
+  const stakeValues = chartData.map((d) => d.activeStake);
+  const minStake = Math.min(...stakeValues);
+  const maxStake = Math.max(...stakeValues);
+  const range = maxStake - minStake;
+
+  // Much more aggressive scaling: zoom in on the actual variation
+  // If range is tiny compared to absolute values, create a meaningful range
+  const minRange = maxStake * 0.05; // At least 5% of max value as range
+  const effectiveRange = Math.max(range, minRange);
+
+  // Center the data and add padding
+  const center = (minStake + maxStake) / 2;
+  const yMin = Math.max(0, center - effectiveRange * 0.7);
+  const yMax = center + effectiveRange * 0.7;
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
@@ -106,6 +122,7 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
             tickLine={false}
           />
           <YAxis
+            domain={[yMin, yMax]}
             tickFormatter={formatYAxis}
             tick={{ fontSize: 12, fill: "#9ca3af" }}
             stroke="rgba(255, 255, 255, 0.1)"
