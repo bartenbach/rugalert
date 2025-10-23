@@ -776,12 +776,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       value={100 - validatorInfo.performance.skipRate}
                       label="Block Success"
                       sublabel={`${
-                        validatorInfo.performance.skipRate &&
-                        validatorInfo.performance.slotsElapsed
-                          ? Math.round(
-                              (validatorInfo.performance.skipRate / 100) *
-                                validatorInfo.performance.slotsElapsed
-                            )
+                        validatorInfo.performance.leaderSlots
+                          ? validatorInfo.performance.leaderSlots -
+                            validatorInfo.performance.blocksProduced
                           : 0
                       } skipped`}
                       thresholds={{ good: 95, warning: 85 }}

@@ -639,9 +639,11 @@ export async function POST(req: NextRequest) {
       const perfKey = `${v.votePubkey}-${epoch}`;
       
       let skipRate = 0;
+      let leaderSlots = 0;
+      let blocksProduced = 0;
       if (blockData) {
-        const leaderSlots = Number(blockData[0] || 0);
-        const blocksProduced = Number(blockData[1] || 0);
+        leaderSlots = Number(blockData[0] || 0);
+        blocksProduced = Number(blockData[1] || 0);
         
         if (leaderSlots > 0) {
           skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
@@ -659,6 +661,8 @@ export async function POST(req: NextRequest) {
         votePubkey: v.votePubkey,
         epoch,
         skipRate: Math.max(0, Math.min(100, skipRate)),
+        leaderSlots, // Store total leader slots for calculating skipped blocks in UI
+        blocksProduced, // Store actual blocks produced
         ...(voteCredits !== undefined ? { 
           voteCredits,
           voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100, // 2 decimal places

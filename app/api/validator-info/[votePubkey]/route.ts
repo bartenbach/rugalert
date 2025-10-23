@@ -82,6 +82,8 @@ export async function GET(
 
     const perfData = perfRecords[0] ? {
       skipRate: Number(perfRecords[0].get('skipRate') || 0),
+      leaderSlots: Number(perfRecords[0].get('leaderSlots') || 0),
+      blocksProduced: Number(perfRecords[0].get('blocksProduced') || 0),
       voteCredits: Number(perfRecords[0].get('voteCredits') || 0),
       epoch: Number(perfRecords[0].get('epoch')),
       // Use the pre-calculated percentage from snapshot job (relative to best performer)
