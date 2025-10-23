@@ -538,13 +538,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 {meta?.avatarUrl ? (
                   <img
                     src={meta.avatarUrl}
-                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-white/10"
+                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-white/10 transition-all shadow-md hover:shadow-orange-500/30 hover:border-orange-400/50"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
                     }}
                   />
                 ) : (
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl border-2 border-white/10 bg-white/5"></div>
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl border-2 border-white/10 bg-white/5 transition-all hover:border-orange-400/50"></div>
                 )}
               </div>
 
@@ -771,6 +771,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <CircularGauge
                       value={100 - validatorInfo.performance.skipRate}
                       label="Block Success"
+                      sublabel={`${Math.round(
+                        (validatorInfo.performance.skipRate / 100) *
+                          validatorInfo.performance.slotsElapsed
+                      )} skipped`}
                       thresholds={{ good: 95, warning: 85 }}
                     />
                     <CircularGauge
@@ -796,6 +800,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <CircularGauge
                     value={uptimePercentage}
                     label="Uptime"
+                    sublabel="(1 year)"
                     thresholds={{ good: 99, warning: 95 }}
                   />
                 ) : (

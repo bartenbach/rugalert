@@ -421,10 +421,6 @@ export async function POST(req: NextRequest) {
 
     // 2b) Fetch most recent validator info history for change detection
     console.log("📚 Fetching validator info history for change detection...");
-    const allInfoHistory = await tb.validatorInfoHistory.select({
-      sort: [{ field: 'changedAt', direction: 'desc' }],
-      pageSize: 100,
-    }).all();
     
     // Build map of votePubkey -> most recent info history
     const lastInfoMap = new Map<string, {
@@ -435,17 +431,30 @@ export async function POST(req: NextRequest) {
       iconUrl?: string;
     }>();
     
-    for (const record of allInfoHistory) {
-      const votePubkey = record.get('votePubkey') as string;
-      if (!lastInfoMap.has(votePubkey)) {
-        lastInfoMap.set(votePubkey, {
-          identityPubkey: record.get('identityPubkey') as string | undefined,
-          name: record.get('name') as string | undefined,
-          description: record.get('description') as string | undefined,
-          website: record.get('website') as string | undefined,
-          iconUrl: record.get('iconUrl') as string | undefined,
-        });
+    let infoHistoryEnabled = true;
+    
+    try {
+      const allInfoHistory = await tb.validatorInfoHistory.select({
+        sort: [{ field: 'changedAt', direction: 'desc' }],
+        pageSize: 100,
+      }).all();
+      
+      for (const record of allInfoHistory) {
+        const votePubkey = record.get('votePubkey') as string;
+        if (!lastInfoMap.has(votePubkey)) {
+          lastInfoMap.set(votePubkey, {
+            identityPubkey: record.get('identityPubkey') as string | undefined,
+            name: record.get('name') as string | undefined,
+            description: record.get('description') as string | undefined,
+            website: record.get('website') as string | undefined,
+            iconUrl: record.get('iconUrl') as string | undefined,
+          });
+        }
       }
+      console.log(`✅ Loaded ${lastInfoMap.size} validator info history records`);
+    } catch (error: any) {
+      console.error("⚠️ Failed to fetch validator info history (table may not exist yet):", error.message);
+      infoHistoryEnabled = false;
     }
     
     const infoHistoryToCreate: any[] = [];
@@ -529,60 +538,63 @@ export async function POST(req: NextRequest) {
       }
 
       // ---- VALIDATOR INFO HISTORY TRACKING ----
-      // Check if validator info has changed since last snapshot
-      const lastInfo = lastInfoMap.get(v.votePubkey);
-      const currentInfo = {
-        identityPubkey: v.nodePubkey,
-        name: chainName,
-        description,
-        website,
-        iconUrl,
-      };
-      
-      // Detect changes in any tracked field
-      const hasInfoChanged = !lastInfo || 
-        lastInfo.identityPubkey !== currentInfo.identityPubkey ||
-        lastInfo.name !== currentInfo.name ||
-        lastInfo.description !== currentInfo.description ||
-        lastInfo.website !== currentInfo.website ||
-        lastInfo.iconUrl !== currentInfo.iconUrl;
-      
-      if (hasInfoChanged) {
-        const timestamp = new Date().toISOString();
-        const infoKey = `${v.votePubkey}-${timestamp}`;
+      // Only track if table exists and is enabled
+      if (infoHistoryEnabled) {
+        // Check if validator info has changed since last snapshot
+        const lastInfo = lastInfoMap.get(v.votePubkey);
+        const currentInfo = {
+          identityPubkey: v.nodePubkey,
+          name: chainName,
+          description,
+          website,
+          iconUrl,
+        };
         
-        infoHistoryToCreate.push({
-          fields: {
-            key: infoKey,
-            votePubkey: v.votePubkey,
-            identityPubkey: v.nodePubkey,
-            name: chainName || null,
-            description: description || null,
-            website: website || null,
-            iconUrl: iconUrl || null,
-            changedAt: timestamp,
-            epoch,
+        // Detect changes in any tracked field
+        const hasInfoChanged = !lastInfo || 
+          lastInfo.identityPubkey !== currentInfo.identityPubkey ||
+          lastInfo.name !== currentInfo.name ||
+          lastInfo.description !== currentInfo.description ||
+          lastInfo.website !== currentInfo.website ||
+          lastInfo.iconUrl !== currentInfo.iconUrl;
+        
+        if (hasInfoChanged) {
+          const timestamp = new Date().toISOString();
+          const infoKey = `${v.votePubkey}-${timestamp}`;
+          
+          infoHistoryToCreate.push({
+            fields: {
+              key: infoKey,
+              votePubkey: v.votePubkey,
+              identityPubkey: v.nodePubkey,
+              name: chainName || null,
+              description: description || null,
+              website: website || null,
+              iconUrl: iconUrl || null,
+              changedAt: timestamp,
+              epoch,
+            }
+          });
+          
+          // Update our map for subsequent checks in this snapshot run
+          lastInfoMap.set(v.votePubkey, currentInfo);
+          
+          // Log the change (helpful for debugging)
+          if (lastInfo) {
+            console.log(`📝 Info changed for ${chainName || v.votePubkey.slice(0, 8)}:`);
+            if (lastInfo.identityPubkey !== currentInfo.identityPubkey) 
+              console.log(`  Identity: ${lastInfo.identityPubkey} → ${currentInfo.identityPubkey}`);
+            if (lastInfo.name !== currentInfo.name) 
+              console.log(`  Name: ${lastInfo.name || '(none)'} → ${currentInfo.name || '(none)'}`);
+            if (lastInfo.description !== currentInfo.description) 
+              console.log(`  Description changed`);
+            if (lastInfo.website !== currentInfo.website) 
+              console.log(`  Website: ${lastInfo.website || '(none)'} → ${currentInfo.website || '(none)'}`);
+            if (lastInfo.iconUrl !== currentInfo.iconUrl) 
+              console.log(`  Icon URL changed`);
+          } else {
+            console.log(`🆕 First snapshot for ${chainName || v.votePubkey.slice(0, 8)}`);
           }
-        });
-        
-        // Update our map for subsequent checks in this snapshot run
-        lastInfoMap.set(v.votePubkey, currentInfo);
-        
-        // Log the change (helpful for debugging)
-        if (lastInfo) {
-          console.log(`📝 Info changed for ${chainName || v.votePubkey.slice(0, 8)}:`);
-          if (lastInfo.identityPubkey !== currentInfo.identityPubkey) 
-            console.log(`  Identity: ${lastInfo.identityPubkey} → ${currentInfo.identityPubkey}`);
-          if (lastInfo.name !== currentInfo.name) 
-            console.log(`  Name: ${lastInfo.name || '(none)'} → ${currentInfo.name || '(none)'}`);
-          if (lastInfo.description !== currentInfo.description) 
-            console.log(`  Description changed`);
-          if (lastInfo.website !== currentInfo.website) 
-            console.log(`  Website: ${lastInfo.website || '(none)'} → ${currentInfo.website || '(none)'}`);
-          if (lastInfo.iconUrl !== currentInfo.iconUrl) 
-            console.log(`  Icon URL changed`);
-        } else {
-          console.log(`🆕 First snapshot for ${chainName || v.votePubkey.slice(0, 8)}`);
         }
       }
 
@@ -844,19 +856,27 @@ export async function POST(req: NextRequest) {
       await tb.mevEvents.create(batch);
     }
     
-    // Create validator info history records
+    // Create validator info history records (if enabled)
     let infoHistoryCreated = 0;
-    for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
-      const batch = infoHistoryToCreate.slice(i, i + batchSize);
-      await tb.validatorInfoHistory.create(batch);
-      infoHistoryCreated += batch.length;
+    if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
+      try {
+        for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
+          const batch = infoHistoryToCreate.slice(i, i + batchSize);
+          await tb.validatorInfoHistory.create(batch);
+          infoHistoryCreated += batch.length;
+        }
+        console.log(`✅ Validator info history records created: ${infoHistoryCreated}`);
+      } catch (error: any) {
+        console.error("⚠️ Failed to create validator info history records:", error.message);
+      }
+    } else if (!infoHistoryEnabled) {
+      console.log(`⏭️  Validator info history tracking skipped (table not available)`);
     }
 
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
     console.log(`✅ MEV snapshots created: ${mevSnapshotsCreated}`);
     console.log(`✅ MEV events created: ${mevEventsCreated}`);
-    console.log(`✅ Validator info history records created: ${infoHistoryCreated}`);
     
     // Cleanup: Delete performance records older than 30 days (keep ~15 epochs of history)
     // Solana epochs are ~2-3 days, so 15 epochs ≈ 30-45 days
