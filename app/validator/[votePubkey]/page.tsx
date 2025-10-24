@@ -69,6 +69,18 @@ type ValidatorInfo = {
     activeStake: number;
     activatingStake: number;
     deactivatingStake: number;
+    activatingAccounts: Array<{
+      staker: string;
+      amount: number;
+      label: string | null;
+      epoch: number;
+    }>;
+    deactivatingAccounts: Array<{
+      staker: string;
+      amount: number;
+      label: string | null;
+      epoch: number;
+    }>;
     epoch: number;
   } | null;
   mev: {
@@ -254,6 +266,65 @@ function CircularGauge({
           }
         }
       `}</style>
+    </div>
+  );
+}
+
+// Stake Breakdown Component - shows individual stake accounts
+function StakeBreakdown({
+  accounts,
+  type,
+}: {
+  accounts: Array<{
+    staker: string;
+    amount: number;
+    label: string | null;
+    epoch: number;
+  }>;
+  type: "activating" | "deactivating";
+}) {
+  const [isExpanded, setIsExpanded] = React.useState(false);
+
+  if (!accounts || accounts.length === 0) return null;
+
+  // Sort by amount descending
+  const sortedAccounts = [...accounts].sort((a, b) => b.amount - a.amount);
+  const LAMPORTS_PER_SOL = 1_000_000_000;
+
+  return (
+    <div className="text-xs">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1 text-gray-400 hover:text-gray-300 transition-colors"
+      >
+        <span>{isExpanded ? "▼" : "▶"}</span>
+        <span>
+          {accounts.length} account{accounts.length !== 1 ? "s" : ""}
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-2 space-y-1 pl-4 border-l-2 border-gray-700">
+          {sortedAccounts.map((account, idx) => {
+            const solAmount = (account.amount / LAMPORTS_PER_SOL).toFixed(2);
+            const displayName =
+              account.label ||
+              `${account.staker.slice(0, 4)}...${account.staker.slice(-4)}`;
+
+            return (
+              <div
+                key={idx}
+                className="flex items-start justify-between gap-2 text-gray-400"
+              >
+                <span className="flex-1 truncate">{displayName}</span>
+                <span className="text-gray-300 font-mono">
+                  ◎ {Number(solAmount).toLocaleString()}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -979,7 +1050,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
                   Activating
                 </div>
-                <div className="text-2xl sm:text-3xl font-bold text-green-400">
+                <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-3">
                   {validatorInfo.stake.activatingStake > 0
                     ? `◎ ${validatorInfo.stake.activatingStake.toLocaleString(
                         "en-US",
@@ -987,12 +1058,18 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       )}`
                     : "—"}
                 </div>
+                {validatorInfo.stake.activatingAccounts.length > 0 && (
+                  <StakeBreakdown
+                    accounts={validatorInfo.stake.activatingAccounts}
+                    type="activating"
+                  />
+                )}
               </div>
               <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20">
                 <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
                   Deactivating
                 </div>
-                <div className="text-2xl sm:text-3xl font-bold text-red-400">
+                <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-3">
                   {validatorInfo.stake.deactivatingStake > 0
                     ? `◎ ${validatorInfo.stake.deactivatingStake.toLocaleString(
                         "en-US",
@@ -1000,6 +1077,12 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       )}`
                     : "—"}
                 </div>
+                {validatorInfo.stake.deactivatingAccounts.length > 0 && (
+                  <StakeBreakdown
+                    accounts={validatorInfo.stake.deactivatingAccounts}
+                    type="deactivating"
+                  />
+                )}
               </div>
             </div>
           )}

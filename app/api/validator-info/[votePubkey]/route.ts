@@ -73,10 +73,15 @@ export async function GET(
     const LAMPORTS_PER_SOL = 1_000_000_000;
     
     // Get stake data from validator record (cached by snapshot job)
+    const activatingAccountsJson = validator.get('activatingAccounts');
+    const deactivatingAccountsJson = validator.get('deactivatingAccounts');
+    
     const stakeData = {
       activeStake: Number(validator.get('activeStake') || 0) / LAMPORTS_PER_SOL,
       activatingStake: Number(validator.get('activatingStake') || 0) / LAMPORTS_PER_SOL,
       deactivatingStake: Number(validator.get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
+      activatingAccounts: activatingAccountsJson ? JSON.parse(activatingAccountsJson as string) : [],
+      deactivatingAccounts: deactivatingAccountsJson ? JSON.parse(deactivatingAccountsJson as string) : [],
       epoch: currentEpoch,
     };
 

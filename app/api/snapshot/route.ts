@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tb } from "../../../lib/airtable";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
+import { getStakerLabel, type StakeAccountBreakdown } from "../../../lib/stakers";
 import { formatTwitterMevRug, formatTwitterRug, postToTwitter } from "../../../lib/twitter";
 
 export const dynamic = 'force-dynamic';
@@ -204,7 +205,12 @@ export async function POST(req: NextRequest) {
     // Fetch ALL stake accounts at once to avoid per-validator RPC calls
     // WARNING: This can be very expensive on mainnet (millions of accounts)
     // Set ENABLE_STAKE_TRACKING=false to disable if causing timeouts
-    let stakeByVoter = new Map<string, { activating: number; deactivating: number }>();
+    let stakeByVoter = new Map<string, { 
+      activating: number; 
+      deactivating: number;
+      activatingAccounts: StakeAccountBreakdown[];
+      deactivatingAccounts: StakeAccountBreakdown[];
+    }>();
     let stakeAccountCounts = new Map<string, number>(); // Count of stake accounts per validator
     const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
     
@@ -262,9 +268,11 @@ export async function POST(req: NextRequest) {
         // Group stake by voter pubkey and count accounts
         for (const account of allStakeAccounts as any[]) {
           const stakeData = account?.account?.data?.parsed?.info?.stake;
-          if (stakeData?.delegation) {
+          const meta = account?.account?.data?.parsed?.info?.meta;
+          if (stakeData?.delegation && meta?.authorized?.staker) {
             const delegation = stakeData.delegation;
             const voter = delegation.voter;
+            const staker = meta.authorized.staker;
             const activationEpoch = Number(delegation.activationEpoch || 0);
             const deactivationEpoch = Number(delegation.deactivationEpoch || Number.MAX_SAFE_INTEGER);
             const stake = Number(delegation.stake || 0);
@@ -273,7 +281,12 @@ export async function POST(req: NextRequest) {
             stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
             
             if (!stakeByVoter.has(voter)) {
-              stakeByVoter.set(voter, { activating: 0, deactivating: 0 });
+              stakeByVoter.set(voter, { 
+                activating: 0, 
+                deactivating: 0,
+                activatingAccounts: [],
+                deactivatingAccounts: []
+              });
             }
             
             const data = stakeByVoter.get(voter)!;
@@ -282,6 +295,12 @@ export async function POST(req: NextRequest) {
             // Stake takes multiple epochs to fully activate
             if (activationEpoch >= epoch) {
               data.activating += stake;
+              data.activatingAccounts.push({
+                staker,
+                amount: stake,
+                label: getStakerLabel(staker),
+                epoch: activationEpoch
+              });
             }
             
             // Stake is deactivating if deactivation epoch equals CURRENT epoch
@@ -289,6 +308,12 @@ export async function POST(req: NextRequest) {
             // This prevents counting historical deactivations that are already complete
             if (deactivationEpoch === epoch) {
               data.deactivating += stake;
+              data.deactivatingAccounts.push({
+                staker,
+                amount: stake,
+                label: getStakerLabel(staker),
+                epoch: deactivationEpoch
+              });
             }
           }
         }
@@ -515,6 +540,8 @@ export async function POST(req: NextRequest) {
       const stakeData = stakeByVoter.get(v.votePubkey);
       const activatingStake = stakeData?.activating || 0;
       const deactivatingStake = stakeData?.deactivating || 0;
+      const activatingAccounts = stakeData?.activatingAccounts || [];
+      const deactivatingAccounts = stakeData?.deactivatingAccounts || [];
       
       if (existing) {
         const patch: any = {};
@@ -543,6 +570,9 @@ export async function POST(req: NextRequest) {
         // Cache activating/deactivating stake (ephemeral current state, not historical)
         patch.activatingStake = activatingStake;
         patch.deactivatingStake = deactivatingStake;
+        // Store stake account breakdowns as JSON for detailed UI display
+        patch.activatingAccounts = JSON.stringify(activatingAccounts);
+        patch.deactivatingAccounts = JSON.stringify(deactivatingAccounts);
         // Update Jito status
         patch.jitoEnabled = isJitoEnabled;
         // Update stake account count
@@ -560,6 +590,8 @@ export async function POST(req: NextRequest) {
             activeStake: Number(v.activatedStake || 0),
             activatingStake,
             deactivatingStake,
+            activatingAccounts: JSON.stringify(activatingAccounts),
+            deactivatingAccounts: JSON.stringify(deactivatingAccounts),
             jitoEnabled: isJitoEnabled,
             stakeAccountCount: accountCount,
             firstSeenEpoch: epoch, // Track when validator first appeared
