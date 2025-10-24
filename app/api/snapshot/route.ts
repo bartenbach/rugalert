@@ -525,7 +525,12 @@ export async function POST(req: NextRequest) {
     // 3) Process each validator
     logProgress(`Processing ${allVotes.length} validators...`);
     let validatorIndex = 0;
+    const totalValidators = allVotes.length;
     for (const v of allVotes) {
+      // Log progress every 100 validators
+      if (validatorIndex > 0 && validatorIndex % 100 === 0) {
+        logProgress(`Processed ${validatorIndex}/${totalValidators} validators...`);
+      }
       const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
       // No fallback icon - let validators with no icon show empty square
@@ -902,6 +907,9 @@ export async function POST(req: NextRequest) {
     
     validatorIndex++; // Increment counter for next validator
     }
+    
+    logProgress(`✅ Finished processing all ${validatorIndex} validators`);
+    console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history records queued`);
 
     // BATCH CREATE/UPDATE operations to avoid timeout
     console.log(`📦 Batching operations: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} validator updates`);
