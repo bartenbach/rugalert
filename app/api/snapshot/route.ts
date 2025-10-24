@@ -149,6 +149,11 @@ export async function POST(req: NextRequest) {
     console.log(`⏱️  [${elapsed}s] ${step}`);
   };
 
+  console.log(`\n🚀 ========== SNAPSHOT JOB STARTED ==========`);
+  console.log(`📅 Timestamp: ${new Date().toISOString()}`);
+  console.log(`🔧 User-Agent: ${userAgent || 'none'}`);
+  console.log(`🔑 Authorized: ${isAuthorized}`);
+
   try {
     logProgress("Starting snapshot job");
     
@@ -431,7 +436,29 @@ export async function POST(req: NextRequest) {
       fetchNextPage();
     });
     
-    logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingMevKeys.size} MEV`);
+    // Fetch latest commission snapshot per validator (for change detection)
+    // THIS MUST BE PRE-FETCHED! Doing this inside the loop = 970 individual queries = death
+    logProgress(`Pre-fetching latest commission snapshots...`);
+    const latestCommissionByValidator = new Map<string, { commission: number, epoch: number, slot: number }>();
+    await tb.snapshots.select({
+      pageSize: 100,
+      sort: [{ field: 'slot', direction: 'desc' }],
+      maxRecords: 2000,
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => {
+        const votePubkey = String(r.get('votePubkey'));
+        if (!latestCommissionByValidator.has(votePubkey)) {
+          latestCommissionByValidator.set(votePubkey, {
+            commission: Number(r.get('commission') || 0),
+            epoch: Number(r.get('epoch') || 0),
+            slot: Number(r.get('slot') || 0),
+          });
+        }
+      });
+      fetchNextPage();
+    });
+    
+    logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingMevKeys.size} MEV, ${latestCommissionByValidator.size} commission`);
     
     // Batch arrays for bulk creation
     const validatorsToCreate: any[] = [];
@@ -441,6 +468,11 @@ export async function POST(req: NextRequest) {
     const perfRecordsToUpdate: {id: string, fields: any}[] = [];
     const mevSnapshotsToCreate: any[] = [];
     const mevEventsToCreate: any[] = [];
+    const snapshotsToCreate: any[] = [];
+    const eventsToCreate: any[] = [];
+    
+    // Track snapshots we're creating in this run to avoid duplicates
+    const snapshotsBeingCreated = new Set<string>();
 
     // 2) jsonParsed GPA over Config program (validatorInfo records)
     const gpa = await rpc("getProgramAccounts", [
@@ -524,12 +556,16 @@ export async function POST(req: NextRequest) {
 
     // 3) Process each validator
     logProgress(`Processing ${allVotes.length} validators...`);
+    console.log(`🔄 Starting validator loop: ${allVotes.length} total validators`);
     let validatorIndex = 0;
     const totalValidators = allVotes.length;
     for (const v of allVotes) {
-      // Log progress every 100 validators
-      if (validatorIndex > 0 && validatorIndex % 100 === 0) {
-        logProgress(`Processed ${validatorIndex}/${totalValidators} validators...`);
+      // Log progress every 50 validators (more frequent) and show memory
+      if (validatorIndex > 0 && validatorIndex % 50 === 0) {
+        const memUsage = process.memoryUsage();
+        const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+        logProgress(`Processed ${validatorIndex}/${totalValidators} validators (${memMB}MB heap)...`);
+        console.log(`  💾 Memory: ${memMB}MB heap, ${Math.round(memUsage.rss / 1024 / 1024)}MB RSS`);
       }
       const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
@@ -752,15 +788,10 @@ export async function POST(req: NextRequest) {
       }
 
       // 4) DELTA-ONLY SNAPSHOTS
-      // Get the most recent snapshot for this validator (by slot)
-      const last = await tb.snapshots.select({
-        filterByFormula: `{votePubkey} = "${v.votePubkey}"`,
-        sort: [{ field: "slot", direction: "desc" }],
-        maxRecords: 1,
-      }).firstPage();
-
-      const prevCommission = last[0]?.get("commission");
-      const prevEpoch = last[0]?.get("epoch");
+      // Get the most recent snapshot for this validator (from pre-fetched map)
+      const lastSnapshot = latestCommissionByValidator.get(v.votePubkey);
+      const prevCommission = lastSnapshot?.commission;
+      const prevEpoch = lastSnapshot?.epoch;
 
       // Only write a new snapshot if commission changed since the most recent snapshot,
       // OR if there is no previous snapshot at all.
@@ -768,15 +799,13 @@ export async function POST(req: NextRequest) {
       const commissionChanged = !hasPrev || Number(prevCommission) !== v.commission;
 
       if (commissionChanged) {
-        // Insert snapshot for this slot (idempotent per key)
+        // Queue snapshot for batch creation (check for duplicates)
         const key = `${v.votePubkey}-${slot}`;
-        const exists = await tb.snapshots
-          .select({ filterByFormula: `{key} = "${key}"`, maxRecords: 1 })
-          .firstPage();
-        if (!exists[0]) {
-          await tb.snapshots.create([{
+        if (!snapshotsBeingCreated.has(key)) {
+          snapshotsBeingCreated.add(key);
+          snapshotsToCreate.push({
             fields: { key, votePubkey: v.votePubkey, epoch, slot, commission: v.commission }
-          }]);
+          });
         }
 
         // Event detection against the last snapshot (if it existed)
@@ -801,10 +830,10 @@ export async function POST(req: NextRequest) {
           }
           // INFO: All other changes (small increases, decreases, etc.)
 
-          // Create event for any commission change
-          await tb.events.create([{
+          // Queue event for batch creation
+          eventsToCreate.push({
             fields: { votePubkey: v.votePubkey, epoch, type, fromCommission: from, toCommission: to, delta }
-          }]);
+          });
 
           // Send notifications based on event type
           const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
@@ -850,11 +879,10 @@ export async function POST(req: NextRequest) {
                 priorityFeeRewards: jitoInfo.priorityFeeRewards || 0,
               }
             });
-          mevSnapshotsCreated++;
           
           // Debug: Log first few MEV snapshots
-          if (mevSnapshotsCreated <= 3) {
-            console.log(`  Creating MEV snapshot for ${v.votePubkey.substring(0, 8)}... - MEV: ${jitoInfo.mevCommission}%, Priority: ${jitoInfo.priorityFeeCommission || 0}%`);
+          if (mevSnapshotsToCreate.length <= 3) {
+            console.log(`  Queued MEV snapshot for ${v.votePubkey.substring(0, 8)}... - MEV: ${jitoInfo.mevCommission}%, Priority: ${jitoInfo.priorityFeeCommission || 0}%`);
           }
           
           // Check for MEV commission changes
@@ -878,7 +906,6 @@ export async function POST(req: NextRequest) {
                   delta,
                 }
               });
-              mevEventsCreated++;
               
               // Send notifications for MEV rugs
               const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
@@ -907,9 +934,11 @@ export async function POST(req: NextRequest) {
     
     validatorIndex++; // Increment counter for next validator
     }
-    
+
+    console.log(`🏁 LOOP COMPLETED! Processed ${validatorIndex} validators`);
     logProgress(`✅ Finished processing all ${validatorIndex} validators`);
     console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history records queued`);
+    console.log(`📊 Breakdown: ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length} perf create, ${perfRecordsToUpdate.length} perf update, ${mevSnapshotsToCreate.length} MEV, ${mevEventsToCreate.length} MEV events`);
 
     // BATCH CREATE/UPDATE operations to avoid timeout
     console.log(`📦 Batching operations: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} validator updates`);
@@ -955,6 +984,24 @@ export async function POST(req: NextRequest) {
     }
     logProgress(`Performance: ${perfRecordsToCreate.length} created, ${perfRecordsToUpdate.length} updated`);
     
+    // Create commission snapshots (moved from inside loop)
+    let snapshotsCreated = 0;
+    for (let i = 0; i < snapshotsToCreate.length; i += batchSize) {
+      const batch = snapshotsToCreate.slice(i, i + batchSize);
+      await tb.snapshots.create(batch);
+      snapshotsCreated += batch.length;
+    }
+    if (snapshotsCreated > 0) logProgress(`Created ${snapshotsCreated} commission snapshots`);
+    
+    // Create events (moved from inside loop)
+    let eventsCreated = 0;
+    for (let i = 0; i < eventsToCreate.length; i += batchSize) {
+      const batch = eventsToCreate.slice(i, i + batchSize);
+      await tb.events.create(batch);
+      eventsCreated += batch.length;
+    }
+    if (eventsCreated > 0) logProgress(`Created ${eventsCreated} events`);
+    
     // Create MEV snapshots
     for (let i = 0; i < mevSnapshotsToCreate.length; i += batchSize) {
       const batch = mevSnapshotsToCreate.slice(i, i + batchSize);
@@ -971,12 +1018,17 @@ export async function POST(req: NextRequest) {
     
     // Create validator info history records (if enabled)
     let infoHistoryCreated = 0;
+    console.log(`\n📚 ========== VALIDATOR INFO HISTORY CREATION ==========`);
     console.log(`📊 INFO HISTORY STATUS: enabled=${infoHistoryEnabled}, toCreate=${infoHistoryToCreate.length}`);
     
     if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
       try {
+        console.log(`🚀 Starting info history creation for ${infoHistoryToCreate.length} records...`);
         logProgress(`Creating ${infoHistoryToCreate.length} validator info history records...`);
-        console.log(`📝 Sample record:`, JSON.stringify(infoHistoryToCreate[0], null, 2));
+        console.log(`📝 Sample record (first):`, JSON.stringify(infoHistoryToCreate[0], null, 2));
+        if (infoHistoryToCreate.length > 1) {
+          console.log(`📝 Sample record (last):`, JSON.stringify(infoHistoryToCreate[infoHistoryToCreate.length - 1], null, 2));
+        }
         
         for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
           const batch = infoHistoryToCreate.slice(i, i + batchSize);
@@ -998,8 +1050,10 @@ export async function POST(req: NextRequest) {
 
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
-    console.log(`✅ MEV snapshots created: ${mevSnapshotsCreated}`);
-    console.log(`✅ MEV events created: ${mevEventsCreated}`);
+    console.log(`✅ Commission snapshots created: ${snapshotsCreated}`);
+    console.log(`✅ Events created: ${eventsCreated}`);
+    console.log(`✅ MEV snapshots created: ${mevSnapshotsToCreate.length}`);
+    console.log(`✅ MEV events created: ${mevEventsToCreate.length}`);
     console.log(`📚 Validator info history records: ${infoHistoryCreated}`);
     
     // Cleanup: Delete performance records older than 30 days (keep ~15 epochs of history)
@@ -1027,6 +1081,7 @@ export async function POST(req: NextRequest) {
       console.error(`⚠️  Cleanup error (non-fatal):`, cleanupErr);
     }
     
+    console.log(`\n🎉 ========== SNAPSHOT JOB COMPLETED SUCCESSFULLY ==========`);
     logProgress(`✅ Snapshot complete!`);
     return NextResponse.json({ 
       ok: true, 
@@ -1035,8 +1090,11 @@ export async function POST(req: NextRequest) {
       metrics: {
         stakeRecordsCreated,
         performanceRecordsCreated,
-        mevSnapshotsCreated,
-        mevEventsCreated,
+        snapshotsCreated,
+        eventsCreated,
+        mevSnapshotsCreated: mevSnapshotsToCreate.length,
+        mevEventsCreated: mevEventsToCreate.length,
+        infoHistoryCreated,
       }
     });
   } catch (err: any) {

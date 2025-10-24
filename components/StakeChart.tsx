@@ -71,12 +71,7 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
 
   // Helper function to format stake
   const formatStake = (stake: number): string => {
-    if (stake >= 1000000) {
-      return `${(stake / 1000000).toFixed(2)}M`;
-    } else if (stake >= 1000) {
-      return `${(stake / 1000).toFixed(2)}K`;
-    }
-    return stake.toFixed(2);
+    return stake.toLocaleString("en-US", { maximumFractionDigits: 0 });
   };
 
   // Format Y-axis ticks

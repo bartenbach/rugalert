@@ -306,19 +306,31 @@ function StakeBreakdown({
       {isExpanded && (
         <div className="mt-2 space-y-1 pl-4 border-l-2 border-gray-700">
           {sortedAccounts.map((account, idx) => {
-            const solAmount = (account.amount / LAMPORTS_PER_SOL).toFixed(2);
+            const solAmount = account.amount / LAMPORTS_PER_SOL;
             const displayName =
               account.label ||
-              `${account.staker.slice(0, 4)}...${account.staker.slice(-4)}`;
+              `${account.staker.slice(0, 8)}...${account.staker.slice(-6)}`;
 
             return (
               <div
                 key={idx}
                 className="flex items-start justify-between gap-2 text-gray-400"
               >
-                <span className="flex-1 truncate">{displayName}</span>
+                <a
+                  href={`https://solscan.io/account/${account.staker}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 truncate hover:text-orange-400 transition-colors"
+                  title={account.staker}
+                >
+                  {displayName}
+                </a>
                 <span className="text-gray-300 font-mono">
-                  ◎ {Number(solAmount).toLocaleString()}
+                  ◎{" "}
+                  {solAmount.toLocaleString("en-US", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 6,
+                  })}
                 </span>
               </div>
             );
@@ -821,7 +833,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         ◎{" "}
                         {validatorInfo.stake.activeStake.toLocaleString(
                           "en-US",
-                          { maximumFractionDigits: 2 }
+                          { maximumFractionDigits: 0 }
                         )}
                       </span>
                       {(() => {
@@ -839,12 +851,14 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                               title={`Net stake change: ${
                                 delta > 0 ? "+" : ""
                               }${delta.toLocaleString("en-US", {
-                                maximumFractionDigits: 2,
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 6,
                               })} SOL`}
                             >
                               {delta > 0 ? "+" : "−"}◎{" "}
                               {Math.abs(delta).toLocaleString("en-US", {
-                                maximumFractionDigits: 2,
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 6,
                               })}
                             </span>
                           );
@@ -1039,12 +1053,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     const delta =
                       validatorInfo.stake.activatingStake -
                       validatorInfo.stake.deactivatingStake;
-                    // Round to avoid floating point precision issues
-                    const roundedDelta = Math.round(delta);
-                    if (roundedDelta === 0) return "—";
-                    return `${roundedDelta > 0 ? "+" : "−"}◎ ${Math.abs(
-                      roundedDelta
-                    ).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+                    if (Math.abs(delta) < 0.000001) return "—";
+                    return `${delta > 0 ? "+" : "−"}◎ ${Math.abs(
+                      delta
+                    ).toLocaleString("en-US", {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 6,
+                    })}`;
                   })()}
                 </div>
               </div>
@@ -1053,10 +1068,14 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   Activating
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-3">
-                  {Math.round(validatorInfo.stake.activatingStake) > 0
-                    ? `◎ ${Math.round(
-                        validatorInfo.stake.activatingStake
-                      ).toLocaleString("en-US")}`
+                  {validatorInfo.stake.activatingStake > 0
+                    ? `◎ ${validatorInfo.stake.activatingStake.toLocaleString(
+                        "en-US",
+                        {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 6,
+                        }
+                      )}`
                     : "—"}
                 </div>
                 {validatorInfo.stake.activatingAccounts.length > 0 && (
@@ -1071,10 +1090,14 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   Deactivating
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-3">
-                  {Math.round(validatorInfo.stake.deactivatingStake) > 0
-                    ? `◎ ${Math.round(
-                        validatorInfo.stake.deactivatingStake
-                      ).toLocaleString("en-US")}`
+                  {validatorInfo.stake.deactivatingStake > 0
+                    ? `◎ ${validatorInfo.stake.deactivatingStake.toLocaleString(
+                        "en-US",
+                        {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 6,
+                        }
+                      )}`
                     : "—"}
                 </div>
                 {validatorInfo.stake.deactivatingAccounts.length > 0 && (
