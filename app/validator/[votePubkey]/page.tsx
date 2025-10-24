@@ -283,7 +283,7 @@ function StakeBreakdown({
   }>;
   type: "activating" | "deactivating";
 }) {
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (!accounts || accounts.length === 0) return null;
 
