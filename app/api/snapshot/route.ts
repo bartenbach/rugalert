@@ -524,6 +524,7 @@ export async function POST(req: NextRequest) {
 
     // 3) Process each validator
     logProgress(`Processing ${allVotes.length} validators...`);
+    let validatorIndex = 0;
     for (const v of allVotes) {
       const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
@@ -634,8 +635,8 @@ export async function POST(req: NextRequest) {
           lastInfo.iconUrl !== currentInfo.iconUrl;
         
         // Debug logging for first few validators
-        if (i < 3) {
-          console.log(`🔍 Validator ${i} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!lastInfo}`);
+        if (validatorIndex < 3) {
+          console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!lastInfo}`);
         }
         
         if (hasInfoChanged) {
@@ -898,6 +899,8 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+    
+    validatorIndex++; // Increment counter for next validator
     }
 
     // BATCH CREATE/UPDATE operations to avoid timeout
