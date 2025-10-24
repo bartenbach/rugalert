@@ -1037,7 +1037,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   Stake Delta
                 </div>
                 <div
-                  className={`text-xl sm:text-2xl font-bold ${
+                  className={`text-2xl sm:text-3xl font-bold mb-3 ${
                     validatorInfo.stake.activatingStake -
                       validatorInfo.stake.deactivatingStake >
                     0
