@@ -371,10 +371,10 @@ export default function ValidatorsPage() {
                         onClick={() =>
                           (window.location.href = `/validator/${validator.votePubkey}`)
                         }
-                        className={`transition-all duration-150 cursor-pointer group border-b border-white/5 ${
+                        className={`transition-all duration-150 cursor-pointer group border-b border-white/5 border-l-2 ${
                           validator.delinquent
-                            ? "bg-red-500/5 hover:bg-red-500/10 border-l-2 border-l-red-500"
-                            : "hover:bg-white/[0.03] hover:border-l-2 hover:border-l-orange-500/50"
+                            ? "bg-red-500/5 hover:bg-red-500/10 border-l-red-500"
+                            : "border-l-transparent hover:bg-white/[0.03] hover:border-l-orange-500/50"
                         }`}
                       >
                         <td className="px-4 py-3">
@@ -392,7 +392,7 @@ export default function ValidatorsPage() {
                                   src={validator.iconUrl}
                                   alt={validator.name || "Validator"}
                                   loading="lazy"
-                                  className="w-10 h-10 rounded-xl object-cover border-2 border-white/10 group-hover:border-orange-400/50 transition-all shadow-md group-hover:shadow-orange-500/30"
+                                  className="w-10 h-10 rounded-xl object-cover border-2 border-white/10 group-hover:border-orange-400/50 transition-all"
                                   onError={(e) => {
                                     e.currentTarget.style.display = "none";
                                     e.currentTarget.nextElementSibling?.classList.remove(

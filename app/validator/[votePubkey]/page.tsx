@@ -1039,9 +1039,11 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     const delta =
                       validatorInfo.stake.activatingStake -
                       validatorInfo.stake.deactivatingStake;
-                    if (delta === 0) return "—";
-                    return `${delta > 0 ? "+" : "−"}◎ ${Math.abs(
-                      delta
+                    // Round to avoid floating point precision issues
+                    const roundedDelta = Math.round(delta);
+                    if (roundedDelta === 0) return "—";
+                    return `${roundedDelta > 0 ? "+" : "−"}◎ ${Math.abs(
+                      roundedDelta
                     ).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
                   })()}
                 </div>
@@ -1051,11 +1053,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   Activating
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-3">
-                  {validatorInfo.stake.activatingStake > 0
-                    ? `◎ ${validatorInfo.stake.activatingStake.toLocaleString(
-                        "en-US",
-                        { maximumFractionDigits: 0 }
-                      )}`
+                  {Math.round(validatorInfo.stake.activatingStake) > 0
+                    ? `◎ ${Math.round(
+                        validatorInfo.stake.activatingStake
+                      ).toLocaleString("en-US")}`
                     : "—"}
                 </div>
                 {validatorInfo.stake.activatingAccounts.length > 0 && (
@@ -1070,11 +1071,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   Deactivating
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-3">
-                  {validatorInfo.stake.deactivatingStake > 0
-                    ? `◎ ${validatorInfo.stake.deactivatingStake.toLocaleString(
-                        "en-US",
-                        { maximumFractionDigits: 0 }
-                      )}`
+                  {Math.round(validatorInfo.stake.deactivatingStake) > 0
+                    ? `◎ ${Math.round(
+                        validatorInfo.stake.deactivatingStake
+                      ).toLocaleString("en-US")}`
                     : "—"}
                 </div>
                 {validatorInfo.stake.deactivatingAccounts.length > 0 && (
