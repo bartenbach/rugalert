@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tb } from "../../../lib/airtable";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
+import { formatTwitterMevRug, formatTwitterRug, postToTwitter } from "../../../lib/twitter";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for Vercel Pro (max allowed)
@@ -64,7 +65,12 @@ async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUT
     }
     
     // Send individual emails to each subscriber (protects PII)
-    const emailPromises = emails.map(async (email) => {
+    // Send sequentially with rate limiting to avoid 429 errors (Resend limit: 2 req/sec)
+    console.log(`📧 Sending ${emails.length} emails individually...`);
+    const results: { email: string; success: boolean; error?: any }[] = [];
+    
+    for (let i = 0; i < emails.length; i++) {
+      const email = emails[i];
       try {
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",
@@ -84,19 +90,22 @@ async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUT
         
         if (!response.ok) {
           console.error(`❌ Email failed for ${email}:`, response.status, result);
-          return { email, success: false, error: result };
+          results.push({ email, success: false, error: result });
         } else {
           console.log(`✅ Email sent to ${email}`);
-          return { email, success: true };
+          results.push({ email, success: true });
         }
       } catch (error) {
         console.error(`❌ Email error for ${email}:`, error);
-        return { email, success: false, error };
+        results.push({ email, success: false, error });
       }
-    });
+      
+      // Rate limit: wait 600ms between emails (max 2 per second = 500ms, add buffer)
+      if (i < emails.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 600));
+      }
+    }
     
-    // Wait for all emails to send
-    const results = await Promise.all(emailPromises);
     const successCount = results.filter(r => r.success).length;
     console.log(`📧 Email batch complete: ${successCount}/${emails.length} sent successfully`);
     
@@ -451,10 +460,13 @@ export async function POST(req: NextRequest) {
     let infoHistoryEnabled = true;
     
     try {
+      logProgress(`Fetching validator info history for change detection...`);
       const allInfoHistory = await tb.validatorInfoHistory.select({
         sort: [{ field: 'changedAt', direction: 'desc' }],
         pageSize: 100,
       }).all();
+      
+      logProgress(`Loaded ${allInfoHistory.length} info history records, processing...`);
       
       for (const record of allInfoHistory) {
         const votePubkey = record.get('votePubkey') as string;
@@ -468,9 +480,10 @@ export async function POST(req: NextRequest) {
           });
         }
       }
-      console.log(`✅ Loaded ${lastInfoMap.size} validator info history records`);
+      logProgress(`Processed ${lastInfoMap.size} unique validator info records`);
     } catch (error: any) {
-      console.error("⚠️ Failed to fetch validator info history (table may not exist yet):", error.message);
+      logProgress(`⚠️ Info history fetch failed: ${error.message}`);
+      console.error("Full error:", error);
       infoHistoryEnabled = false;
     }
     
@@ -751,10 +764,16 @@ export async function POST(req: NextRequest) {
             const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
             await sendEmail("🚨 Solana Validator Commission Rug Detected", msg, "RUG");
+            // Post to Twitter/X for community retweets
+            const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
+            await postToTwitter(twitterMsg);
           } else if (type === "CAUTION") {
             const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
             await sendEmail("⚠️ Solana Validator Large Commission Jump Detected", msg, "CAUTION");
+            // Optionally post CAUTION to Twitter too (remove if too noisy)
+            const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
+            await postToTwitter(twitterMsg);
           } else if (type === "INFO") {
             const msg = `📊 Commission Change\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendEmail("📊 Solana Validator Commission Change", msg, "INFO");
@@ -819,10 +838,16 @@ export async function POST(req: NextRequest) {
                 const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
                 await sendEmail("🚨 Solana Validator MEV Commission Rug Detected", msg, "RUG");
+                // Post MEV rug to Twitter/X
+                const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
+                await postToTwitter(twitterMsg);
               } else if (eventType === "CAUTION") {
                 const msg = `⚠️ CAUTION: Large MEV Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
                 await sendEmail("⚠️ Solana Validator MEV Commission Increase", msg, "CAUTION");
+                // Optionally post MEV CAUTION to Twitter too
+                const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
+                await postToTwitter(twitterMsg);
               }
             }
           }
@@ -892,17 +917,21 @@ export async function POST(req: NextRequest) {
     let infoHistoryCreated = 0;
     if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
       try {
+        logProgress(`Creating ${infoHistoryToCreate.length} validator info history records...`);
         for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
           const batch = infoHistoryToCreate.slice(i, i + batchSize);
           await tb.validatorInfoHistory.create(batch);
           infoHistoryCreated += batch.length;
         }
-        console.log(`✅ Validator info history records created: ${infoHistoryCreated}`);
+        logProgress(`Created ${infoHistoryCreated} validator info history records`);
       } catch (error: any) {
-        console.error("⚠️ Failed to create validator info history records:", error.message);
+        logProgress(`⚠️ Info history creation failed: ${error.message}`);
+        console.error("Full error:", error);
       }
     } else if (!infoHistoryEnabled) {
-      console.log(`⏭️  Validator info history tracking skipped (table not available)`);
+      logProgress(`Info history tracking skipped (table not available)`);
+    } else {
+      logProgress(`No validator info changes detected`);
     }
 
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);

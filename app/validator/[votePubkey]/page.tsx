@@ -96,7 +96,7 @@ type InfoHistory = {
   epoch: number;
 };
 
-// Circular Progress Gauge Component with dynamic coloring
+// Circular Progress Gauge Component with dynamic coloring and animations
 function CircularGauge({
   value,
   max = 100,
@@ -113,7 +113,8 @@ function CircularGauge({
   thresholds?: { good: number; warning: number }; // e.g., { good: 90, warning: 75 }
 }) {
   const percentage = Math.min((value / max) * 100, 100);
-  const circumference = 2 * Math.PI * 45; // radius = 45
+  const radius = 50;
+  const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
 
   // Determine color based on value and thresholds
@@ -129,55 +130,130 @@ function CircularGauge({
   }
 
   const colorClasses = {
-    green: { stroke: "stroke-green-500", text: "text-green-400" },
-    yellow: { stroke: "stroke-yellow-500", text: "text-yellow-400" },
-    orange: { stroke: "stroke-orange-500", text: "text-orange-400" },
-    red: { stroke: "stroke-red-500", text: "text-red-400" },
-    purple: { stroke: "stroke-purple-500", text: "text-purple-400" },
+    green: {
+      stroke: "stroke-green-500",
+      text: "text-green-400",
+      glow: "drop-shadow-[0_0_8px_rgba(34,197,94,0.5)]",
+      bg: "bg-green-500/5",
+    },
+    yellow: {
+      stroke: "stroke-yellow-500",
+      text: "text-yellow-400",
+      glow: "drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]",
+      bg: "bg-yellow-500/5",
+    },
+    orange: {
+      stroke: "stroke-orange-500",
+      text: "text-orange-400",
+      glow: "drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]",
+      bg: "bg-orange-500/5",
+    },
+    red: {
+      stroke: "stroke-red-500",
+      text: "text-red-400",
+      glow: "drop-shadow-[0_0_8px_rgba(239,68,68,0.5)]",
+      bg: "bg-red-500/5",
+    },
+    purple: {
+      stroke: "stroke-purple-500",
+      text: "text-purple-400",
+      glow: "drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]",
+      bg: "bg-purple-500/5",
+    },
   };
 
   const colors = colorClasses[color];
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg className="transform -rotate-90" width={size} height={size}>
+    <div className="flex flex-col items-center gap-2 group">
+      {/* Title above the gauge */}
+      <div className="text-xs text-gray-400 text-center font-medium transition-colors group-hover:text-gray-300">
+        {label}
+      </div>
+
+      {/* Gauge circle with animations */}
+      <div
+        className="relative transition-transform group-hover:scale-105"
+        style={{ width: size, height: size }}
+      >
+        {/* Background glow */}
+        <div
+          className={`absolute inset-0 rounded-full ${colors.bg} blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+        ></div>
+
+        <svg
+          className={`transform -rotate-90 ${colors.glow} transition-all duration-300`}
+          width={size}
+          height={size}
+        >
           {/* Background circle */}
           <circle
             cx={size / 2}
             cy={size / 2}
-            r="45"
+            r={radius}
             fill="none"
-            stroke="rgba(255,255,255,0.1)"
-            strokeWidth="8"
+            stroke="rgba(255,255,255,0.05)"
+            strokeWidth="6"
           />
-          {/* Progress circle */}
+          {/* Animated progress circle */}
           <circle
             cx={size / 2}
             cy={size / 2}
-            r="45"
+            r={radius}
             fill="none"
-            className={colors.stroke}
-            strokeWidth="8"
+            className={`${colors.stroke} transition-all duration-700 ease-out`}
+            strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset 0.5s ease" }}
+            style={{
+              animation: "dash 1.5s ease-in-out",
+            }}
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className={`text-xl font-bold ${colors.text}`}>
+
+        {/* Center content with fade-in animation */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className={`text-2xl font-bold ${colors.text} transition-all duration-300`}
+            style={{ animation: "fadeIn 0.5s ease-out 0.3s both" }}
+          >
             {value.toFixed(1)}
             {max === 100 && "%"}
           </div>
-          {sublabel && (
-            <div className="text-[10px] text-gray-500 mt-0.5">{sublabel}</div>
-          )}
         </div>
       </div>
-      <div className="text-sm text-gray-400 mt-2 text-center font-medium">
-        {label}
-      </div>
+
+      {/* Supporting data below with fade-in */}
+      {sublabel && (
+        <div
+          className="text-xs text-gray-500 text-center transition-colors group-hover:text-gray-400"
+          style={{ animation: "fadeIn 0.5s ease-out 0.5s both" }}
+        >
+          {sublabel}
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes dash {
+          from {
+            stroke-dashoffset: ${circumference};
+          }
+          to {
+            stroke-dashoffset: ${offset};
+          }
+        }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
@@ -775,22 +851,45 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <>
                     <CircularGauge
                       value={100 - validatorInfo.performance.skipRate}
-                      label="Block Success"
+                      label="Block Production"
                       sublabel={
                         validatorInfo.performance.leaderSlots ? (
-                          <span className="text-xs">
-                            <span className="text-green-400 font-medium">
-                              {validatorInfo.performance.blocksProduced}
-                            </span>
-                            {" produced - "}
-                            <span className="text-red-400 font-medium">
-                              {validatorInfo.performance.leaderSlots -
-                                validatorInfo.performance.blocksProduced}
-                            </span>
-                            {` (${validatorInfo.performance.skipRate.toFixed(
-                              2
-                            )}%) skipped`}
-                          </span>
+                          <>
+                            {(() => {
+                              const produced =
+                                validatorInfo.performance.blocksProduced;
+                              const skipped =
+                                validatorInfo.performance.leaderSlots -
+                                validatorInfo.performance.blocksProduced;
+
+                              // Abbreviate large numbers
+                              const formatCompact = (num: number) => {
+                                if (num >= 1000000)
+                                  return `${(num / 1000000).toFixed(1)}M`;
+                                if (num >= 1000)
+                                  return `${(num / 1000).toFixed(1)}K`;
+                                return num.toLocaleString();
+                              };
+
+                              return (
+                                <span>
+                                  <span className="text-green-400 font-medium">
+                                    {formatCompact(produced)}
+                                  </span>
+                                  {" produced · "}
+                                  <span
+                                    className={
+                                      skipped === 0
+                                        ? "text-green-400"
+                                        : "text-red-400"
+                                    }
+                                  >
+                                    {skipped} skipped
+                                  </span>
+                                </span>
+                              );
+                            })()}
+                          </>
                         ) : (
                           "No data"
                         )
@@ -800,17 +899,16 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <CircularGauge
                       value={validatorInfo.performance.voteCreditsPercentage}
                       label="Vote Performance"
-                      sublabel={`${
-                        validatorInfo.performance.voteCredits >= 1000000
-                          ? `${(
-                              validatorInfo.performance.voteCredits / 1000000
-                            ).toFixed(1)}M`
-                          : validatorInfo.performance.voteCredits >= 1000
-                          ? `${(
-                              validatorInfo.performance.voteCredits / 1000
-                            ).toFixed(1)}K`
-                          : validatorInfo.performance.voteCredits
-                      } credits`}
+                      sublabel={(() => {
+                        const credits = validatorInfo.performance.voteCredits;
+                        const formatted =
+                          credits >= 1000000
+                            ? `${(credits / 1000000).toFixed(1)}M`
+                            : credits >= 1000
+                            ? `${(credits / 1000).toFixed(1)}K`
+                            : credits.toLocaleString();
+                        return `${formatted} credits`;
+                      })()}
                       thresholds={{ good: 90, warning: 75 }}
                     />
                   </>
@@ -822,10 +920,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     label="Uptime"
                     sublabel={
                       uptimeDaysTracked === 1
-                        ? "(1 day)"
+                        ? "1 day tracked"
                         : uptimeDaysTracked >= 365
-                        ? "(1 year)"
-                        : `(${uptimeDaysTracked} days)`
+                        ? "1 year tracked"
+                        : `${uptimeDaysTracked} days tracked`
                     }
                     thresholds={{ good: 99, warning: 95 }}
                   />
