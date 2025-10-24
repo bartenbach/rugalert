@@ -485,12 +485,15 @@ export async function POST(req: NextRequest) {
     let infoHistoryEnabled = true;
     
     try {
+      console.log(`📚 Attempting to fetch validator_info_history table...`);
       logProgress(`Fetching validator info history for change detection...`);
+      
       const allInfoHistory = await tb.validatorInfoHistory.select({
         sort: [{ field: 'changedAt', direction: 'desc' }],
         pageSize: 100,
       }).all();
       
+      console.log(`✅ Successfully fetched ${allInfoHistory.length} info history records from Airtable`);
       logProgress(`Loaded ${allInfoHistory.length} info history records, processing...`);
       
       for (const record of allInfoHistory) {
@@ -505,10 +508,15 @@ export async function POST(req: NextRequest) {
           });
         }
       }
+      console.log(`✅ Built info history map for ${lastInfoMap.size} validators`);
       logProgress(`Processed ${lastInfoMap.size} unique validator info records`);
     } catch (error: any) {
-      logProgress(`⚠️ Info history fetch failed: ${error.message}`);
-      console.error("Full error:", error);
+      console.error(`❌ VALIDATOR INFO HISTORY TABLE FETCH FAILED!`);
+      console.error(`Error type: ${error.constructor.name}`);
+      console.error(`Error message: ${error.message}`);
+      console.error(`Full error:`, error);
+      if (error.statusCode) console.error(`Status code: ${error.statusCode}`);
+      logProgress(`❌ Info history fetch failed - tracking disabled: ${error.message}`);
       infoHistoryEnabled = false;
     }
     
@@ -624,6 +632,11 @@ export async function POST(req: NextRequest) {
           lastInfo.description !== currentInfo.description ||
           lastInfo.website !== currentInfo.website ||
           lastInfo.iconUrl !== currentInfo.iconUrl;
+        
+        // Debug logging for first few validators
+        if (i < 3) {
+          console.log(`🔍 Validator ${i} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!lastInfo}`);
+        }
         
         if (hasInfoChanged) {
           const timestamp = new Date().toISOString();
@@ -947,29 +960,36 @@ export async function POST(req: NextRequest) {
     
     // Create validator info history records (if enabled)
     let infoHistoryCreated = 0;
+    console.log(`📊 INFO HISTORY STATUS: enabled=${infoHistoryEnabled}, toCreate=${infoHistoryToCreate.length}`);
+    
     if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
       try {
         logProgress(`Creating ${infoHistoryToCreate.length} validator info history records...`);
+        console.log(`📝 Sample record:`, JSON.stringify(infoHistoryToCreate[0], null, 2));
+        
         for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
           const batch = infoHistoryToCreate.slice(i, i + batchSize);
           await tb.validatorInfoHistory.create(batch);
           infoHistoryCreated += batch.length;
+          console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1}: ${batch.length} records created`);
         }
-        logProgress(`Created ${infoHistoryCreated} validator info history records`);
+        logProgress(`✅ Created ${infoHistoryCreated} validator info history records`);
       } catch (error: any) {
-        logProgress(`⚠️ Info history creation failed: ${error.message}`);
+        logProgress(`❌ Info history creation failed: ${error.message}`);
         console.error("Full error:", error);
+        console.error("Stack:", error.stack);
       }
     } else if (!infoHistoryEnabled) {
-      logProgress(`Info history tracking skipped (table not available)`);
+      logProgress(`⚠️ Info history tracking skipped (table not available or initial fetch failed)`);
     } else {
-      logProgress(`No validator info changes detected`);
+      logProgress(`ℹ️ No validator info changes detected (${infoHistoryToCreate.length} records to create)`);
     }
 
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
     console.log(`✅ MEV snapshots created: ${mevSnapshotsCreated}`);
     console.log(`✅ MEV events created: ${mevEventsCreated}`);
+    console.log(`📚 Validator info history records: ${infoHistoryCreated}`);
     
     // Cleanup: Delete performance records older than 30 days (keep ~15 epochs of history)
     // Solana epochs are ~2-3 days, so 15 epochs ≈ 30-45 days
