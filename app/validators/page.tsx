@@ -401,10 +401,14 @@ export default function ValidatorsPage() {
                                     );
                                   }}
                                 />
-                                <div className="hidden w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0"></div>
+                                <div className="hidden w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center text-gray-500 text-lg">
+                                  ?
+                                </div>
                               </>
                             ) : (
-                              <div className="w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0"></div>
+                              <div className="w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center text-gray-500 text-lg">
+                                ?
+                              </div>
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
@@ -588,7 +592,9 @@ export default function ValidatorsPage() {
                           className="w-12 h-12 rounded-lg object-cover border-2 border-white/10 flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-12 h-12 rounded-lg border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/0 flex-shrink-0"></div>
+                        <div className="w-12 h-12 rounded-lg border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/0 flex-shrink-0 flex items-center justify-center text-gray-500 text-xl">
+                          ?
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">

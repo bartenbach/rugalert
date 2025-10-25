@@ -24,11 +24,16 @@
     min-height: 100vh;
   }
   
-  /* Force native emoji rendering */
+  /* Force native emoji rendering with proper colors */
   .emoji {
     font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Android Emoji', 'EmojiSymbols', sans-serif;
     font-style: normal;
     font-weight: normal;
+    -webkit-text-fill-color: initial;
+    color: initial;
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
   }
 }
 

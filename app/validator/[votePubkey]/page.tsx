@@ -682,8 +682,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                             className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-orange-500/30 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
-                            <span className="text-lg">🔷</span>
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
+                            <span className="text-lg text-gray-500">?</span>
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
@@ -730,21 +730,29 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     }}
                   />
                 ) : (
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl border-2 border-white/10 bg-white/5 transition-all hover:border-orange-400/50"></div>
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl border-2 border-white/10 bg-white/5 transition-all hover:border-orange-400/50 flex items-center justify-center text-gray-500 text-2xl sm:text-4xl">
+                    ?
+                  </div>
                 )}
               </div>
 
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap mb-2 sm:mb-3">
-                  <h1 className="text-xl sm:text-3xl font-bold text-white">
+                  <h1 className="text-xl sm:text-3xl font-bold">
                     {meta?.name ? (
                       <span>
                         {meta.name
-                          .split(/([\u{1F300}-\u{1F9FF}])/u)
+                          .split(
+                            /([\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B50}\u{231A}-\u{23FA}\u{24C2}\u{25AA}-\u{25FE}\u{2934}-\u{2B55}\u{3030}\u{303D}\u{3297}\u{3299}\u{FE00}-\u{FE0F}\u{1F900}-\u{1FA9F}\u{E0020}-\u{E007F}]+)/gu
+                          )
                           .map((part: string, i: number) => {
-                            // Check if part is an emoji
-                            if (/[\u{1F300}-\u{1F9FF}]/u.test(part)) {
+                            // Check if part is an emoji (comprehensive check)
+                            if (
+                              /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B50}\u{231A}-\u{23FA}\u{24C2}\u{25AA}-\u{25FE}\u{2934}-\u{2B55}\u{3030}\u{303D}\u{3297}\u{3299}\u{FE00}-\u{FE0F}\u{1F900}-\u{1FA9F}\u{E0020}-\u{E007F}]/u.test(
+                                part
+                              )
+                            ) {
                               return (
                                 <span key={i} className="emoji">
                                   {part}
@@ -1375,7 +1383,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                             className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg border border-white/20 bg-white/5 flex-shrink-0"></div>
+                          <div className="w-10 h-10 rounded-lg border border-white/20 bg-white/5 flex-shrink-0 flex items-center justify-center text-gray-500 text-lg">
+                            ?
+                          </div>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 flex-wrap">
