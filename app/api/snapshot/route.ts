@@ -356,15 +356,15 @@ export async function POST(req: NextRequest) {
     
     for (const voteAccount of allVoteAccounts) {
       const epochCreditsArray = voteAccount.epochCredits;
-      if (epochCreditsArray && Array.isArray(epochCreditsArray)) {
-        // epochCredits format: [[epoch, cumulative_credits, prev_epoch_cumulative], ...]
+          if (epochCreditsArray && Array.isArray(epochCreditsArray)) {
+            // epochCredits format: [[epoch, cumulative_credits, prev_epoch_cumulative], ...]
         // Look for CURRENT epoch
-        const currentEpochCredits = epochCreditsArray.find((entry: any) => 
-          Number(entry[0]) === epoch
-        );
-        if (currentEpochCredits) {
+            const currentEpochCredits = epochCreditsArray.find((entry: any) => 
+              Number(entry[0]) === epoch
+            );
+            if (currentEpochCredits) {
           // Get credits earned in current epoch (current cumulative - previous cumulative)
-          const earnedCredits = Number(currentEpochCredits[1]) - Number(currentEpochCredits[2] || 0);
+              const earnedCredits = Number(currentEpochCredits[1]) - Number(currentEpochCredits[2] || 0);
           voteCreditsMap.set(voteAccount.votePubkey, earnedCredits);
         }
       }
@@ -703,9 +703,9 @@ export async function POST(req: NextRequest) {
           lastInfo.website !== currentInfo.website ||
           lastInfo.iconUrl !== currentInfo.iconUrl;
         
-        // Debug logging for first few validators
-        if (validatorIndex < 3) {
-          console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!lastInfo}`);
+        // Debug logging for first few validators AND when changes detected
+        if (validatorIndex < 5 || hasInfoChanged) {
+          console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!lastInfo}, name=${!!chainName}, website=${!!website}, iconUrl=${!!iconUrl}`);
         }
         
         if (hasInfoChanged) {
@@ -767,36 +767,36 @@ export async function POST(req: NextRequest) {
       const blockData = blockProductionData[v.nodePubkey];
       const perfKey = `${v.votePubkey}-${epoch}`;
       
-      let skipRate = 0;
+        let skipRate = 0;
       let leaderSlots = 0;
       let blocksProduced = 0;
-      if (blockData) {
+        if (blockData) {
         leaderSlots = Number(blockData[0] || 0);
         blocksProduced = Number(blockData[1] || 0);
-        
-        if (leaderSlots > 0) {
-          skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
+          
+          if (leaderSlots > 0) {
+            skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
+          }
         }
-      }
-      
-      // Get vote credits from pre-fetched map and calculate percentage
-      const voteCredits = voteCreditsMap.get(v.votePubkey);
-      const voteCreditsPercentage = (voteCredits !== undefined && maxVoteCredits > 0)
-        ? (voteCredits / maxVoteCredits) * 100
-        : 0;
-      
+        
+        // Get vote credits from pre-fetched map and calculate percentage
+        const voteCredits = voteCreditsMap.get(v.votePubkey);
+        const voteCreditsPercentage = (voteCredits !== undefined && maxVoteCredits > 0)
+          ? (voteCredits / maxVoteCredits) * 100
+          : 0;
+        
       const perfFields = {
-        key: perfKey,
-        votePubkey: v.votePubkey,
-        epoch,
-        skipRate: Math.max(0, Math.min(100, skipRate)),
+            key: perfKey,
+            votePubkey: v.votePubkey,
+            epoch,
+            skipRate: Math.max(0, Math.min(100, skipRate)),
         leaderSlots, // Store total leader slots for calculating skipped blocks in UI
         blocksProduced, // Store actual blocks produced
-        ...(voteCredits !== undefined ? { 
-          voteCredits,
-          voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100, // 2 decimal places
-          maxPossibleCredits: maxVoteCredits,
-        } : {}),
+            ...(voteCredits !== undefined ? { 
+              voteCredits,
+              voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100, // 2 decimal places
+              maxPossibleCredits: maxVoteCredits,
+            } : {}),
       };
       
       // For current epoch: update existing record, otherwise create new
@@ -966,6 +966,12 @@ export async function POST(req: NextRequest) {
     console.log(`🏁 LOOP COMPLETED! Processed ${validatorIndex} validators`);
     logProgress(`✅ Finished processing all ${validatorIndex} validators`);
     console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history records queued`);
+    console.log(`📊 INFO HISTORY DEBUG: enabled=${infoHistoryEnabled}, lastInfoMapSize=${lastInfoMap.size}, recordsQueued=${infoHistoryToCreate.length}`);
+    if (infoHistoryToCreate.length > 0) {
+      console.log(`📊 INFO HISTORY SAMPLE:`, JSON.stringify(infoHistoryToCreate[0], null, 2));
+    } else if (infoHistoryEnabled) {
+      console.log(`⚠️ INFO HISTORY: Table enabled but NO records queued! This means no validator info changed.`);
+    }
     console.log(`📊 Breakdown: ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length} perf create, ${perfRecordsToUpdate.length} perf update, ${mevSnapshotsToCreate.length} MEV, ${mevEventsToCreate.length} MEV events`);
 
     // BATCH CREATE/UPDATE operations to avoid timeout
@@ -1048,6 +1054,7 @@ export async function POST(req: NextRequest) {
     let infoHistoryCreated = 0;
     console.log(`\n📚 ========== VALIDATOR INFO HISTORY CREATION ==========`);
     console.log(`📊 INFO HISTORY STATUS: enabled=${infoHistoryEnabled}, toCreate=${infoHistoryToCreate.length}`);
+    console.log(`⏱️  Current time: ${new Date().toISOString()}`);
     
     if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
       try {
@@ -1076,6 +1083,7 @@ export async function POST(req: NextRequest) {
       logProgress(`ℹ️ No validator info changes detected (${infoHistoryToCreate.length} records to create)`);
     }
 
+    console.log(`\n🎉 ========== SNAPSHOT DATA COLLECTION COMPLETE ==========`);
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
     console.log(`✅ Commission snapshots created: ${snapshotsCreated}`);
@@ -1083,6 +1091,7 @@ export async function POST(req: NextRequest) {
     console.log(`✅ MEV snapshots created: ${mevSnapshotsToCreate.length}`);
     console.log(`✅ MEV events created: ${mevEventsToCreate.length}`);
     console.log(`📚 Validator info history records: ${infoHistoryCreated}`);
+    logProgress(`✅ Main snapshot complete! Starting cleanup...`);
     
     // Cleanup: Delete performance records older than 30 days (keep ~15 epochs of history)
     // Solana epochs are ~2-3 days, so 15 epochs ≈ 30-45 days

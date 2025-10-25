@@ -393,6 +393,12 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   const [loading, setLoading] = useState(true);
   const [copiedIdentity, setCopiedIdentity] = useState(false);
   const [copiedVote, setCopiedVote] = useState(false);
+  const [showStakeDistribution, setShowStakeDistribution] = useState(false);
+  const [stakeDistributionPosition, setStakeDistributionPosition] = useState({
+    top: 0,
+    left: 0,
+  });
+  const stakeDistributionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -475,6 +481,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   // Mount detection for portal
   useEffect(() => {
     setIsMounted(true);
+  }, []);
+
+  // Cleanup stake distribution timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (stakeDistributionTimeoutRef.current) {
+        clearTimeout(stakeDistributionTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Validator search with debounce
@@ -702,7 +717,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       ) : (
         <>
           {/* Validator Header */}
-          <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm">
+          <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm overflow-visible">
             <div className="flex items-start gap-3 sm:gap-4">
               {/* Icon */}
               <div className="flex-shrink-0">
@@ -763,7 +778,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 )}
 
                 {/* Inline Stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm overflow-visible">
                   {/* Row 1: Commission | MEV Commission | Version */}
                   <div className="flex items-baseline gap-2">
                     <span className="text-gray-500">Commission:</span>
@@ -887,59 +902,123 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     )}
                   {validatorInfo?.validator?.stakeAccountCount !== undefined &&
                     validatorInfo.validator.stakeAccountCount > 0 && (
-                      <div className="flex items-baseline gap-2 relative group">
+                      <div
+                        className="flex items-baseline gap-2"
+                        onMouseEnter={(e) => {
+                          // Clear any pending hide timeout
+                          if (stakeDistributionTimeoutRef.current) {
+                            clearTimeout(stakeDistributionTimeoutRef.current);
+                            stakeDistributionTimeoutRef.current = null;
+                          }
+
+                          if (
+                            validatorInfo.stake?.stakeDistribution &&
+                            validatorInfo.stake.stakeDistribution.length > 0
+                          ) {
+                            const rect =
+                              e.currentTarget.getBoundingClientRect();
+                            setStakeDistributionPosition({
+                              top: rect.bottom + 8,
+                              left: rect.left,
+                            });
+                            setShowStakeDistribution(true);
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          // Delay hiding to allow moving to popup
+                          stakeDistributionTimeoutRef.current = setTimeout(
+                            () => {
+                              setShowStakeDistribution(false);
+                            },
+                            300
+                          );
+                        }}
+                      >
                         <span className="text-gray-500">Stake Accounts:</span>
                         <span className="text-white font-semibold cursor-help">
                           {validatorInfo.validator.stakeAccountCount.toLocaleString()}
                         </span>
-
-                        {/* Stake Distribution Popup */}
-                        {validatorInfo.stake?.stakeDistribution &&
-                          validatorInfo.stake.stakeDistribution.length > 0 && (
-                            <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-96">
-                              <div className="glass rounded-xl p-4 border border-white/20 shadow-2xl">
-                                <div className="text-sm font-semibold text-white mb-3">
-                                  Top Stakers (by Amount)
-                                </div>
-                                <div className="space-y-2">
-                                  {validatorInfo.stake.stakeDistribution.map(
-                                    (entry, idx) => {
-                                      const percentage =
-                                        (entry.amount /
-                                          validatorInfo.stake!.activeStake /
-                                          1_000_000_000) *
-                                        100;
-                                      return (
-                                        <div key={idx} className="space-y-1">
-                                          <div className="flex justify-between text-xs">
-                                            <span className="text-gray-300 font-medium">
-                                              {entry.label ||
-                                                `${entry.staker.slice(
-                                                  0,
-                                                  8
-                                                )}...`}
-                                            </span>
-                                            <span className="text-white font-semibold">
-                                              {percentage.toFixed(1)}%
-                                            </span>
-                                          </div>
-                                          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                                            <div
-                                              className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
-                                              style={{
-                                                width: `${percentage}%`,
-                                              }}
-                                            ></div>
-                                          </div>
-                                        </div>
-                                      );
-                                    }
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )}
                       </div>
+                    )}
+
+                  {/* Stake Distribution Popup Portal */}
+                  {showStakeDistribution &&
+                    validatorInfo?.stake?.stakeDistribution &&
+                    validatorInfo.stake.stakeDistribution.length > 0 &&
+                    typeof window !== "undefined" &&
+                    createPortal(
+                      <div
+                        className="fixed w-[420px]"
+                        style={{
+                          top: `${stakeDistributionPosition.top}px`,
+                          left: `${stakeDistributionPosition.left}px`,
+                          zIndex: 999999,
+                        }}
+                        onMouseEnter={() => {
+                          // Clear any pending hide timeout when hovering over popup
+                          if (stakeDistributionTimeoutRef.current) {
+                            clearTimeout(stakeDistributionTimeoutRef.current);
+                            stakeDistributionTimeoutRef.current = null;
+                          }
+                          setShowStakeDistribution(true);
+                        }}
+                        onMouseLeave={() => {
+                          // Delay hiding when leaving popup
+                          stakeDistributionTimeoutRef.current = setTimeout(
+                            () => {
+                              setShowStakeDistribution(false);
+                            },
+                            200
+                          );
+                        }}
+                      >
+                        <div className="glass rounded-xl p-4 border-2 border-orange-500/50 shadow-[0_20px_60px_rgba(0,0,0,0.9)] backdrop-blur-xl bg-[#0a0a0a]/95">
+                          <div className="text-sm font-bold text-orange-400 mb-3 flex items-center gap-2">
+                            <span>📊</span>
+                            <span>Top 10 Stakers</span>
+                          </div>
+                          <div className="max-h-[400px] overflow-y-auto pr-2 space-y-2.5 custom-scrollbar">
+                            {validatorInfo.stake.stakeDistribution.map(
+                              (entry, idx) => {
+                                const percentage =
+                                  (entry.amount /
+                                    validatorInfo.stake!.activeStake /
+                                    1_000_000_000) *
+                                  100;
+                                return (
+                                  <div key={idx} className="space-y-1.5">
+                                    <div className="flex justify-between items-baseline gap-2">
+                                      <span className="text-white font-medium text-sm truncate">
+                                        {idx + 1}.{" "}
+                                        {entry.label ||
+                                          `${entry.staker.slice(
+                                            0,
+                                            6
+                                          )}...${entry.staker.slice(-4)}`}
+                                      </span>
+                                      <span className="text-orange-400 font-bold text-sm whitespace-nowrap">
+                                        {percentage.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-300"
+                                        style={{
+                                          width: `${Math.min(
+                                            percentage,
+                                            100
+                                          )}%`,
+                                        }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            )}
+                          </div>
+                        </div>
+                      </div>,
+                      document.body
                     )}
                 </div>
 

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Validator = {
   votePubkey: string;
@@ -69,52 +69,53 @@ export default function ValidatorsPage() {
     }
   };
 
-  // Filter validators based on search query
-  const filteredValidators = allValidators.filter((v) => {
-    if (!searchQuery) return true;
+  // Filter validators based on search query - MEMOIZED to prevent infinite re-renders
+  const filteredValidators = useMemo(() => {
+    if (!searchQuery) return allValidators;
     const query = searchQuery.toLowerCase();
-    return (
-      v.name?.toLowerCase().includes(query) ||
-      v.votePubkey.toLowerCase().includes(query) ||
-      v.identityPubkey?.toLowerCase().includes(query)
+    return allValidators.filter(
+      (v) =>
+        v.name?.toLowerCase().includes(query) ||
+        v.votePubkey.toLowerCase().includes(query) ||
+        v.identityPubkey?.toLowerCase().includes(query)
     );
-  });
+  }, [searchQuery, allValidators]);
 
-  // Load more validators from the already-fetched list
-  const loadMore = useCallback(() => {
-    const nextCount = displayCount + PAGE_SIZE;
-    setDisplayedValidators(filteredValidators.slice(0, nextCount));
-    setDisplayCount(nextCount);
-  }, [filteredValidators, displayCount, PAGE_SIZE]);
-
-  // Update displayed validators when search changes
+  // Update displayed validators when displayCount or filteredValidators changes
   useEffect(() => {
-    setDisplayCount(200); // Reset to initial count on search
-    setDisplayedValidators(filteredValidators.slice(0, 200));
-  }, [searchQuery, filteredValidators]);
+    setDisplayedValidators(filteredValidators.slice(0, displayCount));
+  }, [displayCount, filteredValidators]);
+
+  // Reset display count when search changes
+  useEffect(() => {
+    setDisplayCount(PAGE_SIZE);
+  }, [searchQuery]);
+
+  // Load more validators
+  const loadMore = useCallback(() => {
+    setDisplayCount((prev) => prev + PAGE_SIZE);
+  }, []);
 
   // Intersection observer for infinite scroll
   useEffect(() => {
-    const hasMore = displayCount < filteredValidators.length;
+    if (!observerTarget.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore) {
+        if (
+          entries[0].isIntersecting &&
+          displayCount < filteredValidators.length
+        ) {
           loadMore();
         }
       },
       { threshold: 0.1 }
     );
 
-    const currentTarget = observerTarget.current;
-    if (currentTarget) {
-      observer.observe(currentTarget);
-    }
+    observer.observe(observerTarget.current);
 
     return () => {
-      if (currentTarget) {
-        observer.unobserve(currentTarget);
-      }
+      observer.disconnect();
     };
   }, [displayCount, filteredValidators.length, loadMore]);
 
@@ -523,9 +524,6 @@ export default function ValidatorsPage() {
             )}
           </tbody>
         </table>
-
-        {/* Infinite scroll trigger */}
-        <div ref={observerTarget} className="h-4"></div>
       </div>
 
       {/* Validators Cards - Mobile */}
@@ -694,17 +692,18 @@ export default function ValidatorsPage() {
             )}
           </>
         )}
-        {/* Infinite scroll trigger */}
-        <div ref={observerTarget} className="h-4"></div>
       </div>
+
+      {/* Infinite scroll trigger - placed after both desktop and mobile sections */}
+      <div ref={observerTarget} className="h-4"></div>
 
       {/* End message */}
       {!loading &&
-        displayCount >= allValidators.length &&
-        allValidators.length > 0 && (
+        displayCount >= filteredValidators.length &&
+        filteredValidators.length > 0 && (
           <div className="text-center py-8">
             <div className="text-gray-500 text-sm">
-              Showing all {allValidators.length} validators
+              Showing all {filteredValidators.length} validators
             </div>
           </div>
         )}
