@@ -55,6 +55,7 @@ type ValidatorInfo = {
     version?: string;
     delinquent?: boolean;
     jitoEnabled?: boolean;
+    firstSeenEpoch?: number;
   };
   performance: {
     skipRate: number;
@@ -810,7 +811,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     </div>
                   )}
 
-                  {/* Row 2: Website | Stake */}
+                  {/* Row 2: Website | Stake | Validator Age */}
                   {meta?.website && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-gray-500">Website:</span>
@@ -867,6 +868,17 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       })()}
                     </div>
                   )}
+                  {validatorInfo?.validator?.firstSeenEpoch &&
+                    validatorInfo.validator.firstSeenEpoch > 0 && (
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-gray-500">Age:</span>
+                        <span className="text-white font-semibold">
+                          {validatorInfo.currentEpoch -
+                            validatorInfo.validator.firstSeenEpoch}{" "}
+                          epochs
+                        </span>
+                      </div>
+                    )}
                 </div>
 
                 {/* Copy buttons - More compact */}

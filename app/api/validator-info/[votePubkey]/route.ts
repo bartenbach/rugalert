@@ -133,6 +133,7 @@ export async function GET(
         version: validator.get('version'),
         delinquent: isDelinquent, // Use real-time RPC data
         jitoEnabled,
+        firstSeenEpoch: Number(validator.get('firstSeenEpoch') || 0),
       },
       performance: perfData,
       stake: stakeData,
