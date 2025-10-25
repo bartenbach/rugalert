@@ -217,6 +217,7 @@ export async function POST(req: NextRequest) {
       deactivatingAccounts: StakeAccountBreakdown[];
     }>();
     let stakeAccountCounts = new Map<string, number>(); // Count of stake accounts per validator
+    let stakeDistribution = new Map<string, Map<string, number>>(); // voter -> (staker -> total stake amount)
     const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
     
     if (enableStakeTracking) {
@@ -284,6 +285,13 @@ export async function POST(req: NextRequest) {
             
             // Count ALL stake accounts per validator (including inactive, activating, deactivating)
             stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
+            
+            // Track stake distribution by staker (for pie chart)
+            if (!stakeDistribution.has(voter)) {
+              stakeDistribution.set(voter, new Map());
+            }
+            const voterDist = stakeDistribution.get(voter)!;
+            voterDist.set(staker, (voterDist.get(staker) || 0) + stake);
             
             if (!stakeByVoter.has(voter)) {
               stakeByVoter.set(voter, { 
@@ -593,6 +601,23 @@ export async function POST(req: NextRequest) {
       const activatingAccounts = stakeData?.activatingAccounts || [];
       const deactivatingAccounts = stakeData?.deactivatingAccounts || [];
       
+      // Get stake distribution for pie chart (top 10 + "Others")
+      const distribution = stakeDistribution.get(v.votePubkey);
+      const distributionArray: Array<{ staker: string; amount: number; label: string | null }> = [];
+      if (distribution) {
+        const sorted = Array.from(distribution.entries())
+          .sort((a, b) => b[1] - a[1]) // Sort by amount descending
+          .slice(0, 10); // Top 10 stakers
+        
+        for (const [staker, amount] of sorted) {
+          distributionArray.push({
+            staker,
+            amount,
+            label: getStakerLabel(staker)
+          });
+        }
+      }
+      
       if (existing) {
         const patch: any = {};
         if (existing.get("identityPubkey") !== v.nodePubkey)
@@ -627,6 +652,8 @@ export async function POST(req: NextRequest) {
         patch.jitoEnabled = isJitoEnabled;
         // Update stake account count
         patch.stakeAccountCount = accountCount;
+        // Update stake distribution (for pie chart)
+        patch.stakeDistribution = JSON.stringify(distributionArray);
         if (Object.keys(patch).length) {
           validatorsToUpdate.push({ id: existing.id, fields: patch });
         }
@@ -644,6 +671,7 @@ export async function POST(req: NextRequest) {
             deactivatingAccounts: JSON.stringify(deactivatingAccounts),
             jitoEnabled: isJitoEnabled,
             stakeAccountCount: accountCount,
+            stakeDistribution: JSON.stringify(distributionArray),
             firstSeenEpoch: epoch, // Track when validator first appeared
             ...(chainName ? { name: chainName } : {}),
             ...(iconUrl   ? { iconUrl } : {}),

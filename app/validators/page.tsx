@@ -116,7 +116,7 @@ export default function ValidatorsPage() {
         observer.unobserve(currentTarget);
       }
     };
-  }, [displayCount, allValidators.length, loadMore]);
+  }, [displayCount, filteredValidators.length, loadMore]);
 
   useEffect(() => {
     loadValidators();

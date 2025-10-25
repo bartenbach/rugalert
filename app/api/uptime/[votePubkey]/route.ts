@@ -43,11 +43,18 @@ export async function GET(
       })
       .eachPage((records, fetchNextPage) => {
         records.forEach((record) => {
+          const uptimeChecks = Number(record.get('uptimeChecks') || 0);
+          const delinquentChecks = Number(record.get('delinquentChecks') || 0);
+          // ALWAYS calculate uptimePercent from raw checks (source of truth)
+          const uptimePercent = uptimeChecks > 0 
+            ? ((uptimeChecks - delinquentChecks) / uptimeChecks) * 100 
+            : 100;
+          
           allRecords.push({
             date: record.get('date') as string,
-            uptimeChecks: Number(record.get('uptimeChecks') || 0),
-            delinquentChecks: Number(record.get('delinquentChecks') || 0),
-            uptimePercent: Number(record.get('uptimePercent') || 100),
+            uptimeChecks,
+            delinquentChecks,
+            uptimePercent,
           });
         });
         fetchNextPage();

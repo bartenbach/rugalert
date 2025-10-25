@@ -75,6 +75,7 @@ export async function GET(
     // Get stake data from validator record (cached by snapshot job)
     const activatingAccountsJson = validator.get('activatingAccounts');
     const deactivatingAccountsJson = validator.get('deactivatingAccounts');
+    const stakeDistributionJson = validator.get('stakeDistribution');
     
     const stakeData = {
       activeStake: Number(validator.get('activeStake') || 0) / LAMPORTS_PER_SOL,
@@ -82,6 +83,7 @@ export async function GET(
       deactivatingStake: Number(validator.get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
       activatingAccounts: activatingAccountsJson ? JSON.parse(activatingAccountsJson as string) : [],
       deactivatingAccounts: deactivatingAccountsJson ? JSON.parse(deactivatingAccountsJson as string) : [],
+      stakeDistribution: stakeDistributionJson ? JSON.parse(stakeDistributionJson as string) : [],
       epoch: currentEpoch,
     };
 
@@ -134,6 +136,7 @@ export async function GET(
         delinquent: isDelinquent, // Use real-time RPC data
         jitoEnabled,
         firstSeenEpoch: Number(validator.get('firstSeenEpoch') || 0),
+        stakeAccountCount: Number(validator.get('stakeAccountCount') || 0),
       },
       performance: perfData,
       stake: stakeData,

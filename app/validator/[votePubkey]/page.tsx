@@ -56,6 +56,7 @@ type ValidatorInfo = {
     delinquent?: boolean;
     jitoEnabled?: boolean;
     firstSeenEpoch?: number;
+    stakeAccountCount?: number;
   };
   performance: {
     skipRate: number;
@@ -81,6 +82,11 @@ type ValidatorInfo = {
       amount: number;
       label: string | null;
       epoch: number;
+    }>;
+    stakeDistribution: Array<{
+      staker: string;
+      amount: number;
+      label: string | null;
     }>;
     epoch: number;
   } | null;
@@ -811,7 +817,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     </div>
                   )}
 
-                  {/* Row 2: Website | Stake | Validator Age */}
+                  {/* Row 2: Website | Stake | Validator Age | Stake Accounts */}
                   {meta?.website && (
                     <div className="flex items-baseline gap-2">
                       <span className="text-gray-500">Website:</span>
@@ -877,6 +883,62 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                             validatorInfo.validator.firstSeenEpoch}{" "}
                           epochs
                         </span>
+                      </div>
+                    )}
+                  {validatorInfo?.validator?.stakeAccountCount !== undefined &&
+                    validatorInfo.validator.stakeAccountCount > 0 && (
+                      <div className="flex items-baseline gap-2 relative group">
+                        <span className="text-gray-500">Stake Accounts:</span>
+                        <span className="text-white font-semibold cursor-help">
+                          {validatorInfo.validator.stakeAccountCount.toLocaleString()}
+                        </span>
+
+                        {/* Stake Distribution Popup */}
+                        {validatorInfo.stake?.stakeDistribution &&
+                          validatorInfo.stake.stakeDistribution.length > 0 && (
+                            <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block z-50 w-96">
+                              <div className="glass rounded-xl p-4 border border-white/20 shadow-2xl">
+                                <div className="text-sm font-semibold text-white mb-3">
+                                  Top Stakers (by Amount)
+                                </div>
+                                <div className="space-y-2">
+                                  {validatorInfo.stake.stakeDistribution.map(
+                                    (entry, idx) => {
+                                      const percentage =
+                                        (entry.amount /
+                                          validatorInfo.stake!.activeStake /
+                                          1_000_000_000) *
+                                        100;
+                                      return (
+                                        <div key={idx} className="space-y-1">
+                                          <div className="flex justify-between text-xs">
+                                            <span className="text-gray-300 font-medium">
+                                              {entry.label ||
+                                                `${entry.staker.slice(
+                                                  0,
+                                                  8
+                                                )}...`}
+                                            </span>
+                                            <span className="text-white font-semibold">
+                                              {percentage.toFixed(1)}%
+                                            </span>
+                                          </div>
+                                          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                                            <div
+                                              className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
+                                              style={{
+                                                width: `${percentage}%`,
+                                              }}
+                                            ></div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                       </div>
                     )}
                 </div>
