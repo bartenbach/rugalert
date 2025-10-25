@@ -285,7 +285,34 @@ export async function POST(req: NextRequest) {
       fetchNextPage();
     });
     
-    console.log(`✅ Pre-fetch complete. Found ${existingValidators.size} validators, ${existingStakeKeys.size} stake records, ${existingPerfKeys.size} perf records`);
+    // Pre-fetch latest snapshots for ALL validators (avoid N+1 queries)
+    console.log(`📊 Pre-fetching latest snapshots for commission change detection...`);
+    const latestSnapshotMap = new Map<string, any>();
+    await tb.snapshots.select({
+      sort: [{ field: 'slot', direction: 'desc' }],
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => {
+        const votePubkey = String(r.get('votePubkey'));
+        // Only store if we don't have one yet (since sorted by slot desc, first is latest)
+        if (!latestSnapshotMap.has(votePubkey)) {
+          latestSnapshotMap.set(votePubkey, r);
+        }
+      });
+      fetchNextPage();
+    });
+    
+    // Pre-fetch existing snapshot keys for this slot (to avoid duplicate creates)
+    const existingSnapshotKeys = new Set<string>();
+    await tb.snapshots.select({
+      filterByFormula: `{slot} = ${slot}`,
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => existingSnapshotKeys.add(String(r.get('key'))));
+      fetchNextPage();
+    });
+    
+    console.log(`✅ Pre-fetch complete. Found ${existingValidators.size} validators, ${existingStakeKeys.size} stake records, ${existingPerfKeys.size} perf records, ${latestSnapshotMap.size} latest snapshots`);
     
     // Batch arrays for bulk creation
     const validatorsToCreate: any[] = [];
@@ -402,15 +429,11 @@ export async function POST(req: NextRequest) {
       }
 
       // 4) DELTA-ONLY SNAPSHOTS
-      // Get the most recent snapshot for this validator (by slot)
-      const last = await tb.snapshots.select({
-        filterByFormula: `{votePubkey} = "${v.votePubkey}"`,
-        sort: [{ field: "slot", direction: "desc" }],
-        maxRecords: 1,
-      }).firstPage();
+      // Get the most recent snapshot for this validator (from pre-fetched map)
+      const last = latestSnapshotMap.get(v.votePubkey);
 
-      const prevCommission = last[0]?.get("commission");
-      const prevEpoch = last[0]?.get("epoch");
+      const prevCommission = last?.get("commission");
+      const prevEpoch = last?.get("epoch");
 
       // Only write a new snapshot if commission changed since the most recent snapshot,
       // OR if there is no previous snapshot at all.
@@ -420,13 +443,13 @@ export async function POST(req: NextRequest) {
       if (commissionChanged) {
         // Insert snapshot for this slot (idempotent per key)
         const key = `${v.votePubkey}-${slot}`;
-        const exists = await tb.snapshots
-          .select({ filterByFormula: `{key} = "${key}"`, maxRecords: 1 })
-          .firstPage();
-        if (!exists[0]) {
+        // Check pre-fetched set instead of querying Airtable
+        if (!existingSnapshotKeys.has(key)) {
           await tb.snapshots.create([{
             fields: { key, votePubkey: v.votePubkey, epoch, slot, commission: v.commission }
           }]);
+          // Add to set so we don't try to create it again in this run
+          existingSnapshotKeys.add(key);
         }
 
         // Event detection against the last snapshot (if it existed)

@@ -137,13 +137,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       ) : (
         <>
           {/* Validator Header */}
-          <div className="glass rounded-2xl p-8 border border-white/10 shadow-sm card-shine">
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+          <div className="glass rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 shadow-sm card-shine">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 sm:gap-6">
               {meta?.avatarUrl ? (
-                <div className="relative group">
+                <div className="relative group flex-shrink-0">
                   <img
                     src={meta.avatarUrl}
-                    className="w-24 h-24 rounded-2xl object-cover border-2 border-white/10 group-hover:border-orange-500/30 transition-colors"
+                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-2xl object-cover border-2 border-white/10 group-hover:border-orange-500/30 transition-colors"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
                       e.currentTarget.parentElement?.nextElementSibling?.classList.remove(
@@ -154,27 +154,27 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 </div>
               ) : null}
               <div
-                className={`w-24 h-24 rounded-2xl bg-gradient-to-br from-orange-500/20 to-orange-500/30 border-2 border-white/10 flex items-center justify-center ${
+                className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-orange-500/20 to-orange-500/30 border-2 border-white/10 flex items-center justify-center flex-shrink-0 ${
                   meta?.avatarUrl ? "hidden" : ""
                 }`}
               >
-                <span className="text-4xl">🔷</span>
+                <span className="text-2xl sm:text-3xl md:text-4xl">🔷</span>
               </div>
-              <div className="flex-1">
-                <h1 className="text-3xl md:text-4xl font-bold gradient-text mb-2">
+              <div className="flex-1 min-w-0 w-full md:w-auto">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text mb-2">
                   {meta?.name || "Unknown Validator"}
                 </h1>
-                <div className="flex items-center gap-2 text-gray-400 text-sm font-mono bg-white/5 rounded-lg px-4 py-2 inline-block border border-white/10">
-                  <span className="text-gray-400">📋</span>
-                  <span>{params.votePubkey}</span>
+                <div className="flex items-center gap-2 text-gray-400 text-xs sm:text-sm font-mono bg-white/5 rounded-lg px-3 sm:px-4 py-2 border border-white/10 overflow-hidden">
+                  <span className="text-gray-400 flex-shrink-0">📋</span>
+                  <span className="truncate">{params.votePubkey}</span>
                 </div>
               </div>
               {currentCommission !== null && (
-                <div className="glass rounded-xl p-6 text-center min-w-[140px] border border-white/10 shadow-sm">
-                  <div className="text-sm text-gray-400 mb-1">
+                <div className="glass rounded-xl p-4 sm:p-6 text-center w-full md:w-auto md:min-w-[140px] border border-white/10 shadow-sm">
+                  <div className="text-xs sm:text-sm text-gray-400 mb-1">
                     Current Commission
                   </div>
-                  <div className="text-4xl font-bold gradient-text">
+                  <div className="text-3xl sm:text-4xl font-bold gradient-text">
                     {currentCommission}%
                   </div>
                 </div>
