@@ -331,15 +331,6 @@ export async function POST(req: NextRequest) {
           }
         }
         logProgress(`Processed stake for ${stakeByVoter.size} voters, ${stakeAccountCounts.size} validators with accounts`);
-        
-        // Debug: Show some examples of activating/deactivating stake
-        let exampleCount = 0;
-        for (const [voter, data] of stakeByVoter.entries()) {
-          if ((data.activating > 0 || data.deactivating > 0) && exampleCount < 3) {
-            console.log(`  Example: ${voter.substring(0, 8)}... - Activating: ${(data.activating / 1_000_000_000).toFixed(2)} SOL, Deactivating: ${(data.deactivating / 1_000_000_000).toFixed(2)} SOL`);
-            exampleCount++;
-          }
-        }
       } catch (e: any) {
         console.log(`⚠️ Could not fetch stake accounts (continuing without activating/deactivating data):`, e?.message || e);
       }
@@ -483,10 +474,18 @@ export async function POST(req: NextRequest) {
     const snapshotsBeingCreated = new Set<string>();
 
     // 2) jsonParsed GPA over Config program (validatorInfo records)
+    // Note: The CLI filters by checking if validator_info program ID is in ConfigKeys
+    // We rely on jsonParsed filtering by type === "validatorInfo"
+    console.log(`🔍 Fetching validator info from Config program...`);
     const gpa = await rpc("getProgramAccounts", [
       "Config1111111111111111111111111111111111111",
-      { encoding: "jsonParsed", commitment: "confirmed" },
+      { 
+        encoding: "jsonParsed", 
+        commitment: "confirmed",
+      },
     ]);
+    console.log(`🔍 DEBUG: Received ${gpa?.length || 0} total accounts from Config program`);
+    console.log(`🔍 DEBUG: getProgramAccounts likely has NO pagination - this is ALL the accounts`);
 
     // identityPubkey -> { name, iconUrl, website, description }
     const infoMap = new Map<
@@ -494,9 +493,11 @@ export async function POST(req: NextRequest) {
       { name?: string; iconUrl?: string; website?: string; description?: string }
     >();
 
+    let parsedInfoCount = 0;
     for (const item of gpa as any[]) {
       const parsed = item?.account?.data?.parsed;
       if (!parsed || parsed.type !== "validatorInfo") continue;
+      parsedInfoCount++;
       const keys = parsed?.info?.keys || [];
       const signer = keys.find((k: any) => k && k.signer && typeof k.pubkey === "string");
       const cfg = parsed?.info?.configData || {};
@@ -509,6 +510,7 @@ export async function POST(req: NextRequest) {
         infoMap.set(identity, { name, iconUrl, website, description });
       }
     }
+    console.log(`🔍 DEBUG: Parsed ${parsedInfoCount} validatorInfo records, ${infoMap.size} have metadata`);
 
     // 2b) Fetch most recent validator info history for change detection
     console.log("📚 Fetching validator info history for change detection...");
@@ -568,16 +570,20 @@ export async function POST(req: NextRequest) {
     // 3) Process each validator
     logProgress(`Processing ${allVotes.length} validators...`);
     console.log(`🔄 Starting validator loop: ${allVotes.length} total validators`);
+    console.log(`🔍 DEBUG: allVotes array length = ${allVotes.length}`);
+    console.log(`🔍 DEBUG: First validator = ${allVotes[0]?.votePubkey || 'undefined'}`);
+    console.log(`🔍 DEBUG: Last validator = ${allVotes[allVotes.length - 1]?.votePubkey || 'undefined'}`);
+    
     let validatorIndex = 0;
     const totalValidators = allVotes.length;
     for (const v of allVotes) {
       try {
-        // Log progress every 50 validators (more frequent) and show memory
-        if (validatorIndex > 0 && validatorIndex % 50 === 0) {
+        // Log every 10 validators to track progress more closely
+        if (validatorIndex % 10 === 0) {
           const memUsage = process.memoryUsage();
           const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+          console.log(`🔍 Processing validator ${validatorIndex}/${totalValidators} (${v.votePubkey.slice(0, 8)}...) - ${memMB}MB heap`);
           logProgress(`Processed ${validatorIndex}/${totalValidators} validators (${memMB}MB heap)...`);
-          console.log(`  💾 Memory: ${memMB}MB heap, ${Math.round(memUsage.rss / 1024 / 1024)}MB RSS`);
         }
         const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
@@ -986,10 +992,12 @@ export async function POST(req: NextRequest) {
       validatorIndex++; // Increment counter for next validator
     }
 
+    console.log(`🔍 DEBUG: Loop exited! validatorIndex = ${validatorIndex}, totalValidators = ${totalValidators}`);
     console.log(`🏁 LOOP COMPLETED! Processed ${validatorIndex} validators`);
     logProgress(`✅ Finished processing all ${validatorIndex} validators`);
     console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history records queued`);
     console.log(`📊 INFO HISTORY DEBUG: enabled=${infoHistoryEnabled}, lastInfoMapSize=${lastInfoMap.size}, recordsQueued=${infoHistoryToCreate.length}`);
+    console.log(`🔍 DEBUG: About to batch create/update records...`);
     if (infoHistoryToCreate.length > 0) {
       console.log(`📊 INFO HISTORY SAMPLE:`, JSON.stringify(infoHistoryToCreate[0], null, 2));
     } else if (infoHistoryEnabled) {
@@ -998,6 +1006,7 @@ export async function POST(req: NextRequest) {
     console.log(`📊 Breakdown: ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length} perf create, ${perfRecordsToUpdate.length} perf update, ${mevSnapshotsToCreate.length} MEV, ${mevEventsToCreate.length} MEV events`);
 
     // BATCH CREATE/UPDATE operations to avoid timeout
+    console.log(`🔍 DEBUG: REACHED BATCH OPERATIONS SECTION`);
     console.log(`📦 Batching operations: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} validator updates`);
     logProgress(`Batching: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
     
@@ -1142,6 +1151,7 @@ export async function POST(req: NextRequest) {
     }
     
     console.log(`\n🎉 ========== SNAPSHOT JOB COMPLETED SUCCESSFULLY ==========`);
+    console.log(`🔍 DEBUG: About to return success response...`);
     logProgress(`✅ Snapshot complete!`);
     return NextResponse.json({ 
       ok: true, 
