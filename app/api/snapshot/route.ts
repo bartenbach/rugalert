@@ -514,12 +514,13 @@ export async function POST(req: NextRequest) {
     console.log("📚 Fetching validator info history for change detection...");
     
     // Build map of votePubkey -> most recent info history
+    // Using null instead of undefined for consistency with Airtable
     const lastInfoMap = new Map<string, {
-      identityPubkey?: string;
-      name?: string;
-      description?: string;
-      website?: string;
-      iconUrl?: string;
+      identityPubkey: string | null;
+      name: string | null;
+      description: string | null;
+      website: string | null;
+      iconUrl: string | null;
     }>();
     
     let infoHistoryEnabled = true;
@@ -539,12 +540,14 @@ export async function POST(req: NextRequest) {
       for (const record of allInfoHistory) {
         const votePubkey = record.get('votePubkey') as string;
         if (!lastInfoMap.has(votePubkey)) {
+          // Normalize values from Airtable - convert any falsy value to null
+          // Empty strings are already filtered at source, so || is safe here
           lastInfoMap.set(votePubkey, {
-            identityPubkey: record.get('identityPubkey') as string | undefined,
-            name: record.get('name') as string | undefined,
-            description: record.get('description') as string | undefined,
-            website: record.get('website') as string | undefined,
-            iconUrl: record.get('iconUrl') as string | undefined,
+            identityPubkey: (record.get('identityPubkey') as string | undefined) || null,
+            name: (record.get('name') as string | undefined) || null,
+            description: (record.get('description') as string | undefined) || null,
+            website: (record.get('website') as string | undefined) || null,
+            iconUrl: (record.get('iconUrl') as string | undefined) || null,
           });
         }
       }
@@ -687,25 +690,35 @@ export async function POST(req: NextRequest) {
       if (infoHistoryEnabled) {
         // Check if validator info has changed since last snapshot
         const lastInfo = lastInfoMap.get(v.votePubkey);
+        // Normalize undefined/null to null for consistent comparison
         const currentInfo = {
           identityPubkey: v.nodePubkey,
-          name: chainName,
-          description,
-          website,
-          iconUrl,
+          name: chainName || null,
+          description: description || null,
+          website: website || null,
+          iconUrl: iconUrl || null,
         };
         
+        // Also normalize lastInfo values (Airtable might return undefined or null)
+        const normalizedLastInfo = lastInfo ? {
+          identityPubkey: lastInfo.identityPubkey || null,
+          name: lastInfo.name || null,
+          description: lastInfo.description || null,
+          website: lastInfo.website || null,
+          iconUrl: lastInfo.iconUrl || null,
+        } : null;
+        
         // Detect changes in any tracked field
-        const hasInfoChanged = !lastInfo || 
-          lastInfo.identityPubkey !== currentInfo.identityPubkey ||
-          lastInfo.name !== currentInfo.name ||
-          lastInfo.description !== currentInfo.description ||
-          lastInfo.website !== currentInfo.website ||
-          lastInfo.iconUrl !== currentInfo.iconUrl;
+        const hasInfoChanged = !normalizedLastInfo || 
+          normalizedLastInfo.identityPubkey !== currentInfo.identityPubkey ||
+          normalizedLastInfo.name !== currentInfo.name ||
+          normalizedLastInfo.description !== currentInfo.description ||
+          normalizedLastInfo.website !== currentInfo.website ||
+          normalizedLastInfo.iconUrl !== currentInfo.iconUrl;
         
         // Debug logging for first few validators AND when changes detected
         if (validatorIndex < 5 || hasInfoChanged) {
-          console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!lastInfo}, name=${!!chainName}, website=${!!website}, iconUrl=${!!iconUrl}`);
+          console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!normalizedLastInfo}, name=${!!chainName}, website=${!!website}, iconUrl=${!!iconUrl}`);
         }
         
         if (hasInfoChanged) {
@@ -717,10 +730,10 @@ export async function POST(req: NextRequest) {
               key: infoKey,
               votePubkey: v.votePubkey,
               identityPubkey: v.nodePubkey,
-              name: chainName || null,
-              description: description || null,
-              website: website || null,
-              iconUrl: iconUrl || null,
+              name: currentInfo.name,
+              description: currentInfo.description,
+              website: currentInfo.website,
+              iconUrl: currentInfo.iconUrl,
               changedAt: timestamp,
               epoch,
             }
@@ -730,17 +743,17 @@ export async function POST(req: NextRequest) {
           lastInfoMap.set(v.votePubkey, currentInfo);
           
           // Log the change (helpful for debugging)
-          if (lastInfo) {
+          if (normalizedLastInfo) {
             console.log(`📝 Info changed for ${chainName || v.votePubkey.slice(0, 8)}:`);
-            if (lastInfo.identityPubkey !== currentInfo.identityPubkey) 
-              console.log(`  Identity: ${lastInfo.identityPubkey} → ${currentInfo.identityPubkey}`);
-            if (lastInfo.name !== currentInfo.name) 
-              console.log(`  Name: ${lastInfo.name || '(none)'} → ${currentInfo.name || '(none)'}`);
-            if (lastInfo.description !== currentInfo.description) 
+            if (normalizedLastInfo.identityPubkey !== currentInfo.identityPubkey) 
+              console.log(`  Identity: ${normalizedLastInfo.identityPubkey} → ${currentInfo.identityPubkey}`);
+            if (normalizedLastInfo.name !== currentInfo.name) 
+              console.log(`  Name: ${normalizedLastInfo.name || '(none)'} → ${currentInfo.name || '(none)'}`);
+            if (normalizedLastInfo.description !== currentInfo.description) 
               console.log(`  Description changed`);
-            if (lastInfo.website !== currentInfo.website) 
-              console.log(`  Website: ${lastInfo.website || '(none)'} → ${currentInfo.website || '(none)'}`);
-            if (lastInfo.iconUrl !== currentInfo.iconUrl) 
+            if (normalizedLastInfo.website !== currentInfo.website) 
+              console.log(`  Website: ${normalizedLastInfo.website || '(none)'} → ${currentInfo.website || '(none)'}`);
+            if (normalizedLastInfo.iconUrl !== currentInfo.iconUrl) 
               console.log(`  Icon URL changed`);
           } else {
             console.log(`🆕 First snapshot for ${chainName || v.votePubkey.slice(0, 8)}`);
