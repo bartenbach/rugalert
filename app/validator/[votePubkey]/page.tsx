@@ -1223,13 +1223,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               {/* Stake Distribution */}
               {validatorInfo?.stake?.stakeDistribution &&
                 validatorInfo.stake.stakeDistribution.length > 0 && (
-                  <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
+                  <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300 overflow-hidden">
                     <div className="mb-4 sm:mb-6">
                       <h2 className="text-xl sm:text-2xl font-bold text-white">
                         Stake Distribution
                       </h2>
                     </div>
-                    <div className="h-[350px] sm:h-[280px] -mx-2 sm:mx-0">
+                    <div className="h-[380px] sm:h-[280px]">
                       <StakeDistributionPie
                         distribution={validatorInfo.stake.stakeDistribution}
                         totalStake={validatorInfo.stake.activeStake}

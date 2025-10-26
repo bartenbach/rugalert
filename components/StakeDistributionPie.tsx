@@ -105,7 +105,7 @@ export default function StakeDistributionPie({
 
   return (
     <div
-      className="w-full h-full flex items-center justify-center"
+      className="w-full h-full flex items-center justify-center overflow-hidden px-2"
       style={{ outline: "none" }}
     >
       <style>{`
@@ -115,16 +115,35 @@ export default function StakeDistributionPie({
         .recharts-sector:focus {
           outline: none !important;
         }
+        .recharts-legend-wrapper {
+          overflow: visible !important;
+        }
+        .recharts-default-legend {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          justify-content: center !important;
+          gap: 4px !important;
+          max-width: 100% !important;
+        }
+        .recharts-legend-item {
+          margin: 2px 3px !important;
+          max-width: calc(50% - 10px) !important;
+        }
+        @media (min-width: 640px) {
+          .recharts-legend-item {
+            max-width: none !important;
+          }
+        }
       `}</style>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
             data={chartData}
             cx="50%"
-            cy="45%"
+            cy="40%"
             labelLine={false}
             label={renderCustomLabel}
-            outerRadius="65%"
+            outerRadius="58%"
             fill="#8884d8"
             dataKey="value"
             animationBegin={0}
@@ -148,13 +167,13 @@ export default function StakeDistributionPie({
           <Tooltip content={<CustomTooltip />} />
           <Legend
             verticalAlign="bottom"
-            height={36}
+            height={50}
             formatter={(value, entry: any) => {
               const data = entry.payload;
               // If it's "Others" or has no address, just show the name
               if (!data.fullAddress || data.name.includes("Others")) {
                 return (
-                  <span className="text-[10px] sm:text-[11px] text-gray-300 font-medium">
+                  <span className="text-[9px] sm:text-[10px] md:text-[11px] text-gray-300 font-medium">
                     {value}
                   </span>
                 );
@@ -165,7 +184,7 @@ export default function StakeDistributionPie({
                   href={`https://solscan.io/account/${data.fullAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] sm:text-[11px] text-gray-300 hover:text-orange-400 transition-colors duration-200 font-medium"
+                  className="text-[9px] sm:text-[10px] md:text-[11px] text-gray-300 hover:text-orange-400 transition-colors duration-200 font-medium"
                 >
                   {value}
                 </a>
@@ -173,7 +192,7 @@ export default function StakeDistributionPie({
             }}
             wrapperStyle={{
               paddingTop: "10px",
-              fontSize: "10px",
+              fontSize: "9px",
             }}
           />
         </PieChart>
