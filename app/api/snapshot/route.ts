@@ -571,14 +571,15 @@ export async function POST(req: NextRequest) {
     let validatorIndex = 0;
     const totalValidators = allVotes.length;
     for (const v of allVotes) {
-      // Log progress every 50 validators (more frequent) and show memory
-      if (validatorIndex > 0 && validatorIndex % 50 === 0) {
-        const memUsage = process.memoryUsage();
-        const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-        logProgress(`Processed ${validatorIndex}/${totalValidators} validators (${memMB}MB heap)...`);
-        console.log(`  💾 Memory: ${memMB}MB heap, ${Math.round(memUsage.rss / 1024 / 1024)}MB RSS`);
-      }
-      const meta = infoMap.get(v.nodePubkey) || {};
+      try {
+        // Log progress every 50 validators (more frequent) and show memory
+        if (validatorIndex > 0 && validatorIndex % 50 === 0) {
+          const memUsage = process.memoryUsage();
+          const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+          logProgress(`Processed ${validatorIndex}/${totalValidators} validators (${memMB}MB heap)...`);
+          console.log(`  💾 Memory: ${memMB}MB heap, ${Math.round(memUsage.rss / 1024 / 1024)}MB RSS`);
+        }
+        const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
       // No fallback icon - let validators with no icon show empty square
       const iconUrl = meta.iconUrl;
@@ -972,8 +973,17 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+      
+      } catch (validatorError: any) {
+        // Log the error but continue processing other validators
+        console.error(`❌ ERROR processing validator ${validatorIndex} (${v.votePubkey.slice(0, 8)}...):`, validatorError);
+        console.error(`   Error message: ${validatorError.message}`);
+        console.error(`   Error stack:`, validatorError.stack);
+        logProgress(`❌ Error at validator ${validatorIndex}: ${validatorError.message}`);
+        // Don't throw - continue with next validator
+      }
     
-    validatorIndex++; // Increment counter for next validator
+      validatorIndex++; // Increment counter for next validator
     }
 
     console.log(`🏁 LOOP COMPLETED! Processed ${validatorIndex} validators`);
