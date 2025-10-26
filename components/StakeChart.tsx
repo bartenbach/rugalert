@@ -19,12 +19,31 @@ type StakeDataPoint = {
 };
 
 export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
-  // Data is already in SOL (converted by API)
-  const chartData = data.map((d) => ({
+  // Calculate linear regression trendline (y = mx + b)
+  const calculateTrendline = (dataPoints: StakeDataPoint[]) => {
+    if (dataPoints.length < 2) return [];
+
+    const n = dataPoints.length;
+    const sumX = dataPoints.reduce((sum, d, i) => sum + i, 0);
+    const sumY = dataPoints.reduce((sum, d) => sum + d.activeStake, 0);
+    const sumXY = dataPoints.reduce((sum, d, i) => sum + i * d.activeStake, 0);
+    const sumX2 = dataPoints.reduce((sum, d, i) => sum + i * i, 0);
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    return dataPoints.map((d, i) => slope * i + intercept);
+  };
+
+  const trendlineValues = calculateTrendline(data);
+
+  // Data is already in SOL (converted by API) - merge with trendline
+  const chartData = data.map((d, i) => ({
     epoch: d.epoch,
     activeStake: d.activeStake,
     activatingStake: d.activatingStake,
     deactivatingStake: d.deactivatingStake,
+    trendline: trendlineValues[i] || null,
   }));
 
   // Calculate dynamic Y-axis domain with padding to show meaningful changes
@@ -52,6 +71,11 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
           <p className="text-white font-bold text-lg mb-2">
             {formatStake(data.activeStake)} SOL
           </p>
+          {data.trendline && (
+            <p className="text-orange-400 text-xs mb-2">
+              Trend: {formatStake(data.trendline)} SOL
+            </p>
+          )}
           {data.activatingStake !== undefined && data.activatingStake > 0 && (
             <p className="text-green-400 text-sm">
               +{formatStake(data.activatingStake)} activating
@@ -133,6 +157,20 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
             }}
           />
           <Tooltip content={<CustomTooltip />} />
+          {/* Trendline */}
+          {trendlineValues.length > 0 && (
+            <Line
+              type="linear"
+              dataKey="trendline"
+              stroke="#f97316"
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              activeDot={false}
+              animationDuration={1000}
+              name="Trend"
+            />
+          )}
           <Area
             type="monotone"
             dataKey="activeStake"

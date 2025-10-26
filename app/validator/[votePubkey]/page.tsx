@@ -781,13 +781,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
                 {/* Description */}
                 {meta?.description && (
-                  <p className="text-gray-300 text-sm mb-3 leading-relaxed">
+                  <p className="text-gray-300 text-xs sm:text-sm mb-3 leading-relaxed line-clamp-3 sm:line-clamp-none">
                     <LinkifyText text={meta.description} />
                   </p>
                 )}
 
                 {/* Inline Stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-6 gap-y-2 text-xs sm:text-sm overflow-visible">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-3 sm:gap-x-4 md:gap-x-6 gap-y-2 sm:gap-y-2 text-[11px] sm:text-xs md:text-sm overflow-visible">
                   {/* Row 1: Commission | MEV Commission | Version */}
                   <div className="flex items-baseline gap-2">
                     <span className="text-gray-500">Commission:</span>
@@ -1032,7 +1032,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 </div>
 
                 {/* Copy buttons - More compact */}
-                <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                <div className="flex flex-col sm:flex-row gap-2 mt-3 sm:mt-4">
                   {validatorInfo?.validator?.identityPubkey && (
                     <button
                       onClick={() => {
@@ -1042,19 +1042,26 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         setCopiedIdentity(true);
                         setTimeout(() => setCopiedIdentity(false), 2000);
                       }}
-                      className={`flex items-center gap-2 text-xs font-mono rounded-lg px-3 py-1.5 border transition-all ${
+                      className={`flex items-center gap-2 text-[10px] sm:text-xs font-mono rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 border transition-all ${
                         copiedIdentity
                           ? "bg-green-500/20 border-green-500 text-green-400"
                           : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400 text-gray-400"
                       }`}
                     >
-                      <span className="text-gray-500 flex-shrink-0">
+                      <span className="text-gray-500 flex-shrink-0 text-[10px] sm:text-xs">
                         Identity:
                       </span>
                       <span className="truncate">
-                        {validatorInfo.validator.identityPubkey}
+                        <span className="hidden sm:inline">
+                          {validatorInfo.validator.identityPubkey}
+                        </span>
+                        <span className="sm:hidden">
+                          {validatorInfo.validator.identityPubkey.slice(0, 6)}
+                          ...
+                          {validatorInfo.validator.identityPubkey.slice(-6)}
+                        </span>
                       </span>
-                      <span className="flex-shrink-0">
+                      <span className="flex-shrink-0 text-sm">
                         {copiedIdentity ? "✓" : "📋"}
                       </span>
                     </button>
@@ -1065,15 +1072,25 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       setCopiedVote(true);
                       setTimeout(() => setCopiedVote(false), 2000);
                     }}
-                    className={`flex items-center gap-2 text-xs font-mono rounded-lg px-3 py-1.5 border transition-all ${
+                    className={`flex items-center gap-2 text-[10px] sm:text-xs font-mono rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 border transition-all ${
                       copiedVote
                         ? "bg-green-500/20 border-green-500 text-green-400"
                         : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400 text-gray-400"
                     }`}
                   >
-                    <span className="text-gray-500 flex-shrink-0">Vote:</span>
-                    <span className="truncate">{params.votePubkey}</span>
-                    <span className="flex-shrink-0">
+                    <span className="text-gray-500 flex-shrink-0 text-[10px] sm:text-xs">
+                      Vote:
+                    </span>
+                    <span className="truncate">
+                      <span className="hidden sm:inline">
+                        {params.votePubkey}
+                      </span>
+                      <span className="sm:hidden">
+                        {params.votePubkey.slice(0, 6)}...
+                        {params.votePubkey.slice(-6)}
+                      </span>
+                    </span>
+                    <span className="flex-shrink-0 text-sm">
                       {copiedVote ? "✓" : "📋"}
                     </span>
                   </button>
@@ -1105,11 +1122,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           validatorInfo.performance.leaderSlots ? (
                             <>
                               {(() => {
+                                const leaderSlots =
+                                  validatorInfo.performance.leaderSlots;
                                 const produced =
                                   validatorInfo.performance.blocksProduced;
-                                const skipped =
-                                  validatorInfo.performance.leaderSlots -
-                                  validatorInfo.performance.blocksProduced;
+                                const skipped = leaderSlots - produced;
+                                const skipPercent = (
+                                  (skipped / leaderSlots) *
+                                  100
+                                ).toFixed(1);
 
                                 // Abbreviate large numbers
                                 const formatCompact = (num: number) => {
@@ -1121,21 +1142,26 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                 };
 
                                 return (
-                                  <span>
-                                    <span className="text-green-400 font-medium">
-                                      {formatCompact(produced)}
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-gray-400 text-xs">
+                                      Leader slots: {formatCompact(leaderSlots)}
                                     </span>
-                                    {" produced · "}
-                                    <span
-                                      className={
-                                        skipped === 0
-                                          ? "text-green-400"
-                                          : "text-red-400"
-                                      }
-                                    >
-                                      {skipped} skipped
+                                    <span>
+                                      <span className="text-green-400 font-medium">
+                                        {formatCompact(produced)} produced
+                                      </span>
+                                      {" · "}
+                                      <span
+                                        className={
+                                          skipped === 0
+                                            ? "text-green-400"
+                                            : "text-red-400"
+                                        }
+                                      >
+                                        {skipped} ({skipPercent}%) skipped
+                                      </span>
                                     </span>
-                                  </span>
+                                  </div>
                                 );
                               })()}
                             </>
@@ -1203,7 +1229,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         Stake Distribution
                       </h2>
                     </div>
-                    <div className="h-[280px]">
+                    <div className="h-[350px] sm:h-[280px] -mx-2 sm:mx-0">
                       <StakeDistributionPie
                         distribution={validatorInfo.stake.stakeDistribution}
                         totalStake={validatorInfo.stake.activeStake}

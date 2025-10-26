@@ -148,13 +148,13 @@ export default function StakeDistributionPie({
           <Tooltip content={<CustomTooltip />} />
           <Legend
             verticalAlign="bottom"
-            height={28}
+            height={36}
             formatter={(value, entry: any) => {
               const data = entry.payload;
               // If it's "Others" or has no address, just show the name
               if (!data.fullAddress || data.name.includes("Others")) {
                 return (
-                  <span className="text-[11px] text-gray-300 font-medium">
+                  <span className="text-[10px] sm:text-[11px] text-gray-300 font-medium">
                     {value}
                   </span>
                 );
@@ -165,15 +165,15 @@ export default function StakeDistributionPie({
                   href={`https://solscan.io/account/${data.fullAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-gray-300 hover:text-orange-400 transition-colors duration-200 font-medium"
+                  className="text-[10px] sm:text-[11px] text-gray-300 hover:text-orange-400 transition-colors duration-200 font-medium"
                 >
                   {value}
                 </a>
               );
             }}
             wrapperStyle={{
-              paddingTop: "8px",
-              fontSize: "11px",
+              paddingTop: "10px",
+              fontSize: "10px",
             }}
           />
         </PieChart>
