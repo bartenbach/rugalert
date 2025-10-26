@@ -717,29 +717,29 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       ) : (
         <>
           {/* Validator Header */}
-          <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm overflow-visible">
-            <div className="flex items-start gap-3 sm:gap-4">
+          <div className="glass rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 shadow-sm overflow-visible">
+            <div className="flex items-start gap-3 sm:gap-4 md:gap-6">
               {/* Icon */}
               <div className="flex-shrink-0">
                 {meta?.avatarUrl ? (
                   <img
                     src={meta.avatarUrl}
-                    className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl object-cover border-2 border-white/10 transition-all shadow-md hover:shadow-orange-500/30 hover:border-orange-400/50"
+                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all shadow-md hover:shadow-orange-500/30 hover:border-orange-400/50"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
                     }}
                   />
                 ) : (
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl border-2 border-white/10 bg-white/5 transition-all hover:border-orange-400/50 flex items-center justify-center text-gray-500 text-2xl sm:text-4xl">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all hover:border-orange-400/50 flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
                     ?
                   </div>
                 )}
               </div>
 
               {/* Info */}
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 w-full md:w-auto">
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap mb-2 sm:mb-3">
-                  <h1 className="text-xl sm:text-3xl font-bold">
+                  <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">
                     {meta?.name ? (
                       <span>
                         {meta.name
@@ -786,7 +786,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 )}
 
                 {/* Inline Stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm overflow-visible">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 sm:gap-x-6 gap-y-2 text-xs sm:text-sm overflow-visible">
                   {/* Row 1: Commission | MEV Commission | Version */}
                   <div className="flex items-baseline gap-2">
                     <span className="text-gray-500">Commission:</span>
