@@ -1,6 +1,7 @@
 "use client";
 import CommissionChart from "@/components/CommissionChart";
 import StakeChart from "@/components/StakeChart";
+import StakeDistributionPie from "@/components/StakeDistributionPie";
 import UptimeChart from "@/components/UptimeChart";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -717,20 +718,20 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       ) : (
         <>
           {/* Validator Header */}
-          <div className="glass rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 shadow-sm overflow-visible">
+          <div className="glass rounded-2xl p-4 sm:p-6 md:p-8 border border-white/10 shadow-sm overflow-visible hover:border-white/20 transition-all duration-300">
             <div className="flex items-start gap-3 sm:gap-4 md:gap-6">
               {/* Icon */}
               <div className="flex-shrink-0">
                 {meta?.avatarUrl ? (
                   <img
                     src={meta.avatarUrl}
-                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all shadow-md hover:shadow-orange-500/30 hover:border-orange-400/50"
+                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-700 ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:border-orange-400/60"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
                     }}
                   />
                 ) : (
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all hover:border-orange-400/50 flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-700 ease-in-out hover:border-orange-400/60 hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
                     ?
                   </div>
                 )}
@@ -1081,150 +1082,184 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             </div>
           </div>
 
-          {/* Performance Gauges */}
+          {/* Performance Gauges and Stake Distribution */}
           {validatorInfo && (
-            <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30">
-              <div className="mb-6 sm:mb-8">
-                <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">
-                  Current Performance
-                </h2>
-                <p className="text-sm text-gray-400">
-                  Epoch {validatorInfo.currentEpoch}
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10">
-                {validatorInfo.performance && (
-                  <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Current Performance */}
+              <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
+                <div className="mb-6 sm:mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">
+                    Current Performance
+                  </h2>
+                  <p className="text-sm text-gray-400">
+                    Epoch {validatorInfo.currentEpoch}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10">
+                  {validatorInfo.performance && (
+                    <>
+                      <CircularGauge
+                        value={100 - validatorInfo.performance.skipRate}
+                        label="Block Production"
+                        sublabel={
+                          validatorInfo.performance.leaderSlots ? (
+                            <>
+                              {(() => {
+                                const produced =
+                                  validatorInfo.performance.blocksProduced;
+                                const skipped =
+                                  validatorInfo.performance.leaderSlots -
+                                  validatorInfo.performance.blocksProduced;
+
+                                // Abbreviate large numbers
+                                const formatCompact = (num: number) => {
+                                  if (num >= 1000000)
+                                    return `${(num / 1000000).toFixed(1)}M`;
+                                  if (num >= 1000)
+                                    return `${(num / 1000).toFixed(1)}K`;
+                                  return num.toLocaleString();
+                                };
+
+                                return (
+                                  <span>
+                                    <span className="text-green-400 font-medium">
+                                      {formatCompact(produced)}
+                                    </span>
+                                    {" produced · "}
+                                    <span
+                                      className={
+                                        skipped === 0
+                                          ? "text-green-400"
+                                          : "text-red-400"
+                                      }
+                                    >
+                                      {skipped} skipped
+                                    </span>
+                                  </span>
+                                );
+                              })()}
+                            </>
+                          ) : (
+                            "No data"
+                          )
+                        }
+                        thresholds={{ good: 95, warning: 85 }}
+                      />
+                      <CircularGauge
+                        value={validatorInfo.performance.voteCreditsPercentage}
+                        label="Vote Performance"
+                        sublabel={(() => {
+                          const credits = validatorInfo.performance.voteCredits;
+                          const formatted =
+                            credits >= 1000000
+                              ? `${(credits / 1000000).toFixed(1)}M`
+                              : credits >= 1000
+                              ? `${(credits / 1000).toFixed(1)}K`
+                              : credits.toLocaleString();
+                          return `${formatted} credits`;
+                        })()}
+                        thresholds={{ good: 90, warning: 75 }}
+                      />
+                    </>
+                  )}
+                  {/* Uptime gauge - uses real data from uptime tracking */}
+                  {uptimePercentage !== null ? (
                     <CircularGauge
-                      value={100 - validatorInfo.performance.skipRate}
-                      label="Block Production"
+                      value={uptimePercentage}
+                      label="Uptime"
                       sublabel={
-                        validatorInfo.performance.leaderSlots ? (
-                          <>
-                            {(() => {
-                              const produced =
-                                validatorInfo.performance.blocksProduced;
-                              const skipped =
-                                validatorInfo.performance.leaderSlots -
-                                validatorInfo.performance.blocksProduced;
-
-                              // Abbreviate large numbers
-                              const formatCompact = (num: number) => {
-                                if (num >= 1000000)
-                                  return `${(num / 1000000).toFixed(1)}M`;
-                                if (num >= 1000)
-                                  return `${(num / 1000).toFixed(1)}K`;
-                                return num.toLocaleString();
-                              };
-
-                              return (
-                                <span>
-                                  <span className="text-green-400 font-medium">
-                                    {formatCompact(produced)}
-                                  </span>
-                                  {" produced · "}
-                                  <span
-                                    className={
-                                      skipped === 0
-                                        ? "text-green-400"
-                                        : "text-red-400"
-                                    }
-                                  >
-                                    {skipped} skipped
-                                  </span>
-                                </span>
-                              );
-                            })()}
-                          </>
-                        ) : (
-                          "No data"
-                        )
+                        uptimeDaysTracked === 1
+                          ? "1 day tracked"
+                          : uptimeDaysTracked >= 365
+                          ? "1 year tracked"
+                          : `${uptimeDaysTracked} days tracked`
                       }
-                      thresholds={{ good: 95, warning: 85 }}
+                      thresholds={{ good: 99, warning: 95 }}
                     />
-                    <CircularGauge
-                      value={validatorInfo.performance.voteCreditsPercentage}
-                      label="Vote Performance"
-                      sublabel={(() => {
-                        const credits = validatorInfo.performance.voteCredits;
-                        const formatted =
-                          credits >= 1000000
-                            ? `${(credits / 1000000).toFixed(1)}M`
-                            : credits >= 1000
-                            ? `${(credits / 1000).toFixed(1)}K`
-                            : credits.toLocaleString();
-                        return `${formatted} credits`;
-                      })()}
-                      thresholds={{ good: 90, warning: 75 }}
-                    />
-                  </>
-                )}
-                {/* Uptime gauge - uses real data from uptime tracking */}
-                {uptimePercentage !== null ? (
-                  <CircularGauge
-                    value={uptimePercentage}
-                    label="Uptime"
-                    sublabel={
-                      uptimeDaysTracked === 1
-                        ? "1 day tracked"
-                        : uptimeDaysTracked >= 365
-                        ? "1 year tracked"
-                        : `${uptimeDaysTracked} days tracked`
-                    }
-                    thresholds={{ good: 99, warning: 95 }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center">
-                    <div className="w-[120px] h-[120px] rounded-full border-4 border-gray-700 border-dashed flex items-center justify-center">
-                      <div className="text-center px-2">
-                        <div className="text-gray-500 text-xs">Collecting</div>
-                        <div className="text-gray-500 text-xs">Data...</div>
+                  ) : (
+                    <div className="flex flex-col items-center">
+                      <div className="w-[120px] h-[120px] rounded-full border-4 border-gray-700 border-dashed flex items-center justify-center">
+                        <div className="text-center px-2">
+                          <div className="text-gray-500 text-xs">
+                            Collecting
+                          </div>
+                          <div className="text-gray-500 text-xs">Data...</div>
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-400 mt-2 text-center font-medium">
+                        Uptime
                       </div>
                     </div>
-                    <div className="text-sm text-gray-400 mt-2 text-center font-medium">
-                      Uptime
+                  )}
+                </div>
+              </div>
+
+              {/* Stake Distribution */}
+              {validatorInfo?.stake?.stakeDistribution &&
+                validatorInfo.stake.stakeDistribution.length > 0 && (
+                  <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
+                    <div className="mb-4 sm:mb-6">
+                      <h2 className="text-xl sm:text-2xl font-bold text-white">
+                        Stake Distribution
+                      </h2>
+                    </div>
+                    <div className="h-[280px]">
+                      <StakeDistributionPie
+                        distribution={validatorInfo.stake.stakeDistribution}
+                        totalStake={validatorInfo.stake.activeStake}
+                      />
                     </div>
                   </div>
                 )}
-              </div>
             </div>
           )}
 
           {/* Stake Info - Compact Cards */}
           {validatorInfo?.stake && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20">
-                <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
-                  Stake Delta
-                </div>
-                <div
-                  className={`text-2xl sm:text-3xl font-bold mb-3 ${
-                    validatorInfo.stake.activatingStake -
-                      validatorInfo.stake.deactivatingStake >
-                    0
-                      ? "text-green-400"
-                      : validatorInfo.stake.activatingStake -
-                          validatorInfo.stake.deactivatingStake <
-                        0
-                      ? "text-red-400"
-                      : "text-gray-400"
-                  }`}
-                >
-                  {(() => {
-                    const delta =
-                      validatorInfo.stake.activatingStake -
-                      validatorInfo.stake.deactivatingStake;
-                    if (Math.abs(delta) < 0.000001) return "—";
-                    return `${delta > 0 ? "+" : "−"}◎ ${Math.abs(
-                      delta
-                    ).toLocaleString("en-US", {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 6,
-                    })}`;
-                  })()}
-                </div>
-              </div>
-              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20">
+              {(() => {
+                const delta =
+                  validatorInfo.stake.activatingStake -
+                  validatorInfo.stake.deactivatingStake;
+                const isPositive = delta > 0;
+                const isNegative = delta < 0;
+                const isNeutral = Math.abs(delta) < 0.000001;
+
+                return (
+                  <div
+                    className={`glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20 transition-all duration-300 ${
+                      isPositive
+                        ? "hover:border-green-500/30 hover:shadow-2xl hover:shadow-green-500/10"
+                        : isNegative
+                        ? "hover:border-red-500/30 hover:shadow-2xl hover:shadow-red-500/10"
+                        : "hover:border-white/20"
+                    }`}
+                  >
+                    <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
+                      Stake Delta
+                    </div>
+                    <div
+                      className={`text-2xl sm:text-3xl font-bold mb-3 ${
+                        isPositive
+                          ? "text-green-400"
+                          : isNegative
+                          ? "text-red-400"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {isNeutral
+                        ? "—"
+                        : `${delta > 0 ? "+" : "−"}◎ ${Math.abs(
+                            delta
+                          ).toLocaleString("en-US", {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 6,
+                          })}`}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20 hover:border-green-500/30 hover:shadow-2xl hover:shadow-green-500/10 transition-all duration-300">
                 <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
                   Activating
                 </div>
@@ -1246,7 +1281,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   />
                 )}
               </div>
-              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20">
+              <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-xl shadow-black/20 hover:border-red-500/30 hover:shadow-2xl hover:shadow-red-500/10 transition-all duration-300">
                 <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mb-2">
                   Deactivating
                 </div>
@@ -1275,7 +1310,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
           <UptimeChart votePubkey={params.votePubkey} />
 
           {/* Stake History Chart */}
-          <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30">
+          <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
             <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
               Stake History
             </h2>
@@ -1290,7 +1325,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Commission History - Compact */}
           {series.length > 0 && (
-            <div className="glass rounded-2xl p-4 sm:p-5 border border-white/10 shadow-sm">
+            <div className="glass rounded-2xl p-4 sm:p-5 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
               <h2 className="text-base sm:text-lg font-bold text-white mb-3">
                 Commission History
               </h2>
@@ -1328,7 +1363,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Validator Info History - Only show if there are changes */}
           {infoHistory.length > 1 && (
-            <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm">
+            <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-base sm:text-lg font-bold text-white">
                   📜 Validator Info History
@@ -1448,7 +1483,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Commission Change Events Table - Only if events exist */}
           {events.length > 0 && (
-            <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30">
+            <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
               <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
                 Commission Changes
               </h2>
