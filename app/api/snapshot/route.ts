@@ -723,9 +723,9 @@ export async function POST(req: NextRequest) {
           normalizedLastInfo.website !== currentInfo.website ||
           normalizedLastInfo.iconUrl !== currentInfo.iconUrl;
         
-        // Debug logging for first few validators AND when changes detected
-        if (validatorIndex < 5 || hasInfoChanged) {
-          console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!normalizedLastInfo}, name=${!!chainName}, website=${!!website}, iconUrl=${!!iconUrl}`);
+        // Only log first few validators (removed per-validator logging to avoid log truncation)
+        if (validatorIndex < 3) {
+          console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!normalizedLastInfo}`);
         }
         
         if (hasInfoChanged) {
@@ -748,23 +748,6 @@ export async function POST(req: NextRequest) {
           
           // Update our map for subsequent checks in this snapshot run
           lastInfoMap.set(v.votePubkey, currentInfo);
-          
-          // Log the change (helpful for debugging)
-          if (normalizedLastInfo) {
-            console.log(`📝 Info changed for ${chainName || v.votePubkey.slice(0, 8)}:`);
-            if (normalizedLastInfo.identityPubkey !== currentInfo.identityPubkey) 
-              console.log(`  Identity: ${normalizedLastInfo.identityPubkey} → ${currentInfo.identityPubkey}`);
-            if (normalizedLastInfo.name !== currentInfo.name) 
-              console.log(`  Name: ${normalizedLastInfo.name || '(none)'} → ${currentInfo.name || '(none)'}`);
-            if (normalizedLastInfo.description !== currentInfo.description) 
-              console.log(`  Description changed`);
-            if (normalizedLastInfo.website !== currentInfo.website) 
-              console.log(`  Website: ${normalizedLastInfo.website || '(none)'} → ${currentInfo.website || '(none)'}`);
-            if (normalizedLastInfo.iconUrl !== currentInfo.iconUrl) 
-              console.log(`  Icon URL changed`);
-          } else {
-            console.log(`🆕 First snapshot for ${chainName || v.votePubkey.slice(0, 8)}`);
-          }
         }
       }
 
