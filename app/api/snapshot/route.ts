@@ -474,9 +474,6 @@ export async function POST(req: NextRequest) {
     const snapshotsBeingCreated = new Set<string>();
 
     // 2) jsonParsed GPA over Config program (validatorInfo records)
-    // Note: The CLI filters by checking if validator_info program ID is in ConfigKeys
-    // We rely on jsonParsed filtering by type === "validatorInfo"
-    console.log(`🔍 Fetching validator info from Config program...`);
     const gpa = await rpc("getProgramAccounts", [
       "Config1111111111111111111111111111111111111",
       { 
@@ -484,8 +481,6 @@ export async function POST(req: NextRequest) {
         commitment: "confirmed",
       },
     ]);
-    console.log(`🔍 DEBUG: Received ${gpa?.length || 0} total accounts from Config program`);
-    console.log(`🔍 DEBUG: getProgramAccounts likely has NO pagination - this is ALL the accounts`);
 
     // identityPubkey -> { name, iconUrl, website, description }
     const infoMap = new Map<
@@ -493,11 +488,9 @@ export async function POST(req: NextRequest) {
       { name?: string; iconUrl?: string; website?: string; description?: string }
     >();
 
-    let parsedInfoCount = 0;
     for (const item of gpa as any[]) {
       const parsed = item?.account?.data?.parsed;
       if (!parsed || parsed.type !== "validatorInfo") continue;
-      parsedInfoCount++;
       const keys = parsed?.info?.keys || [];
       const signer = keys.find((k: any) => k && k.signer && typeof k.pubkey === "string");
       const cfg = parsed?.info?.configData || {};
@@ -510,7 +503,6 @@ export async function POST(req: NextRequest) {
         infoMap.set(identity, { name, iconUrl, website, description });
       }
     }
-    console.log(`🔍 DEBUG: Parsed ${parsedInfoCount} validatorInfo records, ${infoMap.size} have metadata`);
 
     // 2b) Fetch most recent validator info history for change detection
     console.log("📚 Fetching validator info history for change detection...");
@@ -569,20 +561,15 @@ export async function POST(req: NextRequest) {
 
     // 3) Process each validator
     logProgress(`Processing ${allVotes.length} validators...`);
-    console.log(`🔄 Starting validator loop: ${allVotes.length} total validators`);
-    console.log(`🔍 DEBUG: allVotes array length = ${allVotes.length}`);
-    console.log(`🔍 DEBUG: First validator = ${allVotes[0]?.votePubkey || 'undefined'}`);
-    console.log(`🔍 DEBUG: Last validator = ${allVotes[allVotes.length - 1]?.votePubkey || 'undefined'}`);
     
     let validatorIndex = 0;
     const totalValidators = allVotes.length;
     for (const v of allVotes) {
       try {
-        // Log every 10 validators to track progress more closely
-        if (validatorIndex % 10 === 0) {
+        // Log progress every 200 validators
+        if (validatorIndex > 0 && validatorIndex % 200 === 0) {
           const memUsage = process.memoryUsage();
           const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
-          console.log(`🔍 Processing validator ${validatorIndex}/${totalValidators} (${v.votePubkey.slice(0, 8)}...) - ${memMB}MB heap`);
           logProgress(`Processed ${validatorIndex}/${totalValidators} validators (${memMB}MB heap)...`);
         }
         const meta = infoMap.get(v.nodePubkey) || {};
@@ -975,26 +962,59 @@ export async function POST(req: NextRequest) {
       validatorIndex++; // Increment counter for next validator
     }
 
-    console.log(`🔍 DEBUG: Loop exited! validatorIndex = ${validatorIndex}, totalValidators = ${totalValidators}`);
-    console.log(`🏁 LOOP COMPLETED! Processed ${validatorIndex} validators`);
     logProgress(`✅ Finished processing all ${validatorIndex} validators`);
-    console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history records queued`);
-    console.log(`📊 INFO HISTORY DEBUG: enabled=${infoHistoryEnabled}, lastInfoMapSize=${lastInfoMap.size}, recordsQueued=${infoHistoryToCreate.length}`);
-    console.log(`🔍 DEBUG: About to batch create/update records...`);
-    if (infoHistoryToCreate.length > 0) {
-      console.log(`📊 INFO HISTORY SAMPLE:`, JSON.stringify(infoHistoryToCreate[0], null, 2));
-    } else if (infoHistoryEnabled) {
-      console.log(`⚠️ INFO HISTORY: Table enabled but NO records queued! This means no validator info changed.`);
-    }
-    console.log(`📊 Breakdown: ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length} perf create, ${perfRecordsToUpdate.length} perf update, ${mevSnapshotsToCreate.length} MEV, ${mevEventsToCreate.length} MEV events`);
+    console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history queued`);
 
     // BATCH CREATE/UPDATE operations to avoid timeout
-    console.log(`🔍 DEBUG: REACHED BATCH OPERATIONS SECTION`);
-    console.log(`📦 Batching operations: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} validator updates`);
-    logProgress(`Batching: ${validatorsToCreate.length} new validators, ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
+    logProgress(`Batching: ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
     
     // Airtable allows max 10 records per create/update call, so batch them
     const batchSize = 10;
+    
+    // ========== VALIDATOR INFO HISTORY CREATION (MOVED TO FIRST!) ==========
+    // Do this FIRST so if logs are truncated, at least this runs
+    let infoHistoryCreated = 0;
+    console.log(`\n📚 ========== VALIDATOR INFO HISTORY CREATION (FIRST PRIORITY) ==========`);
+    console.log(`📊 INFO HISTORY STATUS: enabled=${infoHistoryEnabled}, toCreate=${infoHistoryToCreate.length}`);
+    console.log(`⏱️  Current time: ${new Date().toISOString()}`);
+    
+    if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
+      try {
+        console.log(`🚀 Starting info history creation for ${infoHistoryToCreate.length} records...`);
+        logProgress(`Creating ${infoHistoryToCreate.length} validator info history records...`);
+        console.log(`📝 Sample record (first):`, JSON.stringify(infoHistoryToCreate[0], null, 2));
+        if (infoHistoryToCreate.length > 1) {
+          console.log(`📝 Sample record (last):`, JSON.stringify(infoHistoryToCreate[infoHistoryToCreate.length - 1], null, 2));
+        }
+        
+        for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
+          const batch = infoHistoryToCreate.slice(i, i + batchSize);
+          await tb.validatorInfoHistory.create(batch);
+          infoHistoryCreated += batch.length;
+          // Only log every 10 batches (every 100 records)
+          if ((i / batchSize + 1) % 10 === 0 || i + batchSize >= infoHistoryToCreate.length) {
+            console.log(`  ✓ Created ${infoHistoryCreated}/${infoHistoryToCreate.length} records...`);
+          }
+        }
+        console.log(`✅✅✅ SUCCESSFULLY CREATED ${infoHistoryCreated} VALIDATOR INFO HISTORY RECORDS ✅✅✅`);
+        logProgress(`✅ Created ${infoHistoryCreated} validator info history records`);
+      } catch (error: any) {
+        console.error(`\n❌❌❌ VALIDATOR INFO HISTORY CREATION FAILED ❌❌❌`);
+        console.error(`❌ Error message: ${error.message}`);
+        console.error(`❌ Error name: ${error.name}`);
+        console.error(`❌ Error statusCode: ${error.statusCode}`);
+        logProgress(`❌ Info history creation failed: ${error.message}`);
+        console.error("❌ Full error object:", JSON.stringify(error, null, 2));
+        console.error("❌ Stack trace:", error.stack);
+      }
+    } else if (!infoHistoryEnabled) {
+      console.log(`⚠️ Info history tracking skipped (table not available or initial fetch failed)`);
+      logProgress(`⚠️ Info history tracking skipped (table not available or initial fetch failed)`);
+    } else {
+      console.log(`ℹ️ No validator info changes detected (${infoHistoryToCreate.length} records to create)`);
+      logProgress(`ℹ️ No validator info changes detected (${infoHistoryToCreate.length} records to create)`);
+    }
+    console.log(`📚 ========== END VALIDATOR INFO HISTORY CREATION ==========\n`);
     
     // Create new validators
     for (let i = 0; i < validatorsToCreate.length; i += batchSize) {
@@ -1064,40 +1084,6 @@ export async function POST(req: NextRequest) {
       await tb.mevEvents.create(batch);
     }
     if (mevEventsToCreate.length > 0) logProgress(`Created ${mevEventsToCreate.length} MEV events`);
-    
-    // Create validator info history records (if enabled)
-    let infoHistoryCreated = 0;
-    console.log(`\n📚 ========== VALIDATOR INFO HISTORY CREATION ==========`);
-    console.log(`📊 INFO HISTORY STATUS: enabled=${infoHistoryEnabled}, toCreate=${infoHistoryToCreate.length}`);
-    console.log(`⏱️  Current time: ${new Date().toISOString()}`);
-    
-    if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
-      try {
-        console.log(`🚀 Starting info history creation for ${infoHistoryToCreate.length} records...`);
-        logProgress(`Creating ${infoHistoryToCreate.length} validator info history records...`);
-        console.log(`📝 Sample record (first):`, JSON.stringify(infoHistoryToCreate[0], null, 2));
-        if (infoHistoryToCreate.length > 1) {
-          console.log(`📝 Sample record (last):`, JSON.stringify(infoHistoryToCreate[infoHistoryToCreate.length - 1], null, 2));
-        }
-        
-        for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
-          const batch = infoHistoryToCreate.slice(i, i + batchSize);
-          await tb.validatorInfoHistory.create(batch);
-          infoHistoryCreated += batch.length;
-          console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1}: ${batch.length} records created`);
-        }
-        logProgress(`✅ Created ${infoHistoryCreated} validator info history records`);
-      } catch (error: any) {
-        logProgress(`❌ Info history creation failed: ${error.message}`);
-        console.error("Full error:", error);
-        console.error("Stack:", error.stack);
-      }
-    } else if (!infoHistoryEnabled) {
-      logProgress(`⚠️ Info history tracking skipped (table not available or initial fetch failed)`);
-    } else {
-      logProgress(`ℹ️ No validator info changes detected (${infoHistoryToCreate.length} records to create)`);
-    }
-
     console.log(`\n🎉 ========== SNAPSHOT DATA COLLECTION COMPLETE ==========`);
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
