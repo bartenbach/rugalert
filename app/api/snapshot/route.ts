@@ -1045,6 +1045,24 @@ export async function POST(req: NextRequest) {
 
     logProgress(`✅ Finished processing all ${validatorIndex} validators`);
     console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history queued`);
+    console.log(`📊 Performance queue: ${perfRecordsToCreate.length} to create, ${perfRecordsToUpdate.length} to update`);
+    
+    // Debug: Show first few perf records being created
+    if (perfRecordsToCreate.length > 0) {
+      console.log(`\n📝 Performance records to CREATE (first 3):`);
+      for (let i = 0; i < Math.min(3, perfRecordsToCreate.length); i++) {
+        const rec = perfRecordsToCreate[i];
+        console.log(`  ${i + 1}. ${rec.fields.votePubkey?.substring(0, 8)}... epoch=${rec.fields.epoch} leaderSlots=${rec.fields.leaderSlots} produced=${rec.fields.blocksProduced}`);
+      }
+    }
+    
+    if (perfRecordsToUpdate.length > 0) {
+      console.log(`\n📝 Performance records to UPDATE (first 3):`);
+      for (let i = 0; i < Math.min(3, perfRecordsToUpdate.length); i++) {
+        const rec = perfRecordsToUpdate[i];
+        console.log(`  ${i + 1}. ${rec.fields.votePubkey?.substring(0, 8)}... epoch=${rec.fields.epoch} leaderSlots=${rec.fields.leaderSlots} produced=${rec.fields.blocksProduced}`);
+      }
+    }
 
     // BATCH CREATE/UPDATE operations to avoid timeout
     logProgress(`Batching: ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
@@ -1120,17 +1138,35 @@ export async function POST(req: NextRequest) {
     if (stakeRecordsCreated > 0) logProgress(`Created ${stakeRecordsCreated} stake records`);
     
     // Create performance records
-    for (let i = 0; i < perfRecordsToCreate.length; i += batchSize) {
-      const batch = perfRecordsToCreate.slice(i, i + batchSize);
-      await tb.performanceHistory.create(batch);
-      performanceRecordsCreated += batch.length;
+    console.log(`\n⚡ CREATING ${perfRecordsToCreate.length} performance records...`);
+    try {
+      for (let i = 0; i < perfRecordsToCreate.length; i += batchSize) {
+        const batch = perfRecordsToCreate.slice(i, i + batchSize);
+        console.log(`  Creating batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)...`);
+        await tb.performanceHistory.create(batch);
+        performanceRecordsCreated += batch.length;
+        console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1} created successfully`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Performance record creation failed:`, error.message);
+      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+      throw error; // Re-throw to stop the job
     }
     
     // Update performance records (current epoch)
-    for (let i = 0; i < perfRecordsToUpdate.length; i += batchSize) {
-      const batch = perfRecordsToUpdate.slice(i, i + batchSize);
-      await tb.performanceHistory.update(batch);
-      performanceRecordsCreated += batch.length; // Count updates as well
+    console.log(`\n⚡ UPDATING ${perfRecordsToUpdate.length} performance records...`);
+    try {
+      for (let i = 0; i < perfRecordsToUpdate.length; i += batchSize) {
+        const batch = perfRecordsToUpdate.slice(i, i + batchSize);
+        console.log(`  Updating batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)...`);
+        await tb.performanceHistory.update(batch);
+        performanceRecordsCreated += batch.length; // Count updates as well
+        console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1} updated successfully`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Performance record update failed:`, error.message);
+      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+      throw error; // Re-throw to stop the job
     }
     logProgress(`Performance: ${perfRecordsToCreate.length} created, ${perfRecordsToUpdate.length} updated`);
     
