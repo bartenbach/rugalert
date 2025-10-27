@@ -207,6 +207,12 @@ export async function POST(req: NextRequest) {
     const blockProductionData = blockProduction?.value?.byIdentity || {};
     logProgress("Block production data fetched");
     
+    // Get full leader schedule for total leader slots (not just elapsed)
+    logProgress("Fetching leader schedule...");
+    const leaderSchedule = await rpc("getLeaderSchedule", [null, { epoch }]);
+    const leaderScheduleData: Record<string, number[]> = leaderSchedule || {};
+    logProgress(`Leader schedule fetched (${Object.keys(leaderScheduleData).length} validators)`);
+    
     // Fetch ALL stake accounts at once to avoid per-validator RPC calls
     // WARNING: This can be very expensive on mainnet (millions of accounts)
     // Set ENABLE_STAKE_TRACKING=false to disable if causing timeouts
@@ -757,17 +763,26 @@ export async function POST(req: NextRequest) {
       const blockData = blockProductionData[v.nodePubkey];
       const perfKey = `${v.votePubkey}-${epoch}`;
       
-        let skipRate = 0;
+      let skipRate = 0;
       let leaderSlots = 0;
       let blocksProduced = 0;
-        if (blockData) {
-        leaderSlots = Number(blockData[0] || 0);
+      
+      // Get TOTAL leader slots from leader schedule (full epoch assignment)
+      const scheduleSlots = leaderScheduleData[v.votePubkey];
+      if (scheduleSlots && Array.isArray(scheduleSlots)) {
+        leaderSlots = scheduleSlots.length; // Total leader slots for entire epoch
+      }
+      
+      // Get blocks produced so far from block production data
+      if (blockData) {
         blocksProduced = Number(blockData[1] || 0);
-          
-          if (leaderSlots > 0) {
-            skipRate = ((leaderSlots - blocksProduced) / leaderSlots) * 100;
-          }
+        
+        // Calculate skip rate based on elapsed leader slots (blockData[0]) vs blocks produced
+        const elapsedLeaderSlots = Number(blockData[0] || 0);
+        if (elapsedLeaderSlots > 0) {
+          skipRate = ((elapsedLeaderSlots - blocksProduced) / elapsedLeaderSlots) * 100;
         }
+      }
         
         // Get vote credits from pre-fetched map and calculate percentage
         const voteCredits = voteCreditsMap.get(v.votePubkey);

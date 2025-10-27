@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tb } from '../../../../lib/airtable';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   req: NextRequest,
@@ -37,6 +38,7 @@ export async function GET(
           method: 'getEpochInfo',
           params: [],
         }),
+        cache: 'no-store',
       }),
       fetch(rpcUrl, {
         method: 'POST',
@@ -47,6 +49,7 @@ export async function GET(
           method: 'getVoteAccounts',
           params: [],
         }),
+        cache: 'no-store',
       }),
     ]);
     
@@ -124,7 +127,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       validator: {
         votePubkey: validator.get('votePubkey'),
         identityPubkey: validator.get('identityPubkey'),
@@ -142,6 +145,13 @@ export async function GET(
       mev: mevData,
       currentEpoch,
     });
+    
+    // Aggressive cache busting
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    response.headers.set('CDN-Cache-Control', 'no-store');
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store');
+    
+    return response;
   } catch (error: any) {
     console.error('❌ validator-info error:', error);
     return NextResponse.json(

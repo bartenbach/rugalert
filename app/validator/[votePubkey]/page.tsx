@@ -421,32 +421,45 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const s = await fetch(`/api/series/${params.votePubkey}`);
+      const s = await fetch(`/api/series/${params.votePubkey}`, {
+        cache: "no-store",
+      });
       const sj = await s.json();
       setSeries(sj.series || []);
-      const m = await fetch(`/api/meta/${params.votePubkey}`);
+      const m = await fetch(`/api/meta/${params.votePubkey}`, {
+        cache: "no-store",
+      });
       const mj = await m.json();
       setMeta(mj.meta || null);
-      const e = await fetch(`/api/validator-events/${params.votePubkey}`);
+      const e = await fetch(`/api/validator-events/${params.votePubkey}`, {
+        cache: "no-store",
+      });
       const ej = await e.json();
       setEvents(ej.items || []);
-      const i = await fetch(`/api/validator-info/${params.votePubkey}`);
+      const i = await fetch(`/api/validator-info/${params.votePubkey}`, {
+        cache: "no-store",
+      });
       const ij = await i.json();
       setValidatorInfo(ij.error ? null : ij);
-      const sh = await fetch(`/api/stake-history/${params.votePubkey}`);
+      const sh = await fetch(`/api/stake-history/${params.votePubkey}`, {
+        cache: "no-store",
+      });
       const shj = await sh.json();
       setStakeHistory(shj.history || []);
 
       // Fetch validator info history
       const ih = await fetch(
-        `/api/validator-info-history/${params.votePubkey}`
+        `/api/validator-info-history/${params.votePubkey}`,
+        { cache: "no-store" }
       );
       const ihj = await ih.json();
       setInfoHistory(ihj.history || []);
 
       // Fetch uptime data
       try {
-        const u = await fetch(`/api/uptime/${params.votePubkey}`);
+        const u = await fetch(`/api/uptime/${params.votePubkey}`, {
+          cache: "no-store",
+        });
         const uj = await u.json();
         // Use overall uptime from API (works with any amount of data, even partial day)
         if (uj.overallUptime !== undefined) {
@@ -725,13 +738,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 {meta?.avatarUrl ? (
                   <img
                     src={meta.avatarUrl}
-                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-700 ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:border-orange-400/60"
+                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-[1200ms] ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:border-orange-400/60"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";
                     }}
                   />
                 ) : (
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-700 ease-in-out hover:border-orange-400/60 hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-[1200ms] ease-in-out hover:border-orange-400/60 hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
                     ?
                   </div>
                 )}
@@ -1126,15 +1139,28 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           validatorInfo.performance.leaderSlots ? (
                             <>
                               {(() => {
-                                const leaderSlots =
+                                const totalLeaderSlots =
                                   validatorInfo.performance.leaderSlots;
                                 const produced =
                                   validatorInfo.performance.blocksProduced;
-                                const skipped = leaderSlots - produced;
-                                const skipPercent = (
-                                  (skipped / leaderSlots) *
-                                  100
-                                ).toFixed(1);
+                                const skipRate =
+                                  validatorInfo.performance.skipRate;
+
+                                // Calculate elapsed leader slots and skipped from skip rate
+                                // skipRate = (skipped / elapsed) * 100
+                                // We know: skipRate, produced
+                                // elapsed = produced / (1 - skipRate / 100)
+                                // skipped = elapsed - produced
+                                const elapsedLeaderSlots =
+                                  skipRate < 100
+                                    ? Math.round(
+                                        produced / (1 - skipRate / 100)
+                                      )
+                                    : produced;
+                                const skipped = Math.max(
+                                  0,
+                                  elapsedLeaderSlots - produced
+                                );
 
                                 // Abbreviate large numbers
                                 const formatCompact = (num: number) => {
@@ -1148,7 +1174,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                 return (
                                   <div className="flex flex-col gap-0.5">
                                     <span className="text-gray-400 text-xs">
-                                      Leader slots: {formatCompact(leaderSlots)}
+                                      {formatCompact(totalLeaderSlots)} leader
+                                      slots
                                     </span>
                                     <span>
                                       <span className="text-green-400 font-medium">
@@ -1162,7 +1189,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                             : "text-red-400"
                                         }
                                       >
-                                        {skipped} ({skipPercent}%) skipped
+                                        {formatCompact(skipped)} skipped
                                       </span>
                                     </span>
                                   </div>
