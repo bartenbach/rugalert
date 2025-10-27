@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Validator = {
@@ -44,6 +45,7 @@ type SortKey =
 type SortDirection = "asc" | "desc";
 
 export default function ValidatorsPage() {
+  const searchParams = useSearchParams();
   const [allValidators, setAllValidators] = useState<Validator[]>([]); // All validators loaded once
   const [displayedValidators, setDisplayedValidators] = useState<Validator[]>(
     []
@@ -58,6 +60,23 @@ export default function ValidatorsPage() {
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
+
+  // Read filter params from URL
+  // Supported URL parameters:
+  //   ?commission=5            - Exact commission (e.g., 5%)
+  //   ?commission_min=0        - Minimum commission (e.g., 0%)
+  //   ?commission_max=5        - Maximum commission (e.g., 5%)
+  //   ?mev_commission_min=0    - Minimum MEV commission
+  //   ?mev_commission_max=5    - Maximum MEV commission
+  //   ?uptime_min=99           - Minimum uptime percentage (e.g., 99%)
+  // Example: /validators?commission=5 (shows all validators with exactly 5% commission)
+  // Example: /validators?commission_max=5 (shows all validators with <= 5% commission)
+  const commission = searchParams.get("commission");
+  const commissionMin = searchParams.get("commission_min");
+  const commissionMax = searchParams.get("commission_max");
+  const mevCommissionMin = searchParams.get("mev_commission_min");
+  const mevCommissionMax = searchParams.get("mev_commission_max");
+  const uptimeMin = searchParams.get("uptime_min");
 
   // Initial load - fetch ALL validators at once
   const loadValidators = async () => {
@@ -111,6 +130,41 @@ export default function ValidatorsPage() {
       );
     }
 
+    // Apply URL parameter filters
+    if (commission) {
+      const commissionValue = parseFloat(commission);
+      filtered = filtered.filter((v) => v.commission === commissionValue);
+    }
+
+    if (commissionMin) {
+      const minValue = parseFloat(commissionMin);
+      filtered = filtered.filter((v) => v.commission >= minValue);
+    }
+
+    if (commissionMax) {
+      const maxValue = parseFloat(commissionMax);
+      filtered = filtered.filter((v) => v.commission <= maxValue);
+    }
+
+    if (mevCommissionMin) {
+      const minValue = parseFloat(mevCommissionMin);
+      filtered = filtered.filter(
+        (v) => (v.mevCommission ?? Infinity) >= minValue
+      );
+    }
+
+    if (mevCommissionMax) {
+      const maxValue = parseFloat(mevCommissionMax);
+      filtered = filtered.filter(
+        (v) => (v.mevCommission ?? Infinity) <= maxValue
+      );
+    }
+
+    if (uptimeMin) {
+      const minValue = parseFloat(uptimeMin);
+      filtered = filtered.filter((v) => (v.uptimePercent ?? 0) >= minValue);
+    }
+
     // Apply sorting
     const sorted = [...filtered].sort((a, b) => {
       let aVal: any;
@@ -161,7 +215,18 @@ export default function ValidatorsPage() {
     });
 
     return sorted;
-  }, [searchQuery, allValidators, sortKey, sortDirection]);
+  }, [
+    searchQuery,
+    allValidators,
+    sortKey,
+    sortDirection,
+    commission,
+    commissionMin,
+    commissionMax,
+    mevCommissionMin,
+    mevCommissionMax,
+    uptimeMin,
+  ]);
 
   // Update displayed validators when displayCount or filteredValidators changes
   useEffect(() => {
@@ -266,6 +331,47 @@ export default function ValidatorsPage() {
           <div className="text-sm text-gray-400 mt-2 text-center">
             Found {filteredValidators.length} validator
             {filteredValidators.length !== 1 ? "s" : ""}
+          </div>
+        )}
+
+        {/* Active URL Filters Indicator */}
+        {(commission ||
+          commissionMin ||
+          commissionMax ||
+          mevCommissionMin ||
+          mevCommissionMax ||
+          uptimeMin) && (
+          <div className="mt-4 max-w-2xl mx-auto">
+            <div className="glass rounded-xl p-3 border border-orange-500/30 bg-orange-500/5">
+              <div className="flex items-start gap-2">
+                <div className="text-orange-400 text-lg mt-0.5">🔍</div>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-orange-400 mb-1">
+                    Active Filters
+                  </div>
+                  <div className="text-xs text-gray-300 space-y-1">
+                    {commission && <div>• Commission: {commission}%</div>}
+                    {commissionMin && (
+                      <div>• Commission min: {commissionMin}%</div>
+                    )}
+                    {commissionMax && (
+                      <div>• Commission max: {commissionMax}%</div>
+                    )}
+                    {mevCommissionMin && (
+                      <div>• MEV Commission min: {mevCommissionMin}%</div>
+                    )}
+                    {mevCommissionMax && (
+                      <div>• MEV Commission max: {mevCommissionMax}%</div>
+                    )}
+                    {uptimeMin && <div>• Uptime min: {uptimeMin}%</div>}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-2">
+                    Showing {filteredValidators.length} of{" "}
+                    {allValidators.length} validators
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

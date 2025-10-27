@@ -215,11 +215,11 @@ export async function POST(req: NextRequest) {
     const leaderScheduleData: Record<string, number[]> = leaderSchedule || {};
     logProgress(`Leader schedule fetched (${Object.keys(leaderScheduleData).length} validators)`);
     
-    // Debug: Log first few validators with leader slots
+    // Debug: Log first few validators with leader slots (keyed by identity pubkey)
     const sampleKeys = Object.keys(leaderScheduleData).slice(0, 3);
     for (const key of sampleKeys) {
       const slots = leaderScheduleData[key];
-      console.log(`  Sample: ${key.substring(0, 8)}... has ${slots?.length || 0} leader slots`);
+      console.log(`  Sample identity: ${key.substring(0, 8)}... has ${slots?.length || 0} leader slots`);
     }
     
     // Fetch ALL stake accounts at once to avoid per-validator RPC calls
@@ -777,7 +777,8 @@ export async function POST(req: NextRequest) {
       let blocksProduced = 0;
       
       // Get TOTAL leader slots from leader schedule (full epoch assignment)
-      const scheduleSlots = leaderScheduleData[v.votePubkey];
+      // NOTE: Leader schedule is keyed by IDENTITY pubkey (nodePubkey), not vote pubkey!
+      const scheduleSlots = leaderScheduleData[v.nodePubkey];
       if (scheduleSlots && Array.isArray(scheduleSlots)) {
         leaderSlots = scheduleSlots.length; // Total leader slots for entire epoch
       }
@@ -791,7 +792,7 @@ export async function POST(req: NextRequest) {
         // (this happens early in epoch or for validators not in schedule)
         if (leaderSlots === 0 && elapsedLeaderSlots > 0) {
           leaderSlots = elapsedLeaderSlots;
-          console.log(`  ⚠️  ${v.votePubkey.substring(0, 8)}... not in leader schedule, using elapsed: ${leaderSlots}`);
+          console.log(`  ⚠️  ${v.votePubkey.substring(0, 8)}... (identity: ${v.nodePubkey.substring(0, 8)}...) not in leader schedule, using elapsed: ${leaderSlots}`);
         }
         
         // Calculate skip rate based on elapsed leader slots vs blocks produced
@@ -802,7 +803,7 @@ export async function POST(req: NextRequest) {
       
       // Debug log for first 3 validators
       if (validatorIndex < 3) {
-        console.log(`  Validator ${validatorIndex + 1}: ${v.votePubkey.substring(0, 8)}... - leaderSlots=${leaderSlots}, produced=${blocksProduced}, skipRate=${skipRate.toFixed(2)}%`);
+        console.log(`  Validator ${validatorIndex + 1}: vote=${v.votePubkey.substring(0, 8)}... identity=${v.nodePubkey.substring(0, 8)}... - leaderSlots=${leaderSlots}, produced=${blocksProduced}, skipRate=${skipRate.toFixed(2)}%`);
       }
         
         // Get vote credits from pre-fetched map and calculate percentage
