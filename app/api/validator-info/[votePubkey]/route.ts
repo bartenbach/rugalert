@@ -62,10 +62,9 @@ export async function GET(
       (v: any) => v.votePubkey === votePubkey
     ) || false;
 
-    // Fetch latest performance data (most recent epoch)
+    // Fetch performance data for CURRENT epoch (not most recent completed)
     const perfRecords = await tb.performanceHistory.select({
-      filterByFormula: `{votePubkey} = "${votePubkey}"`,
-      sort: [{ field: 'epoch', direction: 'desc' }],
+      filterByFormula: `AND({votePubkey} = "${votePubkey}", {epoch} = ${currentEpoch})`,
       maxRecords: 1,
     }).firstPage();
 

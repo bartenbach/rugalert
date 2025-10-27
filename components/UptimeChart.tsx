@@ -128,7 +128,26 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
           </p>
         </div>
         <div className="text-right">
-          <div className="text-4xl font-bold text-white">
+          {data.overallUptime >= 99.95 && (
+            <div className="flex items-center justify-end gap-2 mb-1">
+              <span
+                className="text-base"
+                title="Platinum tier: Elite uptime ≥ 99.95%"
+              >
+                💎
+              </span>
+              <span className="text-xs font-bold text-green-400">PLATINUM</span>
+            </div>
+          )}
+          <div
+            className={`text-4xl font-bold ${
+              data.overallUptime >= 99.9
+                ? "text-green-400"
+                : data.overallUptime >= 99.0
+                ? "text-yellow-400"
+                : "text-red-400"
+            }`}
+          >
             {data.overallUptime.toFixed(2)}%
           </div>
         </div>

@@ -87,13 +87,39 @@ export default function StakeDistributionPie({
     return null;
   };
 
-  const renderCustomLabel = (entry: any) => {
-    const percent = parseFloat(entry.percentage);
-    // Only show label if slice is > 5%
-    if (percent > 5) {
-      return `${percent}%`;
-    }
-    return "";
+  const renderCustomLabel = ({
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    percent,
+  }: any) => {
+    // Only show label if slice is > 8% to avoid overlapping
+    if (percent < 0.08) return null;
+
+    const RADIAN = Math.PI / 180;
+    // Position label inside the slice, closer to outer edge for better spacing
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="white"
+        textAnchor="middle"
+        dominantBaseline="central"
+        className="font-bold"
+        style={{
+          fontSize: "13px",
+          textShadow: "0 0 4px rgba(0,0,0,0.9)",
+        }}
+      >
+        {`${(percent * 100).toFixed(1)}%`}
+      </text>
+    );
   };
 
   const handleSliceClick = (data: any) => {
@@ -105,7 +131,7 @@ export default function StakeDistributionPie({
 
   return (
     <div
-      className="w-full h-full flex items-center justify-center overflow-hidden px-2"
+      className="w-full h-full flex items-center justify-center px-2"
       style={{ outline: "none" }}
     >
       <style>{`
@@ -117,21 +143,35 @@ export default function StakeDistributionPie({
         }
         .recharts-legend-wrapper {
           overflow: visible !important;
+          width: 100% !important;
         }
         .recharts-default-legend {
           display: flex !important;
           flex-wrap: wrap !important;
           justify-content: center !important;
-          gap: 4px !important;
+          gap: 6px 8px !important;
           max-width: 100% !important;
+          padding: 0 16px !important;
+          line-height: 1.5 !important;
         }
         .recharts-legend-item {
-          margin: 2px 3px !important;
-          max-width: calc(50% - 10px) !important;
+          margin: 0 !important;
+          flex: 0 1 auto !important;
+          max-width: 100% !important;
         }
-        @media (min-width: 640px) {
+        @media (max-width: 639px) {
           .recharts-legend-item {
-            max-width: none !important;
+            flex: 0 1 calc(50% - 8px) !important;
+          }
+        }
+        @media (min-width: 640px) and (max-width: 1023px) {
+          .recharts-legend-item {
+            flex: 0 1 calc(33.333% - 8px) !important;
+          }
+        }
+        @media (min-width: 1024px) {
+          .recharts-legend-item {
+            flex: 0 1 auto !important;
           }
         }
       `}</style>
@@ -140,10 +180,11 @@ export default function StakeDistributionPie({
           <Pie
             data={chartData}
             cx="50%"
-            cy="40%"
+            cy="45%"
             labelLine={false}
             label={renderCustomLabel}
-            outerRadius="58%"
+            outerRadius="65%"
+            innerRadius="0%"
             fill="#8884d8"
             dataKey="value"
             animationBegin={0}
@@ -167,33 +208,36 @@ export default function StakeDistributionPie({
           <Tooltip content={<CustomTooltip />} />
           <Legend
             verticalAlign="bottom"
-            height={50}
+            height={75}
             formatter={(value, entry: any) => {
               const data = entry.payload;
+
               // If it's "Others" or has no address, just show the name
               if (!data.fullAddress || data.name.includes("Others")) {
                 return (
-                  <span className="text-[9px] sm:text-[10px] md:text-[11px] text-gray-300 font-medium">
+                  <span className="text-[10px] sm:text-xs text-gray-300 font-medium">
                     {value}
                   </span>
                 );
               }
-              // Otherwise, make it a clickable link to Solscan
+              // Otherwise, make it a clickable link to Solscan with full name
               return (
                 <a
                   href={`https://solscan.io/account/${data.fullAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[9px] sm:text-[10px] md:text-[11px] text-gray-300 hover:text-orange-400 transition-colors duration-200 font-medium"
+                  className="text-[10px] sm:text-xs text-gray-300 hover:text-orange-400 transition-colors duration-200 font-medium"
+                  title={`${value} - Click to view on Solscan`}
                 >
                   {value}
                 </a>
               );
             }}
             wrapperStyle={{
-              paddingTop: "10px",
-              fontSize: "9px",
+              paddingTop: "8px",
+              fontSize: "11px",
             }}
+            iconSize={10}
           />
         </PieChart>
       </ResponsiveContainer>

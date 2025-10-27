@@ -8,6 +8,7 @@ const base = new Airtable({
 
 const VALIDATORS_TABLE = "validators";
 const MEV_SNAPSHOTS_TABLE = "mev_snapshots";
+const DAILY_UPTIME_TABLE = "daily_uptime";
 
 export const dynamic = 'force-dynamic';
 
@@ -104,6 +105,38 @@ export async function GET(request: NextRequest) {
         fetchNextPage();
       });
 
+    // Fetch uptime data from daily_uptime table
+    // Aggregate by validator to get overall uptime percentage
+    const uptimeMap = new Map<string, { totalChecks: number; delinquentChecks: number; days: number }>();
+    
+    await base(DAILY_UPTIME_TABLE)
+      .select({
+        fields: ['votePubkey', 'uptimeChecks', 'delinquentChecks'],
+        pageSize: 100,
+      })
+      .eachPage((pageRecords, fetchNextPage) => {
+        pageRecords.forEach((record) => {
+          const votePubkey = record.fields.votePubkey as string;
+          const uptimeChecks = Number(record.fields.uptimeChecks || 0);
+          const delinquentChecks = Number(record.fields.delinquentChecks || 0);
+          
+          // Aggregate uptime data per validator
+          const existing = uptimeMap.get(votePubkey);
+          if (existing) {
+            existing.totalChecks += uptimeChecks;
+            existing.delinquentChecks += delinquentChecks;
+            existing.days += 1;
+          } else {
+            uptimeMap.set(votePubkey, {
+              totalChecks: uptimeChecks,
+              delinquentChecks: delinquentChecks,
+              days: 1,
+            });
+          }
+        });
+        fetchNextPage();
+      });
+
     // Note: Stake (including activating/deactivating) is cached in the validators table
     // for performance. No need to join with stake_history for current values.
 
@@ -121,6 +154,17 @@ export async function GET(request: NextRequest) {
       
       // Only include validators with stake > 0
       if (activeStake > 0) {
+        // Calculate uptime percentage from aggregated data
+        const uptimeData = uptimeMap.get(votePubkey);
+        let uptimePercent: number | null = null;
+        let uptimeDays: number | null = null;
+        
+        if (uptimeData && uptimeData.totalChecks > 0) {
+          const upChecks = uptimeData.totalChecks - uptimeData.delinquentChecks;
+          uptimePercent = (upChecks / uptimeData.totalChecks) * 100;
+          uptimeDays = uptimeData.days;
+        }
+        
         validatorsWithStake.push({
           ...validator,
           // commission is already in validator object (cached by snapshot job)
@@ -134,6 +178,9 @@ export async function GET(request: NextRequest) {
           // stakeAccountCount comes from validator object (cached in DB)
           // MEV commission from mev_snapshots
           mevCommission: mevCommissionMap.get(votePubkey) ?? null,
+          // Uptime data from daily_uptime table
+          uptimePercent,
+          uptimeDays,
         });
       }
     });
@@ -142,6 +189,17 @@ export async function GET(request: NextRequest) {
     // (This catches delinquent validators that haven't been processed)
     rpcStakeMap.forEach((rpcStake, votePubkey) => {
       if (!processedVotePubkeys.has(votePubkey) && rpcStake > 0) {
+        // Calculate uptime percentage from aggregated data
+        const uptimeData = uptimeMap.get(votePubkey);
+        let uptimePercent: number | null = null;
+        let uptimeDays: number | null = null;
+        
+        if (uptimeData && uptimeData.totalChecks > 0) {
+          const upChecks = uptimeData.totalChecks - uptimeData.delinquentChecks;
+          uptimePercent = (upChecks / uptimeData.totalChecks) * 100;
+          uptimeDays = uptimeData.days;
+        }
+        
         validatorsWithStake.push({
           votePubkey,
           identityPubkey: null,
@@ -154,6 +212,8 @@ export async function GET(request: NextRequest) {
           deactivatingStake: 0,
           delinquent: delinquentSet.has(votePubkey),
           stakeAccountCount: 0, // Will be populated by snapshot job
+          uptimePercent,
+          uptimeDays,
         });
       }
     });
@@ -188,6 +248,8 @@ export async function GET(request: NextRequest) {
         delinquent: validator.delinquent,
         rank: index + 1,
         stakeAccountCount: validator.stakeAccountCount,
+        uptimePercent: validator.uptimePercent,
+        uptimeDays: validator.uptimeDays,
       };
     });
 

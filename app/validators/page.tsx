@@ -20,6 +20,8 @@ type Validator = {
   stakeAccountCount: number;
   jitoEnabled?: boolean;
   mevCommission?: number | null;
+  uptimePercent?: number | null;
+  uptimeDays?: number | null;
 };
 
 type NetworkStats = {
@@ -31,6 +33,16 @@ type NetworkStats = {
   delinquentStake: number;
 };
 
+type SortKey =
+  | "rank"
+  | "name"
+  | "activeStake"
+  | "cumulativeStakePercent"
+  | "commission"
+  | "mevCommission"
+  | "uptimePercent";
+type SortDirection = "asc" | "desc";
+
 export default function ValidatorsPage() {
   const [allValidators, setAllValidators] = useState<Validator[]>([]); // All validators loaded once
   const [displayedValidators, setDisplayedValidators] = useState<Validator[]>(
@@ -41,6 +53,8 @@ export default function ValidatorsPage() {
   const [error, setError] = useState<string | null>(null);
   const [displayCount, setDisplayCount] = useState(200); // How many to show
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("activeStake");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
@@ -69,17 +83,85 @@ export default function ValidatorsPage() {
     }
   };
 
-  // Filter validators based on search query - MEMOIZED to prevent infinite re-renders
+  // Sort handler
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Set new sort key with appropriate default direction
+      setSortKey(key);
+      // Most columns default to descending (highest first), except name
+      setSortDirection(key === "name" ? "asc" : "desc");
+    }
+  };
+
+  // Filter and sort validators - MEMOIZED to prevent infinite re-renders
   const filteredValidators = useMemo(() => {
-    if (!searchQuery) return allValidators;
-    const query = searchQuery.toLowerCase();
-    return allValidators.filter(
-      (v) =>
-        v.name?.toLowerCase().includes(query) ||
-        v.votePubkey.toLowerCase().includes(query) ||
-        v.identityPubkey?.toLowerCase().includes(query)
-    );
-  }, [searchQuery, allValidators]);
+    let filtered = allValidators;
+
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (v) =>
+          v.name?.toLowerCase().includes(query) ||
+          v.votePubkey.toLowerCase().includes(query) ||
+          v.identityPubkey?.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortKey) {
+        case "rank":
+          aVal = a.rank;
+          bVal = b.rank;
+          break;
+        case "name":
+          aVal = a.name?.toLowerCase() || a.votePubkey.toLowerCase();
+          bVal = b.name?.toLowerCase() || b.votePubkey.toLowerCase();
+          break;
+        case "activeStake":
+          aVal = a.activeStake;
+          bVal = b.activeStake;
+          break;
+        case "cumulativeStakePercent":
+          aVal = a.cumulativeStakePercent;
+          bVal = b.cumulativeStakePercent;
+          break;
+        case "commission":
+          aVal = a.commission;
+          bVal = b.commission;
+          break;
+        case "mevCommission":
+          // Handle null values - push to end
+          aVal =
+            a.mevCommission ?? (sortDirection === "asc" ? Infinity : -Infinity);
+          bVal =
+            b.mevCommission ?? (sortDirection === "asc" ? Infinity : -Infinity);
+          break;
+        case "uptimePercent":
+          // Handle null values - push to end
+          aVal =
+            a.uptimePercent ?? (sortDirection === "asc" ? Infinity : -Infinity);
+          bVal =
+            b.uptimePercent ?? (sortDirection === "asc" ? Infinity : -Infinity);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [searchQuery, allValidators, sortKey, sortDirection]);
 
   // Update displayed validators when displayCount or filteredValidators changes
   useEffect(() => {
@@ -289,33 +371,104 @@ export default function ValidatorsPage() {
         <table className="w-full">
           <thead className="sticky top-20 z-40 shadow-lg backdrop-blur-xl">
             <tr className="bg-[#0a0a0a]/95 border-b-2 border-white/10">
-              <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-16 bg-[#0a0a0a]/95 first:rounded-tl-2xl">
-                Rank
-              </th>
-              <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider bg-[#0a0a0a]/95">
-                Validator
-              </th>
-              <th className="px-4 py-3.5 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-44 bg-[#0a0a0a]/95">
-                Active Stake
-              </th>
-              <th className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-32 bg-[#0a0a0a]/95">
-                Cumulative
-              </th>
-              <th className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95">
-                Commission
+              <th
+                className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-16 bg-[#0a0a0a]/95 first:rounded-tl-2xl cursor-pointer hover:text-orange-400 transition-colors select-none"
+                onClick={() => handleSort("rank")}
+              >
+                <div className="flex items-center gap-1">
+                  Rank
+                  {sortKey === "rank" && (
+                    <span className="text-orange-400">
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </div>
               </th>
               <th
-                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 last:rounded-tr-2xl"
-                title="MEV Commission on priority fees and bundles"
+                className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                onClick={() => handleSort("name")}
               >
-                MEV
+                <div className="flex items-center gap-1">
+                  Validator
+                  {sortKey === "name" && (
+                    <span className="text-orange-400">
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </div>
+              </th>
+              <th
+                className="px-4 py-3.5 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-44 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                onClick={() => handleSort("activeStake")}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Active Stake
+                  {sortKey === "activeStake" && (
+                    <span className="text-orange-400">
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </div>
+              </th>
+              <th
+                className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-32 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                onClick={() => handleSort("cumulativeStakePercent")}
+              >
+                <div className="flex items-center gap-1">
+                  Cumulative
+                  {sortKey === "cumulativeStakePercent" && (
+                    <span className="text-orange-400">
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </div>
+              </th>
+              <th
+                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                onClick={() => handleSort("commission")}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Commission
+                  {sortKey === "commission" && (
+                    <span className="text-orange-400">
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </div>
+              </th>
+              <th
+                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                title="MEV Commission on priority fees and bundles"
+                onClick={() => handleSort("mevCommission")}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  MEV
+                  {sortKey === "mevCommission" && (
+                    <span className="text-orange-400">
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </div>
+              </th>
+              <th
+                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 last:rounded-tr-2xl cursor-pointer hover:text-orange-400 transition-colors select-none"
+                onClick={() => handleSort("uptimePercent")}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Uptime
+                  {sortKey === "uptimePercent" && (
+                    <span className="text-orange-400">
+                      {sortDirection === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </div>
               </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center">
+                <td colSpan={7} className="px-6 py-12 text-center">
                   <div className="flex items-center justify-center gap-3">
                     <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                     <span className="text-gray-400">Loading validators...</span>
@@ -324,7 +477,7 @@ export default function ValidatorsPage() {
               </tr>
             ) : displayedValidators.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center">
+                <td colSpan={7} className="px-6 py-12 text-center">
                   <div className="text-4xl mb-2">🔍</div>
                   <p className="text-gray-400">No validators found</p>
                 </td>
@@ -344,7 +497,7 @@ export default function ValidatorsPage() {
                     <>
                       {showNakamotoDivider && (
                         <tr key={`nakamoto-${validator.votePubkey}`}>
-                          <td colSpan={6} className="px-0 py-0">
+                          <td colSpan={7} className="px-0 py-0">
                             <div className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50">
                               <div className="px-4 py-2 flex items-center justify-center gap-2">
                                 <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
@@ -506,6 +659,39 @@ export default function ValidatorsPage() {
                             <span className="text-gray-600 text-xs">—</span>
                           )}
                         </td>
+                        <td className="px-4 py-3 text-center">
+                          {validator.uptimePercent !== null &&
+                          validator.uptimePercent !== undefined ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              {validator.uptimePercent >= 99.95 && (
+                                <span
+                                  className="text-base"
+                                  title="Platinum tier: ≥ 99.95%"
+                                >
+                                  💎
+                                </span>
+                              )}
+                              <span
+                                className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                  validator.uptimePercent >= 99.9
+                                    ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                    : validator.uptimePercent >= 99.0
+                                    ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                    : "bg-red-500/15 text-red-300 border border-red-500/30"
+                                }`}
+                                title={
+                                  validator.uptimeDays
+                                    ? `${validator.uptimeDays} days tracked`
+                                    : "Uptime percentage"
+                                }
+                              >
+                                {validator.uptimePercent.toFixed(2)}%
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-600 text-xs">—</span>
+                          )}
+                        </td>
                       </tr>
                     </>
                   );
@@ -514,7 +700,7 @@ export default function ValidatorsPage() {
                 {/* Scroll sentinel for infinite scroll */}
                 {displayCount < filteredValidators.length && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center">
+                    <td colSpan={7} className="px-6 py-8 text-center">
                       <div className="flex items-center justify-center gap-3">
                         <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-gray-400 text-sm">
@@ -679,6 +865,37 @@ export default function ValidatorsPage() {
                           >
                             {validator.mevCommission}%
                           </span>
+                        ) : (
+                          <span className="text-gray-600 text-xs">—</span>
+                        )}
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-gray-500 mb-1">Uptime</div>
+                        {validator.uptimePercent !== null &&
+                        validator.uptimePercent !== undefined ? (
+                          <div className="flex items-center gap-1.5">
+                            {validator.uptimePercent >= 99.95 && (
+                              <span className="text-sm" title="Platinum tier">
+                                💎
+                              </span>
+                            )}
+                            <span
+                              className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
+                                validator.uptimePercent >= 99.9
+                                  ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                  : validator.uptimePercent >= 99.0
+                                  ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                  : "bg-red-500/15 text-red-300 border border-red-500/30"
+                              }`}
+                            >
+                              {validator.uptimePercent.toFixed(2)}%
+                            </span>
+                            {validator.uptimeDays && (
+                              <span className="text-[10px] text-gray-500">
+                                ({validator.uptimeDays}d)
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-gray-600 text-xs">—</span>
                         )}
