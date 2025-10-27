@@ -209,18 +209,40 @@ export async function POST(req: NextRequest) {
     
     // Get full leader schedule for total leader slots (not just elapsed)
     logProgress("Fetching leader schedule...");
-    // getLeaderSchedule returns data keyed by vote pubkey
+    // getLeaderSchedule returns data keyed by IDENTITY pubkey (nodePubkey)
     // Call with [null] to get current epoch's schedule
     const leaderSchedule = await rpc("getLeaderSchedule", [null]);
     const leaderScheduleData: Record<string, number[]> = leaderSchedule || {};
     logProgress(`Leader schedule fetched (${Object.keys(leaderScheduleData).length} validators)`);
     
-    // Debug: Log first few validators with leader slots (keyed by identity pubkey)
-    const sampleKeys = Object.keys(leaderScheduleData).slice(0, 3);
+    // Debug: Log first few validators with leader slots
+    const sampleKeys = Object.keys(leaderScheduleData).slice(0, 5);
+    console.log(`\n🔍 LEADER SCHEDULE DEBUG (first 5):`);
     for (const key of sampleKeys) {
       const slots = leaderScheduleData[key];
-      console.log(`  Sample identity: ${key.substring(0, 8)}... has ${slots?.length || 0} leader slots`);
+      console.log(`  Identity: ${key} → ${slots?.length || 0} leader slots`);
     }
+    
+    // Create a mapping of nodePubkey to vote data for quick lookup
+    const nodePubkeyToVote = new Map<string, any>();
+    for (const v of allVotes) {
+      nodePubkeyToVote.set(v.nodePubkey, v);
+    }
+    
+    // Debug: Check how many validators from allVotes are in the leader schedule
+    let foundInSchedule = 0;
+    let notFoundInSchedule = 0;
+    for (const v of allVotes.slice(0, 10)) {
+      if (leaderScheduleData[v.nodePubkey]) {
+        foundInSchedule++;
+      } else {
+        notFoundInSchedule++;
+        if (notFoundInSchedule <= 3) {
+          console.log(`  ⚠️ NOT FOUND: vote=${v.votePubkey.substring(0, 8)}... identity=${v.nodePubkey.substring(0, 8)}... not in leader schedule`);
+        }
+      }
+    }
+    console.log(`📊 Leader schedule coverage (first 10 validators): ${foundInSchedule} found, ${notFoundInSchedule} not found\n`)
     
     // Fetch ALL stake accounts at once to avoid per-validator RPC calls
     // WARNING: This can be very expensive on mainnet (millions of accounts)
@@ -783,10 +805,32 @@ export async function POST(req: NextRequest) {
         leaderSlots = scheduleSlots.length; // Total leader slots for entire epoch
       }
       
+      // Debug specific validator (pumpkinspool)
+      const isPumpkinspool = v.votePubkey === '7X7oVvGKhE5HEm1d3vFPmDN5h2HQXqKzfXu1Cz6p8Fk1';
+      
       // Get blocks produced so far from block production data
       if (blockData) {
         blocksProduced = Number(blockData[1] || 0);
         const elapsedLeaderSlots = Number(blockData[0] || 0);
+        
+        if (isPumpkinspool) {
+          console.log(`\n🎃 PUMPKINSPOOL DEBUG:`);
+          console.log(`  Vote pubkey: ${v.votePubkey}`);
+          console.log(`  Identity pubkey (nodePubkey): ${v.nodePubkey}`);
+          console.log(`  Leader schedule lookup result:`, scheduleSlots ? `${scheduleSlots.length} slots` : 'NOT FOUND');
+          console.log(`  Block production data: elapsed=${elapsedLeaderSlots}, produced=${blocksProduced}`);
+          console.log(`  Current leaderSlots value: ${leaderSlots}`);
+          console.log(`  Will use fallback? ${leaderSlots === 0 && elapsedLeaderSlots > 0}`);
+          
+          // Check if identity is in leader schedule at all
+          const identityInSchedule = v.nodePubkey in leaderScheduleData;
+          console.log(`  Identity in leader schedule keys? ${identityInSchedule}`);
+          if (!identityInSchedule) {
+            // Check for similar keys
+            const similarKeys = Object.keys(leaderScheduleData).filter(k => k.includes(v.nodePubkey.substring(0, 8)));
+            console.log(`  Similar keys in schedule:`, similarKeys.length > 0 ? similarKeys : 'NONE');
+          }
+        }
         
         // Fallback: if we don't have leader schedule data, use elapsed slots as total
         // (this happens early in epoch or for validators not in schedule)
@@ -802,7 +846,7 @@ export async function POST(req: NextRequest) {
       }
       
       // Debug log for first 3 validators
-      if (validatorIndex < 3) {
+      if (validatorIndex < 3 || isPumpkinspool) {
         console.log(`  Validator ${validatorIndex + 1}: vote=${v.votePubkey.substring(0, 8)}... identity=${v.nodePubkey.substring(0, 8)}... - leaderSlots=${leaderSlots}, produced=${blocksProduced}, skipRate=${skipRate.toFixed(2)}%`);
       }
         
