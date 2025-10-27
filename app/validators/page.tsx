@@ -1,6 +1,13 @@
 "use client";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type Validator = {
   votePubkey: string;
@@ -44,7 +51,7 @@ type SortKey =
   | "uptimePercent";
 type SortDirection = "asc" | "desc";
 
-export default function ValidatorsPage() {
+function ValidatorsPageContent() {
   const searchParams = useSearchParams();
   const [allValidators, setAllValidators] = useState<Validator[]>([]); // All validators loaded once
   const [displayedValidators, setDisplayedValidators] = useState<Validator[]>(
@@ -1022,5 +1029,19 @@ export default function ValidatorsPage() {
           </div>
         )}
     </div>
+  );
+}
+
+export default function ValidatorsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-b from-black via-gray-900 to-black text-white flex items-center justify-center">
+          <div className="text-gray-400">Loading validators...</div>
+        </div>
+      }
+    >
+      <ValidatorsPageContent />
+    </Suspense>
   );
 }
