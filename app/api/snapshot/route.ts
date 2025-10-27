@@ -680,8 +680,13 @@ export async function POST(req: NextRequest) {
         patch.activatingStake = activatingStake;
         patch.deactivatingStake = deactivatingStake;
         // Store stake account breakdowns as JSON for detailed UI display
-        patch.activatingAccounts = JSON.stringify(activatingAccounts);
-        patch.deactivatingAccounts = JSON.stringify(deactivatingAccounts);
+        // Only set these fields if we have data (avoid writing to potentially non-existent fields)
+        if (activatingAccounts && activatingAccounts.length > 0) {
+          patch.activatingAccounts = JSON.stringify(activatingAccounts);
+        }
+        if (deactivatingAccounts && deactivatingAccounts.length > 0) {
+          patch.deactivatingAccounts = JSON.stringify(deactivatingAccounts);
+        }
         // Update Jito status
         patch.jitoEnabled = isJitoEnabled;
         // Update stake account count
@@ -1123,9 +1128,33 @@ export async function POST(req: NextRequest) {
     logProgress(`Created ${validatorsToCreate.length} new validators`);
     
     // Update existing validators
-    for (let i = 0; i < validatorsToUpdate.length; i += batchSize) {
-      const batch = validatorsToUpdate.slice(i, i + batchSize);
-      await tb.validators.update(batch);
+    console.log(`\n⚡ UPDATING ${validatorsToUpdate.length} validators...`);
+    try {
+      for (let i = 0; i < validatorsToUpdate.length; i += batchSize) {
+        const batch = validatorsToUpdate.slice(i, i + batchSize);
+        console.log(`  Updating validator batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)...`);
+        
+        // Debug first batch to see what fields we're trying to update
+        if (i === 0) {
+          console.log(`  First record in batch:`, JSON.stringify({
+            id: batch[0].id.substring(0, 12) + '...',
+            fields: Object.keys(batch[0].fields),
+            deactivatingAccounts: batch[0].fields.deactivatingAccounts ? 
+              `${batch[0].fields.deactivatingAccounts.substring(0, 100)}...` : undefined,
+            activatingAccounts: batch[0].fields.activatingAccounts ? 
+              `${batch[0].fields.activatingAccounts.substring(0, 100)}...` : undefined,
+          }, null, 2));
+        }
+        
+        await tb.validators.update(batch);
+        console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1} updated successfully`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Validator update failed:`, error.message);
+      console.error(`   Error statusCode:`, error.statusCode);
+      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+      // Don't throw - continue to performance updates
+      console.log(`⚠️  Continuing despite validator update error...`);
     }
     logProgress(`Updated ${validatorsToUpdate.length} validators`);
     
