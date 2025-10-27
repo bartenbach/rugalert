@@ -394,12 +394,6 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   const [loading, setLoading] = useState(true);
   const [copiedIdentity, setCopiedIdentity] = useState(false);
   const [copiedVote, setCopiedVote] = useState(false);
-  const [showStakeDistribution, setShowStakeDistribution] = useState(false);
-  const [stakeDistributionPosition, setStakeDistributionPosition] = useState({
-    top: 0,
-    left: 0,
-  });
-  const stakeDistributionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -495,15 +489,6 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   // Mount detection for portal
   useEffect(() => {
     setIsMounted(true);
-  }, []);
-
-  // Cleanup stake distribution timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (stakeDistributionTimeoutRef.current) {
-        clearTimeout(stakeDistributionTimeoutRef.current);
-      }
-    };
   }, []);
 
   // Validator search with debounce
@@ -924,123 +909,12 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     )}
                   {validatorInfo?.validator?.stakeAccountCount !== undefined &&
                     validatorInfo.validator.stakeAccountCount > 0 && (
-                      <div
-                        className="flex items-baseline gap-2"
-                        onMouseEnter={(e) => {
-                          // Clear any pending hide timeout
-                          if (stakeDistributionTimeoutRef.current) {
-                            clearTimeout(stakeDistributionTimeoutRef.current);
-                            stakeDistributionTimeoutRef.current = null;
-                          }
-
-                          if (
-                            validatorInfo.stake?.stakeDistribution &&
-                            validatorInfo.stake.stakeDistribution.length > 0
-                          ) {
-                            const rect =
-                              e.currentTarget.getBoundingClientRect();
-                            setStakeDistributionPosition({
-                              top: rect.bottom + 8,
-                              left: rect.left,
-                            });
-                            setShowStakeDistribution(true);
-                          }
-                        }}
-                        onMouseLeave={() => {
-                          // Delay hiding to allow moving to popup
-                          stakeDistributionTimeoutRef.current = setTimeout(
-                            () => {
-                              setShowStakeDistribution(false);
-                            },
-                            300
-                          );
-                        }}
-                      >
+                      <div className="flex items-baseline gap-2">
                         <span className="text-gray-500">Stake Accounts:</span>
-                        <span className="text-white font-semibold cursor-help">
+                        <span className="text-white font-semibold">
                           {validatorInfo.validator.stakeAccountCount.toLocaleString()}
                         </span>
                       </div>
-                    )}
-
-                  {/* Stake Distribution Popup Portal */}
-                  {showStakeDistribution &&
-                    validatorInfo?.stake?.stakeDistribution &&
-                    validatorInfo.stake.stakeDistribution.length > 0 &&
-                    typeof window !== "undefined" &&
-                    createPortal(
-                      <div
-                        className="fixed w-[420px]"
-                        style={{
-                          top: `${stakeDistributionPosition.top}px`,
-                          left: `${stakeDistributionPosition.left}px`,
-                          zIndex: 999999,
-                        }}
-                        onMouseEnter={() => {
-                          // Clear any pending hide timeout when hovering over popup
-                          if (stakeDistributionTimeoutRef.current) {
-                            clearTimeout(stakeDistributionTimeoutRef.current);
-                            stakeDistributionTimeoutRef.current = null;
-                          }
-                          setShowStakeDistribution(true);
-                        }}
-                        onMouseLeave={() => {
-                          // Delay hiding when leaving popup
-                          stakeDistributionTimeoutRef.current = setTimeout(
-                            () => {
-                              setShowStakeDistribution(false);
-                            },
-                            200
-                          );
-                        }}
-                      >
-                        <div className="glass rounded-xl p-4 border-2 border-orange-500/50 shadow-[0_20px_60px_rgba(0,0,0,0.9)] backdrop-blur-xl bg-[#0a0a0a]/95">
-                          <div className="text-sm font-bold text-orange-400 mb-3 flex items-center gap-2">
-                            <span>📊</span>
-                            <span>Top 10 Stakers</span>
-                          </div>
-                          <div className="max-h-[400px] overflow-y-auto pr-2 space-y-2.5 custom-scrollbar">
-                            {validatorInfo.stake.stakeDistribution.map(
-                              (entry, idx) => {
-                                const percentage =
-                                  (entry.amount /
-                                    validatorInfo.stake!.activeStake /
-                                    1_000_000_000) *
-                                  100;
-                                return (
-                                  <div key={idx} className="space-y-1.5">
-                                    <div className="flex justify-between items-baseline gap-2">
-                                      <span className="text-white font-medium text-sm truncate">
-                                        {idx + 1}.{" "}
-                                        {entry.label ||
-                                          `${entry.staker.slice(
-                                            0,
-                                            6
-                                          )}...${entry.staker.slice(-4)}`}
-                                      </span>
-                                      <span className="text-orange-400 font-bold text-sm whitespace-nowrap">
-                                        {percentage.toFixed(1)}%
-                                      </span>
-                                    </div>
-                                    <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                                      <div
-                                        className="h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-300"
-                                        style={{
-                                          width: `${Math.min(
-                                            percentage,
-                                            100
-                                          )}%`,
-                                        }}
-                                      ></div>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                            )}
-                          </div>
-                        </div>
-                      </div>,
-                      document.body
                     )}
                 </div>
 
@@ -1380,43 +1254,53 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             )}
           </div>
 
-          {/* Commission History - Compact */}
-          {series.length > 0 && (
-            <div className="glass rounded-2xl p-4 sm:p-5 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
-              <h2 className="text-base sm:text-lg font-bold text-white mb-3">
-                Commission History
-              </h2>
-              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-4">
-                <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
-                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                    Current
+          {/* Commission History - Only show if commission has changed */}
+          {(() => {
+            if (series.length === 0) return null;
+
+            // Check if there are multiple unique commission values
+            const uniqueCommissions = new Set(series.map((s) => s.commission));
+            const hasCommissionChanges = uniqueCommissions.size > 1;
+
+            if (!hasCommissionChanges) return null;
+
+            return (
+              <div className="glass rounded-2xl p-4 sm:p-5 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
+                <h2 className="text-base sm:text-lg font-bold text-white mb-3">
+                  Commission History
+                </h2>
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                  <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
+                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                      Current
+                    </div>
+                    <div className="text-base sm:text-xl font-bold text-white">
+                      {currentCommission}%
+                    </div>
                   </div>
-                  <div className="text-base sm:text-xl font-bold text-white">
-                    {currentCommission}%
+                  <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
+                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                      Min
+                    </div>
+                    <div className="text-base sm:text-xl font-bold text-green-400">
+                      {Math.min(...series.map((s) => s.commission))}%
+                    </div>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
+                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                      Max
+                    </div>
+                    <div className="text-base sm:text-xl font-bold text-red-400">
+                      {Math.max(...series.map((s) => s.commission))}%
+                    </div>
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
-                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                    Min
-                  </div>
-                  <div className="text-base sm:text-xl font-bold text-green-400">
-                    {Math.min(...series.map((s) => s.commission))}%
-                  </div>
-                </div>
-                <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
-                  <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                    Max
-                  </div>
-                  <div className="text-base sm:text-xl font-bold text-red-400">
-                    {Math.max(...series.map((s) => s.commission))}%
-                  </div>
+                <div className="h-[200px]">
+                  <CommissionChart data={series} />
                 </div>
               </div>
-              <div className="h-[200px]">
-                <CommissionChart data={series} />
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Validator Info History - Only show if there are changes */}
           {infoHistory.length > 1 && (

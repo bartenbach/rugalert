@@ -19,35 +19,12 @@ type StakeDataPoint = {
 };
 
 export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
-  // Calculate simple moving average for smooth trendline
-  const calculateMovingAverage = (
-    dataPoints: StakeDataPoint[],
-    windowSize: number = 5
-  ) => {
-    if (dataPoints.length < windowSize)
-      return dataPoints.map((d) => d.activeStake);
-
-    return dataPoints.map((_, index) => {
-      const start = Math.max(0, index - Math.floor(windowSize / 2));
-      const end = Math.min(
-        dataPoints.length,
-        index + Math.ceil(windowSize / 2)
-      );
-      const window = dataPoints.slice(start, end);
-      const sum = window.reduce((acc, d) => acc + d.activeStake, 0);
-      return sum / window.length;
-    });
-  };
-
-  const movingAverage = calculateMovingAverage(data);
-
   // Data is already in SOL (converted by API)
-  const chartData = data.map((d, i) => ({
+  const chartData = data.map((d) => ({
     epoch: d.epoch,
     activeStake: d.activeStake,
     activatingStake: d.activatingStake,
     deactivatingStake: d.deactivatingStake,
-    trend: movingAverage[i],
   }));
 
   // Calculate dynamic Y-axis domain with padding to show meaningful changes
@@ -75,11 +52,6 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
           <p className="text-white font-bold text-lg mb-2">
             {formatStake(data.activeStake)} SOL
           </p>
-          {data.trend && (
-            <p className="text-orange-400 text-xs mb-2">
-              Trend: {formatStake(data.trend)} SOL
-            </p>
-          )}
           {data.activatingStake !== undefined && data.activatingStake > 0 && (
             <p className="text-green-400 text-sm">
               +{formatStake(data.activatingStake)} activating
@@ -161,17 +133,6 @@ export default function StakeChart({ data }: { data: StakeDataPoint[] }) {
             }}
           />
           <Tooltip content={<CustomTooltip />} />
-          {/* Smooth trendline */}
-          <Line
-            type="monotone"
-            dataKey="trend"
-            stroke="#f97316"
-            strokeWidth={2}
-            dot={false}
-            activeDot={false}
-            strokeOpacity={0.8}
-            animationDuration={1000}
-          />
           <Area
             type="monotone"
             dataKey="activeStake"

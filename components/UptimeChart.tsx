@@ -128,15 +128,12 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
           </p>
         </div>
         <div className="text-right">
-          {data.overallUptime >= 99.95 && (
+          {data.overallUptime === 100 && (
             <div className="flex items-center justify-end gap-2 mb-1">
-              <span
-                className="text-base"
-                title="Platinum tier: Elite uptime ≥ 99.95%"
-              >
+              <span className="text-base" title="Perfect uptime: 100%">
                 💎
               </span>
-              <span className="text-xs font-bold text-green-400">PLATINUM</span>
+              <span className="text-xs font-bold text-green-400">PERFECT</span>
             </div>
           )}
           <div

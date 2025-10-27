@@ -662,32 +662,22 @@ export default function ValidatorsPage() {
                         <td className="px-4 py-3 text-center">
                           {validator.uptimePercent !== null &&
                           validator.uptimePercent !== undefined ? (
-                            <div className="flex items-center justify-center gap-1.5">
-                              {validator.uptimePercent >= 99.95 && (
-                                <span
-                                  className="text-base"
-                                  title="Platinum tier: ≥ 99.95%"
-                                >
-                                  💎
-                                </span>
-                              )}
-                              <span
-                                className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                  validator.uptimePercent >= 99.9
-                                    ? "bg-green-500/15 text-green-300 border border-green-500/30"
-                                    : validator.uptimePercent >= 99.0
-                                    ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                                    : "bg-red-500/15 text-red-300 border border-red-500/30"
-                                }`}
-                                title={
-                                  validator.uptimeDays
-                                    ? `${validator.uptimeDays} days tracked`
-                                    : "Uptime percentage"
-                                }
-                              >
-                                {validator.uptimePercent.toFixed(2)}%
-                              </span>
-                            </div>
+                            <span
+                              className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                validator.uptimePercent >= 99.9
+                                  ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                  : validator.uptimePercent >= 99.0
+                                  ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                  : "bg-red-500/15 text-red-300 border border-red-500/30"
+                              }`}
+                              title={
+                                validator.uptimeDays
+                                  ? `${validator.uptimeDays} days tracked`
+                                  : "Uptime percentage"
+                              }
+                            >
+                              {validator.uptimePercent.toFixed(2)}%
+                            </span>
                           ) : (
                             <span className="text-gray-600 text-xs">—</span>
                           )}
@@ -874,11 +864,6 @@ export default function ValidatorsPage() {
                         {validator.uptimePercent !== null &&
                         validator.uptimePercent !== undefined ? (
                           <div className="flex items-center gap-1.5">
-                            {validator.uptimePercent >= 99.95 && (
-                              <span className="text-sm" title="Platinum tier">
-                                💎
-                              </span>
-                            )}
                             <span
                               className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
                                 validator.uptimePercent >= 99.9

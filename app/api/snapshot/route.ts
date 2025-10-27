@@ -209,9 +209,18 @@ export async function POST(req: NextRequest) {
     
     // Get full leader schedule for total leader slots (not just elapsed)
     logProgress("Fetching leader schedule...");
-    const leaderSchedule = await rpc("getLeaderSchedule", [null, { epoch }]);
+    // getLeaderSchedule returns data keyed by vote pubkey
+    // Call with [null] to get current epoch's schedule
+    const leaderSchedule = await rpc("getLeaderSchedule", [null]);
     const leaderScheduleData: Record<string, number[]> = leaderSchedule || {};
     logProgress(`Leader schedule fetched (${Object.keys(leaderScheduleData).length} validators)`);
+    
+    // Debug: Log first few validators with leader slots
+    const sampleKeys = Object.keys(leaderScheduleData).slice(0, 3);
+    for (const key of sampleKeys) {
+      const slots = leaderScheduleData[key];
+      console.log(`  Sample: ${key.substring(0, 8)}... has ${slots?.length || 0} leader slots`);
+    }
     
     // Fetch ALL stake accounts at once to avoid per-validator RPC calls
     // WARNING: This can be very expensive on mainnet (millions of accounts)
@@ -776,12 +785,24 @@ export async function POST(req: NextRequest) {
       // Get blocks produced so far from block production data
       if (blockData) {
         blocksProduced = Number(blockData[1] || 0);
-        
-        // Calculate skip rate based on elapsed leader slots (blockData[0]) vs blocks produced
         const elapsedLeaderSlots = Number(blockData[0] || 0);
+        
+        // Fallback: if we don't have leader schedule data, use elapsed slots as total
+        // (this happens early in epoch or for validators not in schedule)
+        if (leaderSlots === 0 && elapsedLeaderSlots > 0) {
+          leaderSlots = elapsedLeaderSlots;
+          console.log(`  ⚠️  ${v.votePubkey.substring(0, 8)}... not in leader schedule, using elapsed: ${leaderSlots}`);
+        }
+        
+        // Calculate skip rate based on elapsed leader slots vs blocks produced
         if (elapsedLeaderSlots > 0) {
           skipRate = ((elapsedLeaderSlots - blocksProduced) / elapsedLeaderSlots) * 100;
         }
+      }
+      
+      // Debug log for first 3 validators
+      if (validatorIndex < 3) {
+        console.log(`  Validator ${validatorIndex + 1}: ${v.votePubkey.substring(0, 8)}... - leaderSlots=${leaderSlots}, produced=${blocksProduced}, skipRate=${skipRate.toFixed(2)}%`);
       }
         
         // Get vote credits from pre-fetched map and calculate percentage
