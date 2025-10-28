@@ -686,13 +686,9 @@ export async function POST(req: NextRequest) {
         patch.activatingStake = activatingStake;
         patch.deactivatingStake = deactivatingStake;
         // Store stake account breakdowns as JSON for detailed UI display
-        // Only set these fields if we have data (avoid writing to potentially non-existent fields)
-        if (activatingAccounts && activatingAccounts.length > 0) {
-          patch.activatingAccounts = JSON.stringify(activatingAccounts);
-        }
-        if (deactivatingAccounts && deactivatingAccounts.length > 0) {
-          patch.deactivatingAccounts = JSON.stringify(deactivatingAccounts);
-        }
+        // ALWAYS write these, even if empty, to clear stale data from previous epochs
+        patch.activatingAccounts = activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]";
+        patch.deactivatingAccounts = deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]";
         // Update Jito status
         patch.jitoEnabled = isJitoEnabled;
         // Update stake account count
@@ -712,8 +708,8 @@ export async function POST(req: NextRequest) {
             activeStake: Number(v.activatedStake || 0),
             activatingStake,
             deactivatingStake,
-            activatingAccounts: JSON.stringify(activatingAccounts),
-            deactivatingAccounts: JSON.stringify(deactivatingAccounts),
+            activatingAccounts: activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]",
+            deactivatingAccounts: deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]",
             jitoEnabled: isJitoEnabled,
             stakeAccountCount: accountCount,
             stakeDistribution: JSON.stringify(distributionArray),
