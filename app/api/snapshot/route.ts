@@ -595,6 +595,12 @@ export async function POST(req: NextRequest) {
     }
     
     const infoHistoryToCreate: any[] = [];
+    
+    // Collect alerts for batched notifications at the end
+    const commissionRugs: any[] = [];
+    const commissionCautions: any[] = [];
+    const mevRugs: any[] = [];
+    const mevCautions: any[] = [];
 
     // 3) Process each validator
     logProgress(`Processing ${allVotes.length} validators...`);
@@ -945,16 +951,18 @@ export async function POST(req: NextRequest) {
           const validatorName = chainName || v.votePubkey;
           
           if (type === "RUG") {
+            commissionRugs.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
+            // Still send Discord immediately for real-time alerts
             const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
-            await sendEmail("🚨 Solana Validator Commission Rug Detected", msg, "RUG");
             // Post to Twitter/X for community retweets
             const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
             await postToTwitter(twitterMsg);
           } else if (type === "CAUTION") {
+            commissionCautions.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
+            // Still send Discord immediately
             const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
-            await sendEmail("⚠️ Solana Validator Large Commission Jump Detected", msg, "CAUTION");
             // Optionally post CAUTION to Twitter too (remove if too noisy)
             const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
             await postToTwitter(twitterMsg);
@@ -1017,16 +1025,18 @@ export async function POST(req: NextRequest) {
               const validatorName = chainName || v.votePubkey;
               
               if (eventType === "RUG") {
+                mevRugs.push({ validatorName, votePubkey: v.votePubkey, from: prevMevCommission, to: currentMevCommission, delta, validatorUrl, epoch });
+                // Still send Discord immediately for real-time alerts
                 const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
-                await sendEmail("🚨 Solana Validator MEV Commission Rug Detected", msg, "RUG");
                 // Post MEV rug to Twitter/X
                 const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
                 await postToTwitter(twitterMsg);
               } else if (eventType === "CAUTION") {
+                mevCautions.push({ validatorName, votePubkey: v.votePubkey, from: prevMevCommission, to: currentMevCommission, delta, validatorUrl, epoch });
+                // Still send Discord immediately
                 const msg = `⚠️ CAUTION: Large MEV Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
-                await sendEmail("⚠️ Solana Validator MEV Commission Increase", msg, "CAUTION");
                 // Optionally post MEV CAUTION to Twitter too
                 const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
                 await postToTwitter(twitterMsg);
@@ -1267,6 +1277,85 @@ export async function POST(req: NextRequest) {
     
     console.log(`\n🎉 ========== SNAPSHOT JOB COMPLETED SUCCESSFULLY ==========`);
     console.log(`🔍 DEBUG: About to return success response...`);
+    // Send batched digest emails for all commission/MEV changes
+    console.log(`\n📧 ========== SENDING BATCHED ALERT EMAILS ==========`);
+    logProgress(`Sending batched alert emails...`);
+    
+    const totalAlerts = commissionRugs.length + commissionCautions.length + mevRugs.length + mevCautions.length;
+    console.log(`📊 Alert summary: ${commissionRugs.length} commission rugs, ${commissionCautions.length} commission cautions, ${mevRugs.length} MEV rugs, ${mevCautions.length} MEV cautions`);
+    
+    if (totalAlerts > 0) {
+      try {
+        // Build digest email content
+        let digestSubject = "";
+        let digestBody = "";
+        
+        if (commissionRugs.length > 0 || mevRugs.length > 0) {
+          digestSubject = `🚨 ${commissionRugs.length + mevRugs.length} Validator Rug${commissionRugs.length + mevRugs.length > 1 ? 's' : ''} Detected (Epoch ${epoch})`;
+        } else {
+          digestSubject = `⚠️ ${totalAlerts} Validator Commission Increase${totalAlerts > 1 ? 's' : ''} Detected (Epoch ${epoch})`;
+        }
+        
+        digestBody = `Validator Alert Digest - Epoch ${epoch}\n\n`;
+        
+        // Commission Rugs
+        if (commissionRugs.length > 0) {
+          digestBody += `🚨 COMMISSION RUGS (${commissionRugs.length}):\n`;
+          for (const rug of commissionRugs) {
+            digestBody += `\n• ${rug.validatorName}\n`;
+            digestBody += `  Vote Pubkey: ${rug.votePubkey}\n`;
+            digestBody += `  Commission: ${rug.from}% → ${rug.to}% (${rug.delta >= 0 ? '+' : ''}${rug.delta}pp)\n`;
+            digestBody += `  View: <${rug.validatorUrl}>\n`;
+          }
+          digestBody += `\n`;
+        }
+        
+        // MEV Rugs
+        if (mevRugs.length > 0) {
+          digestBody += `🚨 MEV COMMISSION RUGS (${mevRugs.length}):\n`;
+          for (const rug of mevRugs) {
+            digestBody += `\n• ${rug.validatorName}\n`;
+            digestBody += `  Vote Pubkey: ${rug.votePubkey}\n`;
+            digestBody += `  MEV Commission: ${rug.from}% → ${rug.to}% (${rug.delta >= 0 ? '+' : ''}${rug.delta}pp)\n`;
+            digestBody += `  View: <${rug.validatorUrl}>\n`;
+          }
+          digestBody += `\n`;
+        }
+        
+        // Commission Cautions
+        if (commissionCautions.length > 0) {
+          digestBody += `⚠️ COMMISSION INCREASES (${commissionCautions.length}):\n`;
+          for (const caution of commissionCautions) {
+            digestBody += `\n• ${caution.validatorName}\n`;
+            digestBody += `  Commission: ${caution.from}% → ${caution.to}% (+${caution.delta}pp)\n`;
+            digestBody += `  View: <${caution.validatorUrl}>\n`;
+          }
+          digestBody += `\n`;
+        }
+        
+        // MEV Cautions
+        if (mevCautions.length > 0) {
+          digestBody += `⚠️ MEV COMMISSION INCREASES (${mevCautions.length}):\n`;
+          for (const caution of mevCautions) {
+            digestBody += `\n• ${caution.validatorName}\n`;
+            digestBody += `  MEV Commission: ${caution.from}% → ${caution.to}% (+${caution.delta}pp)\n`;
+            digestBody += `  View: <${caution.validatorUrl}>\n`;
+          }
+        }
+        
+        // Send the digest email (only one email for all alerts)
+        await sendEmail(digestSubject, digestBody, commissionRugs.length + mevRugs.length > 0 ? "RUG" : "CAUTION");
+        console.log(`✅ Sent digest email with ${totalAlerts} alerts`);
+        logProgress(`✅ Sent digest email with ${totalAlerts} alerts`);
+      } catch (emailError: any) {
+        console.error(`❌ Failed to send digest email:`, emailError.message);
+        logProgress(`⚠️ Digest email failed: ${emailError.message}`);
+      }
+    } else {
+      console.log(`ℹ️ No alerts to send`);
+    }
+    console.log(`📧 ========== END BATCHED EMAIL SENDING ==========\n`);
+    
     logProgress(`✅ Snapshot complete!`);
     return NextResponse.json({ 
       ok: true, 
@@ -1280,6 +1369,7 @@ export async function POST(req: NextRequest) {
         mevSnapshotsCreated: mevSnapshotsToCreate.length,
         mevEventsCreated: mevEventsToCreate.length,
         infoHistoryCreated,
+        alertsDetected: totalAlerts,
       }
     });
   } catch (err: any) {
