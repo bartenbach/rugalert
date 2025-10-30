@@ -1036,24 +1036,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                   elapsedLeaderSlots - produced
                                 );
 
-                                // Abbreviate large numbers
-                                const formatCompact = (num: number) => {
-                                  if (num >= 1000000)
-                                    return `${(num / 1000000).toFixed(1)}M`;
-                                  if (num >= 1000)
-                                    return `${(num / 1000).toFixed(1)}K`;
-                                  return num.toLocaleString();
-                                };
-
                                 return (
                                   <div className="flex flex-col gap-0.5">
                                     <span className="text-gray-400 text-xs">
-                                      {formatCompact(totalLeaderSlots)} leader
+                                      {totalLeaderSlots.toLocaleString()} leader
                                       slots
                                     </span>
                                     <span>
                                       <span className="text-green-400 font-medium">
-                                        {formatCompact(produced)} produced
+                                        {produced.toLocaleString()} produced
                                       </span>
                                       {" · "}
                                       <span
@@ -1063,7 +1054,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                             : "text-red-400"
                                         }
                                       >
-                                        {formatCompact(skipped)} skipped
+                                        {skipped.toLocaleString()} skipped
                                       </span>
                                     </span>
                                   </div>

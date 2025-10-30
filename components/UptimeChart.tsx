@@ -112,12 +112,6 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
     );
   }
 
-  // Group days by week (7 days per row)
-  const weeks: UptimeDay[][] = [];
-  for (let i = 0; i < data.days.length; i += 7) {
-    weeks.push(data.days.slice(i, i + 7));
-  }
-
   return (
     <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
       <div className="flex items-center justify-between mb-6">
@@ -151,38 +145,34 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
       </div>
 
       {/* Heatmap Grid */}
-      <div className="space-y-1 mb-4">
-        {weeks.map((week, weekIdx) => (
-          <div key={weekIdx} className="flex gap-1">
-            {week.map((day) => (
-              <div key={day.date} className="group relative">
-                <div
-                  className={`w-4 h-4 rounded-sm ${getUptimeColor(
-                    day.uptimePercent
-                  )} 
+      <div className="flex flex-wrap gap-1 mb-4">
+        {data.days.map((day) => (
+          <div key={day.date} className="group relative">
+            <div
+              className={`w-4 h-4 rounded-sm ${getUptimeColor(
+                day.uptimePercent
+              )} 
                     transition-all duration-200 hover:ring-2 hover:ring-white/50 hover:scale-150
                   `}
-                />
+            />
 
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                  <div className="bg-[#0a0a0a] rounded-xl p-3 border-2 border-white/30 whitespace-nowrap shadow-2xl backdrop-blur-xl">
-                    <p className="text-white font-bold text-base mb-2">
-                      {formatDate(day.date)}
-                    </p>
-                    <p className="text-green-400 font-semibold text-sm mb-1">
-                      {day.uptimePercent.toFixed(2)}% uptime
-                    </p>
-                    <p className="text-red-400 font-medium text-xs mb-1">
-                      {formatDowntime(day.delinquentChecks)}
-                    </p>
-                    <p className="text-gray-400 text-xs">
-                      {day.uptimeChecks} checks
-                    </p>
-                  </div>
-                </div>
+            {/* Tooltip */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+              <div className="bg-[#0a0a0a] rounded-xl p-3 border-2 border-white/30 whitespace-nowrap shadow-2xl backdrop-blur-xl">
+                <p className="text-white font-bold text-base mb-2">
+                  {formatDate(day.date)}
+                </p>
+                <p className="text-green-400 font-semibold text-sm mb-1">
+                  {day.uptimePercent.toFixed(2)}% uptime
+                </p>
+                <p className="text-red-400 font-medium text-xs mb-1">
+                  {formatDowntime(day.delinquentChecks)}
+                </p>
+                <p className="text-gray-400 text-xs">
+                  {day.uptimeChecks} checks
+                </p>
               </div>
-            ))}
+            </div>
           </div>
         ))}
       </div>
