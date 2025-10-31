@@ -69,18 +69,32 @@ export async function GET(request: NextRequest) {
       const votePubkey = record.vote_pubkey;
       const jitoEnabled = Boolean(record.jito_enabled);
       
+      // Convert BigInt/lamports to Number (SOL)
+      // 1 SOL = 1_000_000_000 lamports
+      const lamportsToSol = (val: any) => {
+        if (val === null || val === undefined) return 0;
+        const lamports = typeof val === 'bigint' ? Number(val) : Number(val);
+        return lamports / 1_000_000_000;
+      };
+      
+      const toNumber = (val: any) => {
+        if (typeof val === 'bigint') return Number(val);
+        if (val === null || val === undefined) return 0;
+        return Number(val);
+      };
+      
       validatorsMap.set(votePubkey, {
         votePubkey,
         identityPubkey: record.identity_pubkey,
         name: record.name || null,
         iconUrl: record.icon_url || null,
         version: record.version || null,
-        stakeAccountCount: Number(record.stake_account_count || 0),
-        commission: Number(record.commission || 0),
+        stakeAccountCount: toNumber(record.stake_account_count),
+        commission: toNumber(record.commission),
         jitoEnabled,
-        activeStake: Number(record.active_stake || 0),
-        activatingStake: Number(record.activating_stake || 0),
-        deactivatingStake: Number(record.deactivating_stake || 0),
+        activeStake: lamportsToSol(record.active_stake),
+        activatingStake: lamportsToSol(record.activating_stake),
+        deactivatingStake: lamportsToSol(record.deactivating_stake),
       });
     });
 
