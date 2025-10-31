@@ -94,17 +94,6 @@ export default function RootLayout({
                 <span className="hidden sm:inline">Validators</span>
                 <span className="sm:hidden">📋</span>
               </a>
-              <a
-                href="/history"
-                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
-                  isActive("/history")
-                    ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
-                    : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
-                }`}
-              >
-                <span className="hidden sm:inline">History</span>
-                <span className="sm:hidden">📊</span>
-              </a>
             </nav>
           </div>
         </header>
