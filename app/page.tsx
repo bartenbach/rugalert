@@ -49,12 +49,6 @@ export default function Page() {
   const [items, setItems] = useState<Row[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [subscribing, setSubscribing] = useState(false);
-  const [subscribed, setSubscribed] = useState(false);
-  const [emailPreference, setEmailPreference] = useState<
-    "rugs_only" | "rugs_and_cautions" | "all"
-  >("rugs_only");
 
   // Event type filters (default: show RUGs + Cautions only)
   const [showRugs, setShowRugs] = useState(true);
@@ -144,28 +138,6 @@ export default function Page() {
     // Clear auto-dismiss timer
     if (sirenTimeoutRef.current) {
       clearTimeout(sirenTimeoutRef.current);
-    }
-  }
-
-  async function handleSubscribe(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email || subscribing) return;
-    setSubscribing(true);
-    try {
-      const res = await fetch("/api/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, preferences: emailPreference }),
-      });
-      if (res.ok) {
-        setSubscribed(true);
-        setEmail("");
-        setTimeout(() => setSubscribed(false), 5000);
-      }
-    } catch (error) {
-      console.error("Subscription failed:", error);
-    } finally {
-      setSubscribing(false);
     }
   }
 
@@ -986,92 +958,6 @@ export default function Page() {
       {/* Rugs per Epoch Chart */}
       <div className="mt-8">
         <RugsPerEpochChart />
-      </div>
-
-      {/* Email Subscription */}
-      <div className="glass rounded-2xl p-4 sm:p-8 max-w-2xl mx-auto border-2 border-orange-500/20 mt-8">
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <span className="text-3xl">🔔</span>
-            <h2 className="text-2xl font-bold text-white">
-              Get Commission Alerts
-            </h2>
-          </div>
-          <p className="text-gray-400 text-sm">
-            Subscribe to receive instant email notifications when validators
-            change their commission
-          </p>
-          <form
-            onSubmit={handleSubscribe}
-            className="flex flex-col gap-4 max-w-lg mx-auto mt-6"
-          >
-            {/* Email Preference Selector */}
-            <div className="flex flex-col gap-2 items-center">
-              <label className="text-sm text-gray-400 text-center">
-                Email me for:
-              </label>
-              <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                <button
-                  type="button"
-                  onClick={() => setEmailPreference("rugs_only")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    emailPreference === "rugs_only"
-                      ? "bg-red-500/30 text-red-300 border-2 border-red-500"
-                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  🚨 Rugs
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmailPreference("rugs_and_cautions")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    emailPreference === "rugs_and_cautions"
-                      ? "bg-yellow-500/30 text-yellow-300 border-2 border-yellow-500"
-                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  ⚠️ Increase ≥ 10%
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmailPreference("all")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    emailPreference === "all"
-                      ? "bg-blue-500/30 text-blue-300 border-2 border-blue-500"
-                      : "bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  📊 All Changes
-                </button>
-              </div>
-            </div>
-
-            {/* Email Input and Submit */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                required
-                className="input-modern flex-1 bg-white/5 text-white text-center sm:text-left"
-                disabled={subscribing || subscribed}
-              />
-              <button
-                type="submit"
-                disabled={subscribing || subscribed}
-                className="btn-primary px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-              >
-                {subscribing
-                  ? "Subscribing..."
-                  : subscribed
-                  ? "✓ Subscribed!"
-                  : "Subscribe"}
-              </button>
-            </div>
-          </form>
-        </div>
       </div>
     </div>
   );
