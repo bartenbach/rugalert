@@ -230,9 +230,11 @@ export async function GET(request: NextRequest) {
     // Sort by activeStake DESC first (before calculating cumulative)
     deduplicatedValidators.sort((a, b) => b.activeStake - a.activeStake);
 
-    // Calculate stake percentage and cumulative stake percentage for each validator
+    // Calculate rank, stake percentage, and cumulative stake percentage for each validator
     let cumulativeStake = 0;
-    deduplicatedValidators.forEach((validator) => {
+    deduplicatedValidators.forEach((validator, index) => {
+      validator.rank = index + 1; // Rank starts at 1
+      
       validator.stakePercent = networkTotalStake > 0 
         ? (validator.activeStake / networkTotalStake) * 100 
         : 0;
