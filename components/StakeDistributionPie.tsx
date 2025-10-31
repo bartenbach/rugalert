@@ -216,6 +216,7 @@ export default function StakeDistributionPie({
             wrapperStyle={{
               paddingTop: "12px",
               paddingBottom: "8px",
+              fontSize: "11px",
             }}
             formatter={(value, entry: any) => {
               const data = entry.payload;
@@ -240,10 +241,6 @@ export default function StakeDistributionPie({
                   {value}
                 </a>
               );
-            }}
-            wrapperStyle={{
-              paddingTop: "8px",
-              fontSize: "11px",
             }}
             iconSize={10}
           />
