@@ -1125,7 +1125,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         Stake Distribution
                       </h2>
                     </div>
-                    <div className="h-[420px] sm:h-[380px]">
+                    <div className="h-[450px] sm:h-[400px]">
                       <StakeDistributionPie
                         distribution={validatorInfo.stake.stakeDistribution}
                         totalStake={validatorInfo.stake.activeStake}

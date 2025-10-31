@@ -4,7 +4,25 @@ import { useEffect, useState } from "react";
 
 interface EpochData {
   epoch: number;
-  count: number;
+  uniqueValidators: number;
+  commissionValidators: number;
+  mevValidators: number;
+  totalEvents: number;
+  commissionEvents: number;
+  mevEvents: number;
+  bothTypes: number; // validators who rugged both commission and MEV in this epoch
+}
+
+interface ApiResponse {
+  data: EpochData[];
+  meta?: {
+    totalUniqueValidators: number;
+    totalEpochs: number;
+    repeatOffenders: number;
+    includesMevRugs: boolean;
+    totalCommissionEvents: number;
+    totalMevEvents: number;
+  };
 }
 
 interface RugEvent {
@@ -13,6 +31,7 @@ interface RugEvent {
   name?: string | null;
   icon_url?: string | null;
   type: string;
+  rug_type: 'COMMISSION' | 'MEV'; // NEW: which type of rug
   from_commission: number;
   to_commission: number;
   delta: number;
@@ -22,6 +41,7 @@ interface RugEvent {
 
 export default function RugsPerEpochChart() {
   const [data, setData] = useState<EpochData[]>([]);
+  const [repeatOffenders, setRepeatOffenders] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
   const [epochEvents, setEpochEvents] = useState<RugEvent[]>([]);
@@ -34,8 +54,9 @@ export default function RugsPerEpochChart() {
         const urlParams = new URLSearchParams(window.location.search);
         const epochs = urlParams.get("epochs") || "10";
         const res = await fetch(`/api/rugs-per-epoch?epochs=${epochs}`);
-        const json = await res.json();
+        const json: ApiResponse = await res.json();
         setData(json.data || []);
+        setRepeatOffenders(json.meta?.repeatOffenders || 0);
       } catch (error) {
         console.error("Failed to load rugs per epoch:", error);
       } finally {
@@ -90,25 +111,42 @@ export default function RugsPerEpochChart() {
     );
   }
 
-  const maxCount = Math.max(...data.map((d) => d.count));
-  const totalRugs = data.reduce((sum, d) => sum + d.count, 0);
+  const maxCount = Math.max(...data.map((d) => d.uniqueValidators));
+  const totalUniqueValidators = data.reduce((sum, d) => sum + d.uniqueValidators, 0);
 
   return (
     <div className="glass rounded-2xl p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white mb-1">
+          <h2 className="text-2xl font-bold text-white mb-2">
             🚨 Rugs per Epoch
           </h2>
-          <p className="text-gray-400 text-sm">
-            Unique validators that rugged per epoch
-          </p>
+          {/* Legend */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-gradient-to-r from-red-500 to-red-600"></div>
+              <span className="text-xs text-gray-400">Inflation Commission</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-500 to-purple-600"></div>
+              <span className="text-xs text-gray-400">MEV Commission</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-gradient-to-r from-orange-500 to-orange-600"></div>
+              <span className="text-xs text-gray-400">Both</span>
+            </div>
+          </div>
         </div>
         <div className="text-right">
-          <div className="text-3xl font-bold text-red-400">{totalRugs}</div>
+          <div className="text-3xl font-bold text-red-400">{totalUniqueValidators}</div>
           <div className="text-xs text-gray-400 uppercase tracking-wide">
-            Total Rugs
+            Total Unique Validators
           </div>
+          {repeatOffenders > 0 && (
+            <div className="text-xs text-orange-400 mt-1 font-semibold">
+              {repeatOffenders} repeat offenders
+            </div>
+          )}
         </div>
       </div>
 
@@ -129,10 +167,10 @@ export default function RugsPerEpochChart() {
                       : "text-gray-400 group-hover:text-orange-400"
                   }`}
                 >
-                  #{item.epoch}
+                  {item.epoch}
                 </div>
 
-                {/* Bar */}
+                {/* Stacked Bar - shows commission (only), MEV (only), and both */}
                 <div className="flex-1 relative">
                   <div
                     className={`h-10 bg-white/5 rounded-lg overflow-hidden transition-all ${
@@ -141,30 +179,69 @@ export default function RugsPerEpochChart() {
                         : ""
                     }`}
                   >
-                    <div
-                      className="h-full bg-gradient-to-r from-red-500/80 to-red-600/80 rounded-lg transition-all duration-300 group-hover:from-red-400 group-hover:to-red-500 flex items-center justify-end pr-3"
-                      style={{
-                        width: `${(item.count / maxCount) * 100}%`,
-                        minWidth: item.count > 0 ? "3rem" : "0",
-                      }}
-                    >
-                      <span className="text-white font-bold text-sm">
-                        {item.count}
-                      </span>
+                    {/* Stacked segments */}
+                    <div className="h-full flex items-stretch">
+                      {/* Commission only (validators who ONLY rugged commission, not MEV) */}
+                      {item.commissionValidators - item.bothTypes > 0 && (
+                        <div
+                          className="bg-gradient-to-r from-red-500/80 to-red-600/80 transition-all duration-300 group-hover:from-red-400 group-hover:to-red-500 flex items-center justify-center"
+                          style={{
+                            width: `${((item.commissionValidators - item.bothTypes) / maxCount) * 100}%`,
+                            minWidth: "2rem",
+                          }}
+                          title={`${item.commissionValidators - item.bothTypes} commission only`}
+                        >
+                          <span className="text-white font-bold text-xs">
+                            {item.commissionValidators - item.bothTypes}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* MEV only (validators who ONLY rugged MEV, not commission) */}
+                      {item.mevValidators - item.bothTypes > 0 && (
+                        <div
+                          className="bg-gradient-to-r from-purple-500/80 to-purple-600/80 transition-all duration-300 group-hover:from-purple-400 group-hover:to-purple-500 flex items-center justify-center"
+                          style={{
+                            width: `${((item.mevValidators - item.bothTypes) / maxCount) * 100}%`,
+                            minWidth: "2rem",
+                          }}
+                          title={`${item.mevValidators - item.bothTypes} MEV only`}
+                        >
+                          <span className="text-white font-bold text-xs">
+                            {item.mevValidators - item.bothTypes}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Both (validators who rugged BOTH commission and MEV in this epoch) */}
+                      {item.bothTypes > 0 && (
+                        <div
+                          className="bg-gradient-to-r from-orange-500/80 to-orange-600/80 transition-all duration-300 group-hover:from-orange-400 group-hover:to-orange-500 flex items-center justify-center"
+                          style={{
+                            width: `${(item.bothTypes / maxCount) * 100}%`,
+                            minWidth: "2rem",
+                          }}
+                          title={`${item.bothTypes} rugged both commission and MEV`}
+                        >
+                          <span className="text-white font-bold text-xs">
+                            {item.bothTypes}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* Count Badge */}
-                <div className="w-20 text-left">
+                <div className="w-36 text-left">
                   <span
-                    className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold transition-colors ${
+                    className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
                       selectedEpoch === item.epoch
                         ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
                         : "bg-red-500/20 text-red-300 border border-red-500/30 group-hover:bg-red-500/30"
                     }`}
                   >
-                    {item.count} {item.count === 1 ? "validator" : "validators"}
+                    {item.uniqueValidators} total {item.uniqueValidators === 1 ? "rug" : "rugs"}
                   </span>
                 </div>
               </div>
@@ -191,6 +268,9 @@ export default function RugsPerEpochChart() {
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
                             Validator
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                            Type
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
                             Commission
@@ -243,6 +323,17 @@ export default function RugsPerEpochChart() {
                               </div>
                             </td>
                             <td className="px-4 py-3">
+                              <span
+                                className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${
+                                  event.rug_type === 'COMMISSION'
+                                    ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                    : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                }`}
+                              >
+                                {event.rug_type === 'COMMISSION' ? 'Inflation Commission' : 'MEV Commission'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
                               <div className="flex items-center gap-2 text-sm">
                                 <span className="text-gray-400">
                                   {event.from_commission}%
@@ -282,19 +373,27 @@ export default function RugsPerEpochChart() {
           <div>
             <div className="text-2xl font-bold text-red-400">{maxCount}</div>
             <div className="text-xs text-gray-400 uppercase tracking-wide">
-              Peak Rugs
+              Peak Unique Rugs
             </div>
           </div>
           <div>
             <div className="text-2xl font-bold text-orange-400">
-              {(totalRugs / data.length).toFixed(1)}
+              {(totalUniqueValidators / data.length).toFixed(1)}
             </div>
             <div className="text-xs text-gray-400 uppercase tracking-wide">
               Avg per Epoch
             </div>
           </div>
         </div>
+        {repeatOffenders > 0 && (
+          <div className="mt-4 text-center">
+            <p className="text-sm text-gray-400">
+              ⚠️ {repeatOffenders} validators rugged in multiple epochs (repeat offenders)
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+

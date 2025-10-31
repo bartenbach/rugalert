@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 interface StakeDistributionPieProps {
   distribution: Array<{
@@ -40,17 +33,29 @@ export default function StakeDistributionPie({
   distribution,
   totalStake,
 }: StakeDistributionPieProps) {
-  // Take top 10 stakers and group the rest as "Others"
-  const top10 = distribution.slice(0, 10);
+  // Smart logic: show enough top stakers to represent at least 70% of total stake
+  // But cap at 20 stakers max to avoid clutter
+  let topStakers = [];
+  let topStakersTotal = 0;
+  const targetPercentage = 0.7; // Show enough to represent 70%
+  const maxStakers = 20;
 
-  // Calculate total shown in top 10
-  const top10Total = top10.reduce((sum, entry) => sum + entry.amount, 0);
+  for (let i = 0; i < Math.min(distribution.length, maxStakers); i++) {
+    topStakers.push(distribution[i]);
+    topStakersTotal += distribution[i].amount;
 
-  // Everything else is "Others" (difference between total stake and top 10)
-  const othersTotal = totalStake * 1_000_000_000 - top10Total;
+    // If we've hit 60% of total stake and have at least 8 stakers, we can stop
+    const currentPercentage = topStakersTotal / (totalStake * 1_000_000_000);
+    if (currentPercentage >= targetPercentage && i >= 7) {
+      break;
+    }
+  }
+
+  // Everything else is "Others"
+  const othersTotal = totalStake * 1_000_000_000 - topStakersTotal;
 
   // Prepare data for pie chart
-  const chartData = top10.map((entry) => ({
+  const chartData = topStakers.map((entry) => ({
     name:
       entry.label || `${entry.staker.slice(0, 4)}...${entry.staker.slice(-4)}`,
     value: entry.amount / 1_000_000_000, // Convert to SOL
@@ -60,11 +65,18 @@ export default function StakeDistributionPie({
 
   // Always add "Others" if there's any unaccounted stake
   if (othersTotal > 0) {
-    const otherStakers = distribution.length - 10;
+    const otherStakers = distribution.length - topStakers.length;
+    const othersPercentage = (
+      (othersTotal / 1_000_000_000 / totalStake) *
+      100
+    ).toFixed(1);
     chartData.push({
-      name: otherStakers > 0 ? `${otherStakers} Others` : "Others",
+      name:
+        otherStakers > 0
+          ? `${otherStakers} Others (${othersPercentage}%)`
+          : "Others",
       value: othersTotal / 1_000_000_000,
-      percentage: ((othersTotal / 1_000_000_000 / totalStake) * 100).toFixed(2),
+      percentage: othersPercentage,
       fullAddress: "",
     });
   }
@@ -130,122 +142,72 @@ export default function StakeDistributionPie({
   };
 
   return (
-    <div
-      className="w-full h-full flex items-center justify-center px-2"
-      style={{ outline: "none" }}
-    >
-      <style>{`
-        .recharts-wrapper, .recharts-surface, .recharts-layer, .recharts-sector {
-          outline: none !important;
-        }
-        .recharts-sector:focus {
-          outline: none !important;
-        }
-        .recharts-legend-wrapper {
-          overflow: visible !important;
-          width: 100% !important;
-        }
-        .recharts-default-legend {
-          display: flex !important;
-          flex-wrap: wrap !important;
-          justify-content: center !important;
-          gap: 6px 8px !important;
-          max-width: 100% !important;
-          padding: 0 16px !important;
-          line-height: 1.5 !important;
-        }
-        .recharts-legend-item {
-          margin: 0 !important;
-          flex: 0 1 auto !important;
-          max-width: 100% !important;
-        }
-        @media (max-width: 639px) {
-          .recharts-legend-item {
-            flex: 0 1 calc(50% - 8px) !important;
-            min-width: 0 !important;
-          }
-          .recharts-legend-wrapper {
-            padding-bottom: 16px !important;
-          }
-        }
-        @media (min-width: 640px) and (max-width: 1023px) {
-          .recharts-legend-item {
-            flex: 0 1 calc(33.333% - 8px) !important;
-          }
-        }
-        @media (min-width: 1024px) {
-          .recharts-legend-item {
-            flex: 0 1 auto !important;
-          }
-        }
-      `}</style>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={chartData}
-            cx="50%"
-            cy="45%"
-            labelLine={false}
-            label={renderCustomLabel}
-            outerRadius="65%"
-            innerRadius="0%"
-            fill="#8884d8"
-            dataKey="value"
-            animationBegin={0}
-            animationDuration={800}
-            onClick={handleSliceClick}
-          >
-            {chartData.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={COLORS[index % COLORS.length]}
-                style={{
-                  cursor:
-                    entry.fullAddress && !entry.name.includes("Others")
-                      ? "pointer"
-                      : "default",
-                  outline: "none",
-                }}
-              />
-            ))}
-          </Pie>
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            verticalAlign="bottom"
-            height={85}
-            wrapperStyle={{
-              paddingTop: "12px",
-              paddingBottom: "8px",
-              fontSize: "11px",
-            }}
-            formatter={(value, entry: any) => {
-              const data = entry.payload;
+    <div className="w-full h-full flex flex-col">
+      {/* Pie Chart */}
+      <div className="flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={renderCustomLabel}
+              outerRadius="70%"
+              fill="#8884d8"
+              dataKey="value"
+              animationBegin={0}
+              animationDuration={800}
+              onClick={handleSliceClick}
+            >
+              {chartData.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={COLORS[index % COLORS.length]}
+                  style={{
+                    cursor:
+                      entry.fullAddress && !entry.name.includes("Others")
+                        ? "pointer"
+                        : "default",
+                    outline: "none",
+                  }}
+                />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
 
-              // If it's "Others" or has no address, just show the name
-              if (!data.fullAddress || data.name.includes("Others")) {
-                return (
-                  <span className="text-[10px] sm:text-xs text-gray-300 font-medium">
-                    {value}
-                  </span>
-                );
-              }
-              // Otherwise, make it a clickable link to Solscan with full name
-              return (
-                <a
-                  href={`https://solscan.io/account/${data.fullAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] sm:text-xs text-gray-300 hover:text-orange-400 transition-colors duration-200 font-medium"
-                  title={`${value} - Click to view on Solscan`}
-                >
-                  {value}
-                </a>
-              );
-            }}
-            iconSize={10}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+      {/* Custom Legend Below Chart */}
+      <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 px-4 py-4 border-t border-white/10">
+        {chartData.map((entry, index) => (
+          <div
+            key={`legend-${index}`}
+            className="flex items-center gap-1.5 text-xs"
+          >
+            <div
+              className="w-3 h-3 rounded flex-shrink-0"
+              style={{ backgroundColor: COLORS[index % COLORS.length] }}
+            />
+            {entry.fullAddress && !entry.name.includes("Others") ? (
+              <a
+                href={`https://solscan.io/account/${entry.fullAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-gray-300 hover:text-orange-400 transition-colors truncate max-w-[140px] sm:max-w-[180px]"
+                title={`${entry.name} - Click to view on Solscan`}
+              >
+                {entry.name}
+              </a>
+            ) : (
+              <span className="text-gray-300 truncate max-w-[140px] sm:max-w-[180px]">
+                {entry.name}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

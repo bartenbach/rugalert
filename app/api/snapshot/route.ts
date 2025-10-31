@@ -609,13 +609,13 @@ export async function POST(req: NextRequest) {
       const activatingAccounts = stakeData?.activatingAccounts || [];
       const deactivatingAccounts = stakeData?.deactivatingAccounts || [];
       
-      // Get stake distribution for pie chart (top 10 + "Others")
+      // Get stake distribution for pie chart (top 25 stakers)
       const distribution = stakeDistribution.get(v.votePubkey);
       const distributionArray: Array<{ staker: string; amount: number; label: string | null }> = [];
       if (distribution) {
         const sorted = Array.from(distribution.entries())
           .sort((a, b) => b[1] - a[1]) // Sort by amount descending
-          .slice(0, 10); // Top 10 stakers
+          .slice(0, 25); // Top 25 stakers (frontend will decide how many to show)
         
         for (const [staker, amount] of sorted) {
           distributionArray.push({

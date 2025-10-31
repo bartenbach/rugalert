@@ -1,7 +1,6 @@
 "use client";
 import RugsPerEpochChart from "@/components/RugsPerEpochChart";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 type Row = {
   id: string;
@@ -37,17 +36,9 @@ function getRelativeTime(timestamp: string): string {
   return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-type ValidatorSearchResult = {
-  votePubkey: string;
-  name: string;
-  iconUrl?: string;
-  identityPubkey: string;
-};
-
 export default function Page() {
   const [epochs, setEpochs] = useState<number>(10);
   const [items, setItems] = useState<Row[]>([]);
-  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Event type filters (default: show RUGs + Cautions only)
@@ -61,25 +52,11 @@ export default function Page() {
   const [newRugDetected, setNewRugDetected] = useState<Row | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  // Validator search state (integrated with main search)
-  const [searchResults, setSearchResults] = useState<ValidatorSearchResult[]>(
-    []
-  );
-  const [searching, setSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
   const [eventsPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
 
   const previousRugsRef = useRef<Set<string>>(new Set());
   const sirenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
 
   async function load(isAutoRefresh = false) {
     if (!isAutoRefresh) setLoading(true);
@@ -141,49 +118,6 @@ export default function Page() {
     }
   }
 
-  // Validator search with debounce (using existing "q" search)
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    if (q.length < 2) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
-
-    setSearching(true);
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/search-validators?q=${encodeURIComponent(q)}`
-        );
-        const data = await res.json();
-        setSearchResults(data.results || []);
-        // Only show dropdown if we have results
-        if (data.results && data.results.length > 0) {
-          // Small delay to ensure input is positioned
-          setTimeout(() => {
-            updateDropdownPosition();
-            setShowSearchResults(true);
-          }, 0);
-        }
-      } catch (error) {
-        console.error("Search failed:", error);
-        setSearchResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 300);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [q]);
-
   // Initial load and reload when filters change
   useEffect(() => {
     load();
@@ -199,36 +133,6 @@ export default function Page() {
 
     return () => clearInterval(interval);
   }, [autoRefresh, epochs, showInfo]);
-
-  // Mount detection for portal
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  // Calculate dropdown position
-  const updateDropdownPosition = () => {
-    if (searchInputRef.current) {
-      const rect = searchInputRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + 8,
-        left: rect.left,
-        width: rect.width,
-      });
-    }
-  };
-
-  // Update position when showing results or on scroll/resize
-  useEffect(() => {
-    if (showSearchResults && searchResults.length > 0) {
-      updateDropdownPosition();
-      window.addEventListener("scroll", updateDropdownPosition, true);
-      window.addEventListener("resize", updateDropdownPosition);
-      return () => {
-        window.removeEventListener("scroll", updateDropdownPosition, true);
-        window.removeEventListener("resize", updateDropdownPosition);
-      };
-    }
-  }, [showSearchResults, searchResults.length]);
 
   const filtered = items.filter((it) => {
     // Filter by event type only (removed search query filtering)
@@ -361,144 +265,9 @@ export default function Page() {
         </div>
       )}
 
-      {/* Hero Section */}
-      <div className="text-center space-y-4 mb-8">
-        <div className="inline-block">
-          <h1 className="text-5xl md:text-6xl font-bold gradient-text mb-4">
-            Validator Commission Tracker
-          </h1>
-          <div className="h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 rounded-full"></div>
-        </div>
-        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-          Real-time tracking of ALL Solana validator commission changes. Get
-          instant alerts for rugs and suspicious increases.
-        </p>
-      </div>
-
-      {/* Global Validator Search */}
-      <div className="max-w-2xl mx-auto mb-12">
-        <div className="relative">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onFocus={() => {
-              if (searchResults.length > 0) {
-                updateDropdownPosition();
-                setShowSearchResults(true);
-              }
-            }}
-            placeholder="Search validators by name or pubkey..."
-            className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-orange-500/20"
-          />
-          {searching ? (
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : (
-            <svg
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          )}
-          {q && (
-            <button
-              onClick={() => setQ("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          )}
-
-          {/* Validator Search Results Dropdown - Rendered via Portal */}
-          {isMounted &&
-            showSearchResults &&
-            searchResults.length > 0 &&
-            dropdownPosition &&
-            createPortal(
-              <>
-                <div
-                  className="fixed inset-0"
-                  style={{ zIndex: 999998 }}
-                  onClick={() => setShowSearchResults(false)}
-                />
-                <div
-                  className="fixed rounded-xl border-2 border-orange-500 overflow-hidden max-h-96 overflow-y-auto shadow-2xl"
-                  style={{
-                    zIndex: 999999,
-                    backgroundColor: "#0a0a0a",
-                    top: `${dropdownPosition.top}px`,
-                    left: `${dropdownPosition.left}px`,
-                    width: `${dropdownPosition.width}px`,
-                  }}
-                >
-                  <div className="p-3 border-b border-orange-500/50 bg-gradient-to-r from-orange-500/30 to-orange-600/30">
-                    <span className="text-sm text-orange-300 font-bold px-2">
-                      🔍 Validators matching "{q}"
-                    </span>
-                  </div>
-                  {searchResults.map((result) => (
-                    <a
-                      key={result.votePubkey}
-                      href={`/validator/${result.votePubkey}`}
-                      className="flex items-center gap-3 p-4 hover:bg-orange-500/30 transition-all border-b border-white/10 last:border-0 group"
-                      style={{ backgroundColor: "#1a1a1a" }}
-                      onClick={() => {
-                        setShowSearchResults(false);
-                        setQ("");
-                      }}
-                    >
-                      {result.iconUrl ? (
-                        <img
-                          src={result.iconUrl}
-                          alt={result.name}
-                          className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-lg bg-orange-500/30 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
-                          <span className="text-lg">🔷</span>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-base font-bold truncate group-hover:text-orange-300 transition-colors">
-                          {result.name}
-                        </div>
-                        <div className="text-xs text-gray-300 font-mono truncate bg-black/30 px-2 py-0.5 rounded mt-1 inline-block">
-                          {result.votePubkey}
-                        </div>
-                      </div>
-                      <span className="text-gray-400 group-hover:text-orange-400 transition-colors text-xl flex-shrink-0">
-                        →
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              </>,
-              document.body
-            )}
-        </div>
+      {/* Rugs per Epoch Chart */}
+      <div className="mb-8">
+        <RugsPerEpochChart />
       </div>
 
       {/* Commission Events Table Section */}
@@ -507,8 +276,7 @@ export default function Page() {
         <div className="space-y-4">
           {/* Title and Stats Row */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-            <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-              <span>📊</span>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">
               Commission Events
             </h2>
             <div className="flex gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-start">
@@ -953,11 +721,6 @@ export default function Page() {
           Showing {startIndex + 1}-{Math.min(endIndex, filtered.length)} of{" "}
           {filtered.length} events
         </div>
-      </div>
-
-      {/* Rugs per Epoch Chart */}
-      <div className="mt-8">
-        <RugsPerEpochChart />
       </div>
     </div>
   );
