@@ -37,7 +37,7 @@ let sql: any
 async function migrateValidators() {
   console.log('\n📦 Migrating validators...')
   const records: any[] = []
-  await tb.validators.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.validators.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -91,7 +91,7 @@ async function migrateValidators() {
 async function migrateSnapshots() {
   console.log('\n📸 Migrating snapshots...')
   const records: any[] = []
-  await tb.snapshots.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.snapshots.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -124,7 +124,7 @@ async function migrateSnapshots() {
 async function migrateEvents() {
   console.log('\n🚨 Migrating events...')
   const records: any[] = []
-  await tb.events.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.events.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -156,7 +156,7 @@ async function migrateEvents() {
 async function migrateSubscribers() {
   console.log('\n📧 Migrating subscribers...')
   const records: any[] = []
-  await tb.subs.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.subs.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -187,7 +187,7 @@ async function migrateSubscribers() {
 async function migrateStakeHistory() {
   console.log('\n📊 Migrating stake history...')
   const records: any[] = []
-  await tb.stakeHistory.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.stakeHistory.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -221,7 +221,7 @@ async function migrateStakeHistory() {
 async function migratePerformanceHistory() {
   console.log('\n⚡ Migrating performance history...')
   const records: any[] = []
-  await tb.performanceHistory.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.performanceHistory.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -253,7 +253,7 @@ async function migratePerformanceHistory() {
 async function migrateMevSnapshots() {
   console.log('\n💰 Migrating MEV snapshots...')
   const records: any[] = []
-  await tb.mevSnapshots.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.mevSnapshots.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -287,7 +287,7 @@ async function migrateMevSnapshots() {
 async function migrateMevEvents() {
   console.log('\n💸 Migrating MEV events...')
   const records: any[] = []
-  await tb.mevEvents.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.mevEvents.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -323,7 +323,7 @@ async function migrateMevEvents() {
 async function migrateDailyUptime() {
   console.log('\n📈 Migrating daily uptime...')
   const records: any[] = []
-  await tb.dailyUptime.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.dailyUptime.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })
@@ -370,7 +370,7 @@ async function migrateDailyUptime() {
 async function migrateValidatorInfoHistory() {
   console.log('\n📝 Migrating validator info history...')
   const records: any[] = []
-  await tb.validatorInfoHistory.select({ pageSize: 100 }).eachPage((recs, next) => {
+  await tb.validatorInfoHistory.select({ pageSize: 100 }).eachPage((recs: any[], next: () => void) => {
     records.push(...recs)
     next()
   })

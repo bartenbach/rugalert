@@ -70,7 +70,7 @@ export async function findValidator(votePubkey: string): Promise<Validator | nul
     WHERE vote_pubkey = ${votePubkey}
     LIMIT 1
   `
-  return result[0] || null
+  return (result[0] as Validator) || null
 }
 
 export async function upsertValidator(
@@ -90,11 +90,11 @@ export async function upsertValidator(
       updated_at = NOW()
     RETURNING *
   `
-  return result[0]
+  return result[0] as Validator
 }
 
 export async function getAllValidators(): Promise<Validator[]> {
-  return await sql`SELECT * FROM validators`
+  return await sql`SELECT * FROM validators` as Validator[]
 }
 
 export async function updateValidatorStake(
@@ -126,7 +126,7 @@ export async function getPrevSnapshot(votePubkey: string, currentEpoch: number):
     ORDER BY epoch DESC
     LIMIT 1
   `
-  return result[0] || null
+  return (result[0] as Snapshot) || null
 }
 
 export async function upsertSnapshot(
@@ -144,7 +144,7 @@ export async function upsertSnapshot(
       commission = COALESCE(EXCLUDED.commission, snapshots.commission)
     RETURNING *
   `
-  return result[0]
+  return result[0] as Snapshot
 }
 
 // Events
@@ -161,7 +161,7 @@ export async function createEvent(
     VALUES (${votePubkey}, ${type}, ${fromCommission}, ${toCommission}, ${delta}, ${epoch})
     RETURNING *
   `
-  return result[0]
+  return result[0] as Event
 }
 
 export async function listEventsSince(minEpoch: number): Promise<Event[]> {
@@ -170,7 +170,7 @@ export async function listEventsSince(minEpoch: number): Promise<Event[]> {
     FROM events
     WHERE epoch >= ${minEpoch}
     ORDER BY vote_pubkey, epoch DESC, created_at DESC
-  `
+  ` as Event[]
 }
 
 export async function getEventsInEpochRange(minEpoch: number, maxEpoch: number): Promise<Event[]> {
@@ -178,7 +178,7 @@ export async function getEventsInEpochRange(minEpoch: number, maxEpoch: number):
     SELECT * FROM events
     WHERE epoch >= ${minEpoch} AND epoch <= ${maxEpoch}
     ORDER BY created_at DESC
-  `
+  ` as Event[]
 }
 
 // Subscribers
@@ -188,7 +188,7 @@ export async function findSubscriber(email: string): Promise<Subscriber | null> 
     WHERE email = ${email}
     LIMIT 1
   `
-  return result[0] || null
+  return (result[0] as Subscriber) || null
 }
 
 export async function upsertSubscriber(email: string, preferences: string): Promise<Subscriber> {
@@ -201,11 +201,11 @@ export async function upsertSubscriber(email: string, preferences: string): Prom
       updated_at = NOW()
     RETURNING *
   `
-  return result[0]
+  return result[0] as Subscriber
 }
 
 export async function getAllSubscribers(): Promise<Subscriber[]> {
-  return await sql`SELECT * FROM subscribers`
+  return await sql`SELECT * FROM subscribers` as Subscriber[]
 }
 
 // Series for charting
