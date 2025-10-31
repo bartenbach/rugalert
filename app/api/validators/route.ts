@@ -23,27 +23,31 @@ export async function GET(request: NextRequest) {
     ]);
     const currentEpoch = epochInfo.epoch;
     
-    // Calculate real-time network totals from RPC
+    // Helper to convert lamports to SOL
+    const LAMPORTS_PER_SOL = 1_000_000_000;
+    const lamportsToSol = (lamports: number) => lamports / LAMPORTS_PER_SOL;
+    
+    // Calculate real-time network totals from RPC (convert to SOL)
     const totalActiveStake = voteAccounts.current.reduce(
-      (sum, v) => sum + v.activatedStake,
+      (sum, v) => sum + lamportsToSol(v.activatedStake),
       0
     );
     const totalDelinquentStake = voteAccounts.delinquent.reduce(
-      (sum, v) => sum + v.activatedStake,
+      (sum, v) => sum + lamportsToSol(v.activatedStake),
       0
     );
     const networkTotalStake = totalActiveStake + totalDelinquentStake;
     
-    // Build maps for RPC stake data and delinquent status
+    // Build maps for RPC stake data and delinquent status (in SOL)
     const rpcStakeMap = new Map<string, number>();
     const delinquentSet = new Set<string>();
     
     voteAccounts.current.forEach((v: any) => {
-      rpcStakeMap.set(v.votePubkey, v.activatedStake);
+      rpcStakeMap.set(v.votePubkey, lamportsToSol(v.activatedStake));
     });
     
     voteAccounts.delinquent.forEach((v: any) => {
-      rpcStakeMap.set(v.votePubkey, v.activatedStake);
+      rpcStakeMap.set(v.votePubkey, lamportsToSol(v.activatedStake));
       delinquentSet.add(v.votePubkey);
     });
 
@@ -70,11 +74,10 @@ export async function GET(request: NextRequest) {
       const jitoEnabled = Boolean(record.jito_enabled);
       
       // Convert BigInt/lamports to Number (SOL)
-      // 1 SOL = 1_000_000_000 lamports
-      const lamportsToSol = (val: any) => {
+      const lamportsToSolFromDb = (val: any) => {
         if (val === null || val === undefined) return 0;
         const lamports = typeof val === 'bigint' ? Number(val) : Number(val);
-        return lamports / 1_000_000_000;
+        return lamports / LAMPORTS_PER_SOL;
       };
       
       const toNumber = (val: any) => {
@@ -92,9 +95,9 @@ export async function GET(request: NextRequest) {
         stakeAccountCount: toNumber(record.stake_account_count),
         commission: toNumber(record.commission),
         jitoEnabled,
-        activeStake: lamportsToSol(record.active_stake),
-        activatingStake: lamportsToSol(record.activating_stake),
-        deactivatingStake: lamportsToSol(record.deactivating_stake),
+        activeStake: lamportsToSolFromDb(record.active_stake),
+        activatingStake: lamportsToSolFromDb(record.activating_stake),
+        deactivatingStake: lamportsToSolFromDb(record.deactivating_stake),
       });
     });
 
