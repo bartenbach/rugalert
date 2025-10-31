@@ -599,40 +599,15 @@ function ValidatorsPageContent() {
               <>
                 {displayedValidators.map((validator, index) => {
                   // Check if we need to insert Nakamoto coefficient divider
-                  const previousValidator =
-                    index > 0 ? displayedValidators[index - 1] : null;
+                  // Show AFTER the validator that crosses 33.33% threshold
                   const showNakamotoDivider =
-                    previousValidator &&
-                    previousValidator.cumulativeStakePercent < 33.33 &&
-                    validator.cumulativeStakePercent >= 33.33;
+                    validator.cumulativeStakePercent > 33.33 &&
+                    (index === 0 ||
+                      displayedValidators[index - 1].cumulativeStakePercent <=
+                        33.33);
 
                   return (
                     <>
-                      {showNakamotoDivider && (
-                        <tr key={`nakamoto-${validator.votePubkey}`}>
-                          <td colSpan={7} className="px-0 py-0">
-                            <div className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50">
-                              <div className="px-4 py-2 flex items-center justify-center gap-2">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
-                                <div className="text-center">
-                                  <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider">
-                                    ⚠️ Nakamoto Coefficient Threshold
-                                  </div>
-                                  <div className="text-[10px] text-cyan-300/80 mt-0.5">
-                                    Cumulative stake above forms a superminority
-                                    - Threat of halt or censorship
-                                  </div>
-                                  <div className="text-[10px] text-cyan-400/60 mt-0.5 font-semibold">
-                                    Please consider staking below this line to
-                                    help decentralize the network
-                                  </div>
-                                </div>
-                                <div className="flex-1 h-px bg-gradient-to-r from-cyan-400 via-cyan-400 to-transparent"></div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                       <tr
                         key={validator.votePubkey}
                         onClick={() =>
@@ -796,6 +771,31 @@ function ValidatorsPageContent() {
                           )}
                         </td>
                       </tr>
+                      {showNakamotoDivider && (
+                        <tr key={`nakamoto-${validator.votePubkey}`}>
+                          <td colSpan={7} className="px-0 py-0">
+                            <div className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50">
+                              <div className="px-4 py-2 flex items-center justify-center gap-2">
+                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
+                                <div className="text-center">
+                                  <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider">
+                                    ⚠️ Nakamoto Coefficient Threshold
+                                  </div>
+                                  <div className="text-[10px] text-cyan-300/80 mt-0.5">
+                                    Cumulative stake above forms a superminority
+                                    - Threat of halt or censorship
+                                  </div>
+                                  <div className="text-[10px] text-cyan-400/60 mt-0.5 font-semibold">
+                                    Please consider staking below this line to
+                                    help decentralize the network
+                                  </div>
+                                </div>
+                                <div className="flex-1 h-px bg-gradient-to-r from-cyan-400 via-cyan-400 to-transparent"></div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </>
                   );
                 })}
@@ -836,30 +836,15 @@ function ValidatorsPageContent() {
         ) : (
           <>
             {displayedValidators.map((validator, index) => {
-              const previousValidator =
-                index > 0 ? displayedValidators[index - 1] : null;
+              // Show AFTER the validator that crosses 33.33% threshold
               const showNakamotoDivider =
-                previousValidator &&
-                previousValidator.cumulativeStakePercent < 33.33 &&
-                validator.cumulativeStakePercent >= 33.33;
+                validator.cumulativeStakePercent > 33.33 &&
+                (index === 0 ||
+                  displayedValidators[index - 1].cumulativeStakePercent <=
+                    33.33);
 
               return (
                 <>
-                  {showNakamotoDivider && (
-                    <div
-                      key={`nakamoto-mobile-${validator.votePubkey}`}
-                      className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50 rounded-xl p-3"
-                    >
-                      <div className="text-center">
-                        <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-1">
-                          ⚠️ Nakamoto Coefficient
-                        </div>
-                        <div className="text-[10px] text-cyan-300/80">
-                          Cumulative stake above forms a superminority
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div
                     key={validator.votePubkey}
                     onClick={() =>
@@ -1000,6 +985,21 @@ function ValidatorsPageContent() {
                       </div>
                     </div>
                   </div>
+                  {showNakamotoDivider && (
+                    <div
+                      key={`nakamoto-mobile-${validator.votePubkey}`}
+                      className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50 rounded-xl p-3"
+                    >
+                      <div className="text-center">
+                        <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-1">
+                          ⚠️ Nakamoto Coefficient
+                        </div>
+                        <div className="text-[10px] text-cyan-300/80">
+                          Cumulative stake above forms a superminority
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               );
             })}

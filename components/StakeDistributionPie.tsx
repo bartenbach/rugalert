@@ -162,6 +162,10 @@ export default function StakeDistributionPie({
         @media (max-width: 639px) {
           .recharts-legend-item {
             flex: 0 1 calc(50% - 8px) !important;
+            min-width: 0 !important;
+          }
+          .recharts-legend-wrapper {
+            padding-bottom: 16px !important;
           }
         }
         @media (min-width: 640px) and (max-width: 1023px) {
@@ -208,7 +212,11 @@ export default function StakeDistributionPie({
           <Tooltip content={<CustomTooltip />} />
           <Legend
             verticalAlign="bottom"
-            height={75}
+            height={85}
+            wrapperStyle={{
+              paddingTop: "12px",
+              paddingBottom: "8px",
+            }}
             formatter={(value, entry: any) => {
               const data = entry.payload;
 

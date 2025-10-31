@@ -1,9 +1,5 @@
-// This file contains the Neon version of the snapshot script
-// It's being created alongside the original to allow for safe review before replacing
-// Once verified, rename this to route.ts and delete the old Airtable version
-
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "../../../lib/db-neon";
+import { tb } from "../../../lib/airtable";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
 import { getStakerLabel, type StakeAccountBreakdown } from "../../../lib/stakers";
 import { formatTwitterMevRug, formatTwitterRug, postToTwitter } from "../../../lib/twitter";
@@ -40,29 +36,28 @@ async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUT
       return;
     }
     
-    const subs = await sql`SELECT email, preferences FROM subscribers`;
+    const subs = await tb.subs.select().firstPage();
     console.log(`📧 Found ${subs.length} total subscribers`);
     
     // Filter subscribers based on their preferences
-    const eligibleSubs = subs.filter((s: any) => {
-      const email = s.email;
+    const eligibleSubs = subs.filter((s) => {
+      const email = s.get("email");
       if (!email) return false;
       
-      const preference = s.preferences || "rugs_only"; // Default to rugs_only
+      const prefs = s.get("preferences") as string | undefined;
+      const preference = prefs || "rugs_only"; // Default to rugs_only
       
       console.log(`  Subscriber: ${email}, preference: ${preference}, eventType: ${eventType}`);
       
       // Determine if this subscriber should get this type of alert
       if (preference === "all") return true; // All events
-      if (preference === "all_alerts") return true; // Legacy: treat as "all"
-      if (preference === "all_events") return true; // Legacy: treat as "all"
       if (preference === "rugs_and_cautions" && (eventType === "RUG" || eventType === "CAUTION")) return true;
       if (preference === "rugs_only" && eventType === "RUG") return true;
       
       return false;
     });
     
-    const emails = eligibleSubs.map((s: any) => s.email).filter(Boolean);
+    const emails = eligibleSubs.map((s) => String(s.get("email"))).filter(Boolean);
     console.log(`📧 Sending ${eventType} email to ${emails.length} recipients individually`);
     
     if (!emails.length) {
@@ -419,65 +414,94 @@ export async function POST(req: NextRequest) {
     
     // Fetch all validators at once
     const existingValidators = new Map<string, any>();
-    const allValidators = await sql`SELECT * FROM validators`;
-    allValidators.forEach((v: any) => existingValidators.set(v.vote_pubkey, v));
+    const allValidators: any[] = [];
+    await tb.validators.select({ pageSize: 100 }).eachPage((records, fetchNextPage) => {
+      allValidators.push(...records);
+      fetchNextPage();
+    });
+    allValidators.forEach(v => existingValidators.set(String(v.get('votePubkey')), v));
     
     // Fetch existing stake records for this epoch
     const existingStakeKeys = new Set<string>();
-    const stakeRecords = await sql`SELECT key FROM stake_history WHERE epoch = ${epoch}`;
-    stakeRecords.forEach((r: any) => existingStakeKeys.add(r.key));
+    await tb.stakeHistory.select({
+      filterByFormula: `{epoch} = ${epoch}`,
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => existingStakeKeys.add(String(r.get('key'))));
+      fetchNextPage();
+    });
     
     // Fetch existing performance records for this epoch
     const existingPerfKeys = new Set<string>();
     const existingPerfRecords = new Map<string, any>();
-    const perfRecords = await sql`SELECT * FROM performance_history WHERE epoch = ${epoch}`;
-    perfRecords.forEach((r: any) => {
-      existingPerfKeys.add(r.key);
-      existingPerfRecords.set(r.key, r);
+    await tb.performanceHistory.select({
+      filterByFormula: `{epoch} = ${epoch}`,
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => {
+        const key = String(r.get('key'));
+        existingPerfKeys.add(key);
+        existingPerfRecords.set(key, r);
+      });
+      fetchNextPage();
     });
     
     // Fetch existing MEV snapshots for this epoch
     const existingMevKeys = new Set<string>();
-    const mevRecords = await sql`SELECT key FROM mev_snapshots WHERE epoch = ${epoch}`;
-    mevRecords.forEach((r: any) => existingMevKeys.add(r.key));
+    await tb.mevSnapshots.select({
+      filterByFormula: `{epoch} = ${epoch}`,
+      pageSize: 100
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => existingMevKeys.add(String(r.get('key'))));
+      fetchNextPage();
+    });
     
     // Fetch latest MEV snapshot per validator (for change detection)
     const latestMevByValidator = new Map<string, any>();
-    const latestMevSnapshots = await sql`
-      SELECT DISTINCT ON (vote_pubkey) *
-      FROM mev_snapshots
-      ORDER BY vote_pubkey, epoch DESC
-      LIMIT 2000
-    `;
-    latestMevSnapshots.forEach((r: any) => {
-      latestMevByValidator.set(r.vote_pubkey, r);
+    await tb.mevSnapshots.select({
+      pageSize: 100,
+      sort: [{ field: 'epoch', direction: 'desc' }],
+      maxRecords: 2000,
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => {
+        const votePubkey = String(r.get('votePubkey'));
+        if (!latestMevByValidator.has(votePubkey)) {
+          latestMevByValidator.set(votePubkey, r);
+        }
+      });
+      fetchNextPage();
     });
     
     // Fetch latest commission snapshot per validator (for change detection)
+    // THIS MUST BE PRE-FETCHED! Doing this inside the loop = 970 individual queries = death
     logProgress(`Pre-fetching latest commission snapshots...`);
     const latestCommissionByValidator = new Map<string, { commission: number, epoch: number, slot: number }>();
-    const latestSnapshots = await sql`
-      SELECT DISTINCT ON (vote_pubkey) vote_pubkey, commission, epoch, slot
-      FROM snapshots
-      ORDER BY vote_pubkey, slot DESC
-      LIMIT 2000
-    `;
-    latestSnapshots.forEach((r: any) => {
-      latestCommissionByValidator.set(r.vote_pubkey, {
-        commission: Number(r.commission || 0),
-        epoch: Number(r.epoch || 0),
-        slot: Number(r.slot || 0),
+    await tb.snapshots.select({
+      pageSize: 100,
+      sort: [{ field: 'slot', direction: 'desc' }],
+      maxRecords: 2000,
+    }).eachPage((records, fetchNextPage) => {
+      records.forEach(r => {
+        const votePubkey = String(r.get('votePubkey'));
+        if (!latestCommissionByValidator.has(votePubkey)) {
+          latestCommissionByValidator.set(votePubkey, {
+            commission: Number(r.get('commission') || 0),
+            epoch: Number(r.get('epoch') || 0),
+            slot: Number(r.get('slot') || 0),
+          });
+        }
       });
+      fetchNextPage();
     });
     
     logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingMevKeys.size} MEV, ${latestCommissionByValidator.size} commission`);
     
     // Batch arrays for bulk creation
     const validatorsToCreate: any[] = [];
-    const validatorsToUpdate: any[] = [];
+    const validatorsToUpdate: {id: string, fields: any}[] = [];
     const stakeRecordsToCreate: any[] = [];
     const perfRecordsToCreate: any[] = [];
-    const perfRecordsToUpdate: any[] = [];
+    const perfRecordsToUpdate: {id: string, fields: any}[] = [];
     const mevSnapshotsToCreate: any[] = [];
     const mevEventsToCreate: any[] = [];
     const snapshotsToCreate: any[] = [];
@@ -521,6 +545,7 @@ export async function POST(req: NextRequest) {
     console.log("📚 Fetching validator info history for change detection...");
     
     // Build map of votePubkey -> most recent info history
+    // Using null instead of undefined for consistency with Airtable
     const lastInfoMap = new Map<string, {
       identityPubkey: string | null;
       name: string | null;
@@ -535,29 +560,36 @@ export async function POST(req: NextRequest) {
       console.log(`📚 Attempting to fetch validator_info_history table...`);
       logProgress(`Fetching validator info history for change detection...`);
       
-      const allInfoHistory = await sql`
-        SELECT DISTINCT ON (vote_pubkey) *
-        FROM validator_info_history
-        ORDER BY vote_pubkey, changed_at DESC
-      `;
+      const allInfoHistory = await tb.validatorInfoHistory.select({
+        sort: [{ field: 'changedAt', direction: 'desc' }],
+        pageSize: 100,
+      }).all();
       
-      console.log(`✅ Successfully fetched ${allInfoHistory.length} info history records`);
+      console.log(`✅ Successfully fetched ${allInfoHistory.length} info history records from Airtable`);
       logProgress(`Loaded ${allInfoHistory.length} info history records, processing...`);
       
       for (const record of allInfoHistory) {
-        lastInfoMap.set(record.vote_pubkey, {
-          identityPubkey: record.identity_pubkey || null,
-          name: record.name || null,
-          description: record.description || null,
-          website: record.website || null,
-          iconUrl: record.icon_url || null,
-        });
+        const votePubkey = record.get('votePubkey') as string;
+        if (!lastInfoMap.has(votePubkey)) {
+          // Normalize values from Airtable - convert any falsy value to null
+          // Empty strings are already filtered at source, so || is safe here
+          lastInfoMap.set(votePubkey, {
+            identityPubkey: (record.get('identityPubkey') as string | undefined) || null,
+            name: (record.get('name') as string | undefined) || null,
+            description: (record.get('description') as string | undefined) || null,
+            website: (record.get('website') as string | undefined) || null,
+            iconUrl: (record.get('iconUrl') as string | undefined) || null,
+          });
+        }
       }
       console.log(`✅ Built info history map for ${lastInfoMap.size} validators`);
       logProgress(`Processed ${lastInfoMap.size} unique validator info records`);
     } catch (error: any) {
       console.error(`❌ VALIDATOR INFO HISTORY TABLE FETCH FAILED!`);
+      console.error(`Error type: ${error.constructor.name}`);
       console.error(`Error message: ${error.message}`);
+      console.error(`Full error:`, error);
+      if (error.statusCode) console.error(`Status code: ${error.statusCode}`);
       logProgress(`❌ Info history fetch failed - tracking disabled: ${error.message}`);
       infoHistoryEnabled = false;
     }
@@ -586,6 +618,7 @@ export async function POST(req: NextRequest) {
         }
         const meta = infoMap.get(v.nodePubkey) || {};
       const chainName = meta.name;
+      // No fallback icon - let validators with no icon show empty square
       const iconUrl = meta.iconUrl;
       const website = meta.website;
       const description = meta.description;
@@ -627,64 +660,76 @@ export async function POST(req: NextRequest) {
       }
       
       if (existing) {
-        // Update existing validator
-        const patch: any = {
-          votePubkey: v.votePubkey,
-          identityPubkey: v.nodePubkey,
-          delinquent: isDelinquent,
-          commission: v.commission,
-          activeStake: Number(v.activatedStake || 0),
-          activatingStake,
-          deactivatingStake,
-          activatingAccounts: activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]",
-          deactivatingAccounts: deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]",
-          jitoEnabled: isJitoEnabled,
-          stakeAccountCount: accountCount,
-          stakeDistribution: JSON.stringify(distributionArray),
-        };
-        
+        const patch: any = {};
+        if (existing.get("identityPubkey") !== v.nodePubkey)
+          patch.identityPubkey = v.nodePubkey;
         if (chainName) patch.name = chainName;
         
         // Handle iconUrl: update if we have a new one, or clear if existing is DiceBear
-        const existingIconUrl = existing.icon_url;
+        const existingIconUrl = existing.get("iconUrl") as string | undefined;
         if (iconUrl) {
           patch.iconUrl = iconUrl;
         } else if (existingIconUrl && existingIconUrl.includes('dicebear.com')) {
+          // Clear DiceBear fallback URLs
           patch.iconUrl = null;
         }
         
-        if (website) patch.website = website;
+        if (website)   patch.website = website;
         if (description) patch.description = description;
-        if (version) patch.version = version;
-        
-        validatorsToUpdate.push(patch);
+        if (version && existing.get("version") !== version) patch.version = version;
+        // Update delinquent status (changes frequently)
+        patch.delinquent = isDelinquent;
+        // Cache current commission for fast access
+        patch.commission = v.commission;
+        // Cache activeStake (locked at epoch boundaries)
+        patch.activeStake = Number(v.activatedStake || 0);
+        // Cache activating/deactivating stake (ephemeral current state, not historical)
+        patch.activatingStake = activatingStake;
+        patch.deactivatingStake = deactivatingStake;
+        // Store stake account breakdowns as JSON for detailed UI display
+        // ALWAYS write these, even if empty, to clear stale data from previous epochs
+        patch.activatingAccounts = activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]";
+        patch.deactivatingAccounts = deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]";
+        // Update Jito status
+        patch.jitoEnabled = isJitoEnabled;
+        // Update stake account count
+        patch.stakeAccountCount = accountCount;
+        // Update stake distribution (for pie chart)
+        patch.stakeDistribution = JSON.stringify(distributionArray);
+        if (Object.keys(patch).length) {
+          validatorsToUpdate.push({ id: existing.id, fields: patch });
+        }
       } else {
-        // Create new validator
         validatorsToCreate.push({
-          votePubkey: v.votePubkey,
-          identityPubkey: v.nodePubkey,
-          commission: v.commission,
-          delinquent: isDelinquent,
-          activeStake: Number(v.activatedStake || 0),
-          activatingStake,
-          deactivatingStake,
-          activatingAccounts: activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]",
-          deactivatingAccounts: deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]",
-          jitoEnabled: isJitoEnabled,
-          stakeAccountCount: accountCount,
-          stakeDistribution: JSON.stringify(distributionArray),
-          firstSeenEpoch: epoch,
-          name: chainName || null,
-          iconUrl: iconUrl || null,
-          website: website || null,
-          description: description || null,
-          version: version || null,
+          fields: {
+            votePubkey: v.votePubkey,
+            identityPubkey: v.nodePubkey,
+            commission: v.commission,
+            delinquent: isDelinquent,
+            activeStake: Number(v.activatedStake || 0),
+            activatingStake,
+            deactivatingStake,
+            activatingAccounts: activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]",
+            deactivatingAccounts: deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]",
+            jitoEnabled: isJitoEnabled,
+            stakeAccountCount: accountCount,
+            stakeDistribution: JSON.stringify(distributionArray),
+            firstSeenEpoch: epoch, // Track when validator first appeared
+            ...(chainName ? { name: chainName } : {}),
+            ...(iconUrl   ? { iconUrl } : {}),
+            ...(website   ? { website } : {}),
+            ...(description ? { description } : {}),
+            ...(version ? { version } : {}),
+          }
         });
       }
 
       // ---- VALIDATOR INFO HISTORY TRACKING ----
+      // Only track if table exists and is enabled
       if (infoHistoryEnabled) {
+        // Check if validator info has changed since last snapshot
         const lastInfo = lastInfoMap.get(v.votePubkey);
+        // Normalize undefined/null to null for consistent comparison
         const currentInfo = {
           identityPubkey: v.nodePubkey,
           name: chainName || null,
@@ -693,6 +738,7 @@ export async function POST(req: NextRequest) {
           iconUrl: iconUrl || null,
         };
         
+        // Also normalize lastInfo values (Airtable might return undefined or null)
         const normalizedLastInfo = lastInfo ? {
           identityPubkey: lastInfo.identityPubkey || null,
           name: lastInfo.name || null,
@@ -701,6 +747,7 @@ export async function POST(req: NextRequest) {
           iconUrl: lastInfo.iconUrl || null,
         } : null;
         
+        // Detect changes in any tracked field
         const hasInfoChanged = !normalizedLastInfo || 
           normalizedLastInfo.identityPubkey !== currentInfo.identityPubkey ||
           normalizedLastInfo.name !== currentInfo.name ||
@@ -708,6 +755,7 @@ export async function POST(req: NextRequest) {
           normalizedLastInfo.website !== currentInfo.website ||
           normalizedLastInfo.iconUrl !== currentInfo.iconUrl;
         
+        // Only log first few validators (removed per-validator logging to avoid log truncation)
         if (validatorIndex < 3) {
           console.log(`🔍 Validator ${validatorIndex} (${chainName || v.votePubkey.slice(0, 8)}): hasInfoChanged=${hasInfoChanged}, lastInfo=${!!normalizedLastInfo}`);
         }
@@ -717,29 +765,36 @@ export async function POST(req: NextRequest) {
           const infoKey = `${v.votePubkey}-${timestamp}`;
           
           infoHistoryToCreate.push({
-            key: infoKey,
-            votePubkey: v.votePubkey,
-            identityPubkey: v.nodePubkey,
-            name: currentInfo.name,
-            description: currentInfo.description,
-            website: currentInfo.website,
-            iconUrl: currentInfo.iconUrl,
-            changedAt: timestamp,
-            epoch,
+            fields: {
+              key: infoKey,
+              votePubkey: v.votePubkey,
+              identityPubkey: v.nodePubkey,
+              name: currentInfo.name,
+              description: currentInfo.description,
+              website: currentInfo.website,
+              iconUrl: currentInfo.iconUrl,
+              changedAt: timestamp,
+              epoch,
+            }
           });
           
+          // Update our map for subsequent checks in this snapshot run
           lastInfoMap.set(v.votePubkey, currentInfo);
         }
       }
 
       // ---- STAKE HISTORY TRACKING ----
+      // Only track ACTUAL historical stake (active stake at epoch boundaries)
+      // activating/deactivating are cached in validators table as current state
       const stakeKey = `${v.votePubkey}-${epoch}`;
       if (!existingStakeKeys.has(stakeKey) && v.activatedStake !== undefined) {
         stakeRecordsToCreate.push({
-          key: stakeKey,
-          votePubkey: v.votePubkey,
-          epoch,
-          activeStake: Number(v.activatedStake || 0),
+          fields: {
+            key: stakeKey,
+            votePubkey: v.votePubkey,
+            epoch,
+            activeStake: Number(v.activatedStake || 0),
+          }
         });
       }
 
@@ -751,13 +806,17 @@ export async function POST(req: NextRequest) {
       let leaderSlots = 0;
       let blocksProduced = 0;
       
+      // Get TOTAL leader slots from leader schedule (full epoch assignment)
+      // NOTE: Leader schedule is keyed by IDENTITY pubkey (nodePubkey), not vote pubkey!
       const scheduleSlots = leaderScheduleData[v.nodePubkey];
       if (scheduleSlots && Array.isArray(scheduleSlots)) {
-        leaderSlots = scheduleSlots.length;
+        leaderSlots = scheduleSlots.length; // Total leader slots for entire epoch
       }
       
+      // Debug specific validator (pumpkinspool)
       const isPumpkinspool = v.votePubkey === '7X7oVvGKhE5HEm1d3vFPmDN5h2HQXqKzfXu1Cz6p8Fk1';
       
+      // Get blocks produced so far from block production data
       if (blockData) {
         blocksProduced = Number(blockData[1] || 0);
         const elapsedLeaderSlots = Number(blockData[0] || 0);
@@ -765,110 +824,143 @@ export async function POST(req: NextRequest) {
         if (isPumpkinspool) {
           console.log(`\n🎃 PUMPKINSPOOL DEBUG:`);
           console.log(`  Vote pubkey: ${v.votePubkey}`);
+          console.log(`  Identity pubkey (nodePubkey): ${v.nodePubkey}`);
           console.log(`  Leader schedule lookup result:`, scheduleSlots ? `${scheduleSlots.length} slots` : 'NOT FOUND');
           console.log(`  Block production data: elapsed=${elapsedLeaderSlots}, produced=${blocksProduced}`);
+          console.log(`  Current leaderSlots value: ${leaderSlots}`);
+          console.log(`  Will use fallback? ${leaderSlots === 0 && elapsedLeaderSlots > 0}`);
+          
+          // Check if identity is in leader schedule at all
+          const identityInSchedule = v.nodePubkey in leaderScheduleData;
+          console.log(`  Identity in leader schedule keys? ${identityInSchedule}`);
+          if (!identityInSchedule) {
+            // Check for similar keys
+            const similarKeys = Object.keys(leaderScheduleData).filter(k => k.includes(v.nodePubkey.substring(0, 8)));
+            console.log(`  Similar keys in schedule:`, similarKeys.length > 0 ? similarKeys : 'NONE');
+          }
         }
         
+        // Fallback: if we don't have leader schedule data, use elapsed slots as total
+        // (this happens early in epoch or for validators not in schedule)
         if (leaderSlots === 0 && elapsedLeaderSlots > 0) {
           leaderSlots = elapsedLeaderSlots;
-          console.log(`  ⚠️  ${v.votePubkey.substring(0, 8)}... not in leader schedule, using elapsed: ${leaderSlots}`);
+          console.log(`  ⚠️  ${v.votePubkey.substring(0, 8)}... (identity: ${v.nodePubkey.substring(0, 8)}...) not in leader schedule, using elapsed: ${leaderSlots}`);
         }
         
+        // Calculate skip rate based on elapsed leader slots vs blocks produced
         if (elapsedLeaderSlots > 0) {
           skipRate = ((elapsedLeaderSlots - blocksProduced) / elapsedLeaderSlots) * 100;
         }
       }
       
+      // Debug log for first 3 validators
       if (validatorIndex < 3 || isPumpkinspool) {
-        console.log(`  Validator ${validatorIndex + 1}: vote=${v.votePubkey.substring(0, 8)}... - leaderSlots=${leaderSlots}, produced=${blocksProduced}, skipRate=${skipRate.toFixed(2)}%`);
+        console.log(`  Validator ${validatorIndex + 1}: vote=${v.votePubkey.substring(0, 8)}... identity=${v.nodePubkey.substring(0, 8)}... - leaderSlots=${leaderSlots}, produced=${blocksProduced}, skipRate=${skipRate.toFixed(2)}%`);
       }
         
-      const voteCredits = voteCreditsMap.get(v.votePubkey);
-      const voteCreditsPercentage = (voteCredits !== undefined && maxVoteCredits > 0)
-        ? (voteCredits / maxVoteCredits) * 100
-        : 0;
+        // Get vote credits from pre-fetched map and calculate percentage
+        const voteCredits = voteCreditsMap.get(v.votePubkey);
+        const voteCreditsPercentage = (voteCredits !== undefined && maxVoteCredits > 0)
+          ? (voteCredits / maxVoteCredits) * 100
+          : 0;
         
       const perfFields = {
-        key: perfKey,
-        votePubkey: v.votePubkey,
-        epoch,
-        skipRate: Math.max(0, Math.min(100, skipRate)),
-        leaderSlots,
-        blocksProduced,
-        ...(voteCredits !== undefined ? { 
-          voteCredits,
-          voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100,
-          maxPossibleCredits: maxVoteCredits,
-        } : {}),
+            key: perfKey,
+            votePubkey: v.votePubkey,
+            epoch,
+            skipRate: Math.max(0, Math.min(100, skipRate)),
+        leaderSlots, // Store total leader slots for calculating skipped blocks in UI
+        blocksProduced, // Store actual blocks produced
+            ...(voteCredits !== undefined ? { 
+              voteCredits,
+              voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100, // 2 decimal places
+              maxPossibleCredits: maxVoteCredits,
+            } : {}),
       };
       
+      // For current epoch: update existing record, otherwise create new
       if (existingPerfKeys.has(perfKey)) {
-        perfRecordsToUpdate.push(perfFields);
+        // Update the existing record
+        const existingRecord = existingPerfRecords.get(perfKey);
+        if (existingRecord) {
+          perfRecordsToUpdate.push({
+            id: existingRecord.id,
+            fields: perfFields
+          });
+        }
       } else {
-        perfRecordsToCreate.push(perfFields);
+        perfRecordsToCreate.push({
+          fields: perfFields
+        });
       }
 
       // 4) DELTA-ONLY SNAPSHOTS
+      // Get the most recent snapshot for this validator (from pre-fetched map)
       const lastSnapshot = latestCommissionByValidator.get(v.votePubkey);
       const prevCommission = lastSnapshot?.commission;
       const prevEpoch = lastSnapshot?.epoch;
 
+      // Only write a new snapshot if commission changed since the most recent snapshot,
+      // OR if there is no previous snapshot at all.
       const hasPrev = prevCommission !== undefined && prevCommission !== null;
       const commissionChanged = !hasPrev || Number(prevCommission) !== v.commission;
 
       if (commissionChanged) {
+        // Queue snapshot for batch creation (check for duplicates)
         const key = `${v.votePubkey}-${slot}`;
         if (!snapshotsBeingCreated.has(key)) {
           snapshotsBeingCreated.add(key);
           snapshotsToCreate.push({
-            key, 
-            votePubkey: v.votePubkey, 
-            epoch, 
-            slot, 
-            commission: v.commission
+            fields: { key, votePubkey: v.votePubkey, epoch, slot, commission: v.commission }
           });
         }
 
+        // Event detection against the last snapshot (if it existed)
         if (hasPrev) {
           const from = Number(prevCommission);
           const to = Number(v.commission);
           const delta = to - from;
 
+          // Create events for ALL commission changes
           let type = "INFO";
           let shouldNotify = false;
           
+          // RUG: Commission increased TO 90% or higher (taking almost all rewards)
           if (to >= 90 && delta > 0) {
             type = "RUG";
             shouldNotify = true;
           } 
+          // CAUTION: Commission increased by 10+ percentage points (but not to rug levels)
           else if (delta >= 10 && to < 90) {
             type = "CAUTION";
             shouldNotify = true;
           }
+          // INFO: All other changes (small increases, decreases, etc.)
 
+          // Queue event for batch creation
           eventsToCreate.push({
-            votePubkey: v.votePubkey, 
-            epoch, 
-            type, 
-            fromCommission: from, 
-            toCommission: to, 
-            delta
+            fields: { votePubkey: v.votePubkey, epoch, type, fromCommission: from, toCommission: to, delta }
           });
 
+          // Send notifications based on event type
           const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
           const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
           const validatorName = chainName || v.votePubkey;
           
           if (type === "RUG") {
             commissionRugs.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
+            // Still send Discord immediately for real-time alerts
             const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
+            // Post to Twitter/X for community retweets
             const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
             await postToTwitter(twitterMsg);
           } else if (type === "CAUTION") {
             commissionCautions.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
+            // Still send Discord immediately
             const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
             await sendDiscord(msg);
+            // Optionally post CAUTION to Twitter too (remove if too noisy)
             const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
             await postToTwitter(twitterMsg);
           } else if (type === "INFO") {
@@ -876,58 +968,72 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+      // If commission didn't change, we write nothing and (correctly) emit no event.
       
       // ---- MEV COMMISSION TRACKING ----
       if (isJitoEnabled && jitoInfo) {
         const mevKey = `${v.votePubkey}-${epoch}`;
         
+        // Only create snapshot if we don't have one for this epoch
         if (!existingMevKeys.has(mevKey)) {
-          mevSnapshotsToCreate.push({
-            key: mevKey,
-            votePubkey: v.votePubkey,
-            epoch,
-            mevCommission: jitoInfo.mevCommission || 0,
-            priorityFeeCommission: jitoInfo.priorityFeeCommission || 0,
-            mevRewards: jitoInfo.mevRewards || 0,
-            priorityFeeRewards: jitoInfo.priorityFeeRewards || 0,
-          });
+            mevSnapshotsToCreate.push({
+              fields: {
+                key: mevKey,
+                votePubkey: v.votePubkey,
+                epoch,
+                mevCommission: jitoInfo.mevCommission || 0,
+                priorityFeeCommission: jitoInfo.priorityFeeCommission || 0,
+                mevRewards: jitoInfo.mevRewards || 0,
+                priorityFeeRewards: jitoInfo.priorityFeeRewards || 0,
+              }
+            });
           
+          // Debug: Log first few MEV snapshots
           if (mevSnapshotsToCreate.length <= 3) {
             console.log(`  Queued MEV snapshot for ${v.votePubkey.substring(0, 8)}... - MEV: ${jitoInfo.mevCommission}%, Priority: ${jitoInfo.priorityFeeCommission || 0}%`);
           }
           
+          // Check for MEV commission changes
           const latestMev = latestMevByValidator.get(v.votePubkey);
           if (latestMev) {
-            const prevMevCommission = Number(latestMev.mev_commission || 0);
+            const prevMevCommission = Number(latestMev.get('mevCommission') || 0);
             const currentMevCommission = jitoInfo.mevCommission || 0;
             
+            // Only create event if MEV commission actually changed
             if (prevMevCommission !== currentMevCommission) {
               const delta = currentMevCommission - prevMevCommission;
               const eventType = detectMevRug(prevMevCommission, currentMevCommission);
               
               mevEventsToCreate.push({
-                votePubkey: v.votePubkey,
-                epoch,
-                type: eventType,
-                fromMevCommission: prevMevCommission,
-                toMevCommission: currentMevCommission,
-                delta,
+                fields: {
+                  votePubkey: v.votePubkey,
+                  epoch,
+                  type: eventType,
+                  fromMevCommission: prevMevCommission,
+                  toMevCommission: currentMevCommission,
+                  delta,
+                }
               });
               
+              // Send notifications for MEV rugs
               const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
               const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
               const validatorName = chainName || v.votePubkey;
               
               if (eventType === "RUG") {
                 mevRugs.push({ validatorName, votePubkey: v.votePubkey, from: prevMevCommission, to: currentMevCommission, delta, validatorUrl, epoch });
+                // Still send Discord immediately for real-time alerts
                 const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
+                // Post MEV rug to Twitter/X
                 const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
                 await postToTwitter(twitterMsg);
               } else if (eventType === "CAUTION") {
                 mevCautions.push({ validatorName, votePubkey: v.votePubkey, from: prevMevCommission, to: currentMevCommission, delta, validatorUrl, epoch });
+                // Still send Discord immediately
                 const msg = `⚠️ CAUTION: Large MEV Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
+                // Optionally post MEV CAUTION to Twitter too
                 const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
                 await postToTwitter(twitterMsg);
               }
@@ -937,218 +1043,199 @@ export async function POST(req: NextRequest) {
       }
       
       } catch (validatorError: any) {
+        // Log the error but continue processing other validators
         console.error(`❌ ERROR processing validator ${validatorIndex} (${v.votePubkey.slice(0, 8)}...):`, validatorError);
+        console.error(`   Error message: ${validatorError.message}`);
+        console.error(`   Error stack:`, validatorError.stack);
         logProgress(`❌ Error at validator ${validatorIndex}: ${validatorError.message}`);
+        // Don't throw - continue with next validator
       }
     
-      validatorIndex++;
+      validatorIndex++; // Increment counter for next validator
     }
 
     logProgress(`✅ Finished processing all ${validatorIndex} validators`);
     console.log(`📊 Summary: ${validatorsToCreate.length} new, ${validatorsToUpdate.length} updates, ${infoHistoryToCreate.length} info history queued`);
     console.log(`📊 Performance queue: ${perfRecordsToCreate.length} to create, ${perfRecordsToUpdate.length} to update`);
     
-    // BATCH CREATE/UPDATE operations
+    // Debug: Show first few perf records being created
+    if (perfRecordsToCreate.length > 0) {
+      console.log(`\n📝 Performance records to CREATE (first 3):`);
+      for (let i = 0; i < Math.min(3, perfRecordsToCreate.length); i++) {
+        const rec = perfRecordsToCreate[i];
+        console.log(`  ${i + 1}. ${rec.fields.votePubkey?.substring(0, 8)}... epoch=${rec.fields.epoch} leaderSlots=${rec.fields.leaderSlots} produced=${rec.fields.blocksProduced}`);
+      }
+    }
+    
+    if (perfRecordsToUpdate.length > 0) {
+      console.log(`\n📝 Performance records to UPDATE (first 3):`);
+      for (let i = 0; i < Math.min(3, perfRecordsToUpdate.length); i++) {
+        const rec = perfRecordsToUpdate[i];
+        console.log(`  ${i + 1}. ${rec.fields.votePubkey?.substring(0, 8)}... epoch=${rec.fields.epoch} leaderSlots=${rec.fields.leaderSlots} produced=${rec.fields.blocksProduced}`);
+      }
+    }
+
+    // BATCH CREATE/UPDATE operations to avoid timeout
     logProgress(`Batching: ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
     
-    // ========== VALIDATOR INFO HISTORY CREATION ==========
+    // Airtable allows max 10 records per create/update call, so batch them
+    const batchSize = 10;
+    
+    // ========== VALIDATOR INFO HISTORY CREATION (MOVED TO FIRST!) ==========
+    // Do this FIRST so if logs are truncated, at least this runs
     let infoHistoryCreated = 0;
-    console.log(`\n📚 ========== VALIDATOR INFO HISTORY CREATION ==========`);
+    console.log(`\n📚 ========== VALIDATOR INFO HISTORY CREATION (FIRST PRIORITY) ==========`);
+    console.log(`📊 INFO HISTORY STATUS: enabled=${infoHistoryEnabled}, toCreate=${infoHistoryToCreate.length}`);
+    console.log(`⏱️  Current time: ${new Date().toISOString()}`);
     
     if (infoHistoryEnabled && infoHistoryToCreate.length > 0) {
       try {
         console.log(`🚀 Starting info history creation for ${infoHistoryToCreate.length} records...`);
         logProgress(`Creating ${infoHistoryToCreate.length} validator info history records...`);
-        
-        for (const record of infoHistoryToCreate) {
-          await sql`
-            INSERT INTO validator_info_history (key, vote_pubkey, identity_pubkey, name, description, website, icon_url, changed_at, epoch)
-            VALUES (
-              ${record.key},
-              ${record.votePubkey},
-              ${record.identityPubkey},
-              ${record.name},
-              ${record.description},
-              ${record.website},
-              ${record.iconUrl},
-              ${record.changedAt},
-              ${record.epoch}
-            )
-            ON CONFLICT (key) DO NOTHING
-          `;
-          infoHistoryCreated++;
+        console.log(`📝 Sample record (first):`, JSON.stringify(infoHistoryToCreate[0], null, 2));
+        if (infoHistoryToCreate.length > 1) {
+          console.log(`📝 Sample record (last):`, JSON.stringify(infoHistoryToCreate[infoHistoryToCreate.length - 1], null, 2));
         }
         
+        for (let i = 0; i < infoHistoryToCreate.length; i += batchSize) {
+          const batch = infoHistoryToCreate.slice(i, i + batchSize);
+          await tb.validatorInfoHistory.create(batch);
+          infoHistoryCreated += batch.length;
+          // Only log every 10 batches (every 100 records)
+          if ((i / batchSize + 1) % 10 === 0 || i + batchSize >= infoHistoryToCreate.length) {
+            console.log(`  ✓ Created ${infoHistoryCreated}/${infoHistoryToCreate.length} records...`);
+          }
+        }
         console.log(`✅✅✅ SUCCESSFULLY CREATED ${infoHistoryCreated} VALIDATOR INFO HISTORY RECORDS ✅✅✅`);
         logProgress(`✅ Created ${infoHistoryCreated} validator info history records`);
       } catch (error: any) {
-        console.error(`❌ Validator info history creation failed:`, error.message);
+        console.error(`\n❌❌❌ VALIDATOR INFO HISTORY CREATION FAILED ❌❌❌`);
+        console.error(`❌ Error message: ${error.message}`);
+        console.error(`❌ Error name: ${error.name}`);
+        console.error(`❌ Error statusCode: ${error.statusCode}`);
         logProgress(`❌ Info history creation failed: ${error.message}`);
+        console.error("❌ Full error object:", JSON.stringify(error, null, 2));
+        console.error("❌ Stack trace:", error.stack);
       }
+    } else if (!infoHistoryEnabled) {
+      console.log(`⚠️ Info history tracking skipped (table not available or initial fetch failed)`);
+      logProgress(`⚠️ Info history tracking skipped (table not available or initial fetch failed)`);
+    } else {
+      console.log(`ℹ️ No validator info changes detected (${infoHistoryToCreate.length} records to create)`);
+      logProgress(`ℹ️ No validator info changes detected (${infoHistoryToCreate.length} records to create)`);
     }
     console.log(`📚 ========== END VALIDATOR INFO HISTORY CREATION ==========\n`);
     
-    // Create/update validators
-    for (const validator of validatorsToCreate) {
-      await sql`
-        INSERT INTO validators (
-          vote_pubkey, identity_pubkey, name, icon_url, website, description, version,
-          commission, active_stake, activating_stake, deactivating_stake,
-          activating_accounts, deactivating_accounts, delinquent, jito_enabled,
-          stake_account_count, stake_distribution, first_seen_epoch
-        ) VALUES (
-          ${validator.votePubkey},
-          ${validator.identityPubkey},
-          ${validator.name},
-          ${validator.iconUrl},
-          ${validator.website},
-          ${validator.description},
-          ${validator.version},
-          ${validator.commission},
-          ${validator.activeStake},
-          ${validator.activatingStake},
-          ${validator.deactivatingStake},
-          ${validator.activatingAccounts},
-          ${validator.deactivatingAccounts},
-          ${validator.delinquent},
-          ${validator.jitoEnabled},
-          ${validator.stakeAccountCount},
-          ${validator.stakeDistribution},
-          ${validator.firstSeenEpoch}
-        )
-        ON CONFLICT (vote_pubkey) DO NOTHING
-      `;
+    // Create new validators
+    for (let i = 0; i < validatorsToCreate.length; i += batchSize) {
+      const batch = validatorsToCreate.slice(i, i + batchSize);
+      await tb.validators.create(batch);
     }
     logProgress(`Created ${validatorsToCreate.length} new validators`);
     
-    for (const validator of validatorsToUpdate) {
-      await sql`
-        UPDATE validators SET
-          identity_pubkey = ${validator.identityPubkey},
-          name = COALESCE(${validator.name || null}, name),
-          icon_url = COALESCE(${validator.iconUrl || null}, icon_url),
-          website = COALESCE(${validator.website || null}, website),
-          description = COALESCE(${validator.description || null}, description),
-          version = COALESCE(${validator.version || null}, version),
-          commission = ${validator.commission},
-          active_stake = ${validator.activeStake},
-          activating_stake = ${validator.activatingStake},
-          deactivating_stake = ${validator.deactivatingStake},
-          activating_accounts = ${validator.activatingAccounts},
-          deactivating_accounts = ${validator.deactivatingAccounts},
-          delinquent = ${validator.delinquent},
-          jito_enabled = ${validator.jitoEnabled},
-          stake_account_count = ${validator.stakeAccountCount},
-          stake_distribution = ${validator.stakeDistribution}
-        WHERE vote_pubkey = ${validator.votePubkey}
-      `;
+    // Update existing validators
+    console.log(`\n⚡ UPDATING ${validatorsToUpdate.length} validators...`);
+    try {
+      for (let i = 0; i < validatorsToUpdate.length; i += batchSize) {
+        const batch = validatorsToUpdate.slice(i, i + batchSize);
+        console.log(`  Updating validator batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)...`);
+        
+        // Debug first batch to see what fields we're trying to update
+        if (i === 0) {
+          console.log(`  First record in batch:`, JSON.stringify({
+            id: batch[0].id.substring(0, 12) + '...',
+            fields: Object.keys(batch[0].fields),
+            deactivatingAccounts: batch[0].fields.deactivatingAccounts ? 
+              `${batch[0].fields.deactivatingAccounts.substring(0, 100)}...` : undefined,
+            activatingAccounts: batch[0].fields.activatingAccounts ? 
+              `${batch[0].fields.activatingAccounts.substring(0, 100)}...` : undefined,
+          }, null, 2));
+        }
+        
+        await tb.validators.update(batch);
+        console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1} updated successfully`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Validator update failed:`, error.message);
+      console.error(`   Error statusCode:`, error.statusCode);
+      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+      // Don't throw - continue to performance updates
+      console.log(`⚠️  Continuing despite validator update error...`);
     }
     logProgress(`Updated ${validatorsToUpdate.length} validators`);
     
     // Create stake records
-    for (const stake of stakeRecordsToCreate) {
-      await sql`
-        INSERT INTO stake_history (key, vote_pubkey, epoch, active_stake)
-        VALUES (${stake.key}, ${stake.votePubkey}, ${stake.epoch}, ${stake.activeStake})
-        ON CONFLICT (key) DO NOTHING
-      `;
-      stakeRecordsCreated++;
+    for (let i = 0; i < stakeRecordsToCreate.length; i += batchSize) {
+      const batch = stakeRecordsToCreate.slice(i, i + batchSize);
+      await tb.stakeHistory.create(batch);
+      stakeRecordsCreated += batch.length;
     }
     if (stakeRecordsCreated > 0) logProgress(`Created ${stakeRecordsCreated} stake records`);
     
     // Create performance records
-    for (const perf of perfRecordsToCreate) {
-      await sql`
-        INSERT INTO performance_history (key, vote_pubkey, epoch, skip_rate, leader_slots, blocks_produced, vote_credits, vote_credits_percentage, max_possible_credits)
-        VALUES (
-          ${perf.key},
-          ${perf.votePubkey},
-          ${perf.epoch},
-          ${perf.skipRate},
-          ${perf.leaderSlots},
-          ${perf.blocksProduced},
-          ${perf.voteCredits || null},
-          ${perf.voteCreditsPercentage || null},
-          ${perf.maxPossibleCredits || null}
-        )
-        ON CONFLICT (key) DO NOTHING
-      `;
-      performanceRecordsCreated++;
+    console.log(`\n⚡ CREATING ${perfRecordsToCreate.length} performance records...`);
+    try {
+      for (let i = 0; i < perfRecordsToCreate.length; i += batchSize) {
+        const batch = perfRecordsToCreate.slice(i, i + batchSize);
+        console.log(`  Creating batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)...`);
+        await tb.performanceHistory.create(batch);
+        performanceRecordsCreated += batch.length;
+        console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1} created successfully`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Performance record creation failed:`, error.message);
+      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+      throw error; // Re-throw to stop the job
     }
     
-    // Update performance records
-    for (const perf of perfRecordsToUpdate) {
-      await sql`
-        UPDATE performance_history SET
-          skip_rate = ${perf.skipRate},
-          leader_slots = ${perf.leaderSlots},
-          blocks_produced = ${perf.blocksProduced},
-          vote_credits = ${perf.voteCredits || null},
-          vote_credits_percentage = ${perf.voteCreditsPercentage || null},
-          max_possible_credits = ${perf.maxPossibleCredits || null}
-        WHERE key = ${perf.key}
-      `;
-      performanceRecordsCreated++;
+    // Update performance records (current epoch)
+    console.log(`\n⚡ UPDATING ${perfRecordsToUpdate.length} performance records...`);
+    try {
+      for (let i = 0; i < perfRecordsToUpdate.length; i += batchSize) {
+        const batch = perfRecordsToUpdate.slice(i, i + batchSize);
+        console.log(`  Updating batch ${Math.floor(i / batchSize) + 1} (${batch.length} records)...`);
+        await tb.performanceHistory.update(batch);
+        performanceRecordsCreated += batch.length; // Count updates as well
+        console.log(`  ✓ Batch ${Math.floor(i / batchSize) + 1} updated successfully`);
+      }
+    } catch (error: any) {
+      console.error(`❌ Performance record update failed:`, error.message);
+      console.error(`   Error details:`, JSON.stringify(error, null, 2));
+      throw error; // Re-throw to stop the job
     }
     logProgress(`Performance: ${perfRecordsToCreate.length} created, ${perfRecordsToUpdate.length} updated`);
     
-    // Create commission snapshots
+    // Create commission snapshots (moved from inside loop)
     let snapshotsCreated = 0;
-    for (const snapshot of snapshotsToCreate) {
-      await sql`
-        INSERT INTO snapshots (key, vote_pubkey, epoch, slot, commission)
-        VALUES (${snapshot.key}, ${snapshot.votePubkey}, ${snapshot.epoch}, ${snapshot.slot}, ${snapshot.commission})
-        ON CONFLICT (key) DO NOTHING
-      `;
-      snapshotsCreated++;
+    for (let i = 0; i < snapshotsToCreate.length; i += batchSize) {
+      const batch = snapshotsToCreate.slice(i, i + batchSize);
+      await tb.snapshots.create(batch);
+      snapshotsCreated += batch.length;
     }
     if (snapshotsCreated > 0) logProgress(`Created ${snapshotsCreated} commission snapshots`);
     
-    // Create events
+    // Create events (moved from inside loop)
     let eventsCreated = 0;
-    for (const event of eventsToCreate) {
-      await sql`
-        INSERT INTO events (vote_pubkey, epoch, type, from_commission, to_commission, delta)
-        VALUES (${event.votePubkey}, ${event.epoch}, ${event.type}, ${event.fromCommission}, ${event.toCommission}, ${event.delta})
-      `;
-      eventsCreated++;
+    for (let i = 0; i < eventsToCreate.length; i += batchSize) {
+      const batch = eventsToCreate.slice(i, i + batchSize);
+      await tb.events.create(batch);
+      eventsCreated += batch.length;
     }
     if (eventsCreated > 0) logProgress(`Created ${eventsCreated} events`);
     
     // Create MEV snapshots
-    for (const mev of mevSnapshotsToCreate) {
-      await sql`
-        INSERT INTO mev_snapshots (key, vote_pubkey, epoch, mev_commission, priority_fee_commission, mev_rewards, priority_fee_rewards)
-        VALUES (
-          ${mev.key},
-          ${mev.votePubkey},
-          ${mev.epoch},
-          ${mev.mevCommission},
-          ${mev.priorityFeeCommission},
-          ${mev.mevRewards},
-          ${mev.priorityFeeRewards}
-        )
-        ON CONFLICT (key) DO NOTHING
-      `;
+    for (let i = 0; i < mevSnapshotsToCreate.length; i += batchSize) {
+      const batch = mevSnapshotsToCreate.slice(i, i + batchSize);
+      await tb.mevSnapshots.create(batch);
     }
     if (mevSnapshotsToCreate.length > 0) logProgress(`Created ${mevSnapshotsToCreate.length} MEV snapshots`);
     
     // Create MEV events
-    for (const mevEvent of mevEventsToCreate) {
-      await sql`
-        INSERT INTO mev_events (vote_pubkey, epoch, type, from_mev_commission, to_mev_commission, delta)
-        VALUES (
-          ${mevEvent.votePubkey},
-          ${mevEvent.epoch},
-          ${mevEvent.type},
-          ${mevEvent.fromMevCommission},
-          ${mevEvent.toMevCommission},
-          ${mevEvent.delta}
-        )
-      `;
+    for (let i = 0; i < mevEventsToCreate.length; i += batchSize) {
+      const batch = mevEventsToCreate.slice(i, i + batchSize);
+      await tb.mevEvents.create(batch);
     }
     if (mevEventsToCreate.length > 0) logProgress(`Created ${mevEventsToCreate.length} MEV events`);
-    
     console.log(`\n🎉 ========== SNAPSHOT DATA COLLECTION COMPLETE ==========`);
     console.log(`✅ Stake records created: ${stakeRecordsCreated}`);
     console.log(`✅ Performance records created: ${performanceRecordsCreated}`);
@@ -1159,28 +1246,34 @@ export async function POST(req: NextRequest) {
     console.log(`📚 Validator info history records: ${infoHistoryCreated}`);
     logProgress(`✅ Main snapshot complete! Starting cleanup...`);
     
-    // Cleanup: Delete performance records older than 15 epochs
+    // Cleanup: Delete performance records older than 30 days (keep ~15 epochs of history)
+    // Solana epochs are ~2-3 days, so 15 epochs ≈ 30-45 days
     const oldestEpochToKeep = epoch - 15;
     console.log(`🧹 Cleaning up performance records older than epoch ${oldestEpochToKeep}...`);
     
     try {
-      const result = await sql`
-        DELETE FROM performance_history
-        WHERE epoch < ${oldestEpochToKeep}
-        AND id IN (
-          SELECT id FROM performance_history
-          WHERE epoch < ${oldestEpochToKeep}
-          LIMIT 1000
-        )
-      `;
-      console.log(`🗑️  Deleted old performance records`);
+      const oldPerfRecords = await tb.performanceHistory.select({
+        filterByFormula: `{epoch} < ${oldestEpochToKeep}`,
+        maxRecords: 1000, // Limit per batch
+      }).firstPage();
+      
+      if (oldPerfRecords.length > 0) {
+        // Delete in batches of 10
+        for (let i = 0; i < oldPerfRecords.length; i += 10) {
+          const batch = oldPerfRecords.slice(i, i + 10).map(r => r.id);
+          await tb.performanceHistory.destroy(batch);
+        }
+        console.log(`🗑️  Deleted ${oldPerfRecords.length} old performance records`);
+      } else {
+        console.log(`✅ No old performance records to clean up`);
+      }
     } catch (cleanupErr) {
       console.error(`⚠️  Cleanup error (non-fatal):`, cleanupErr);
     }
     
     console.log(`\n🎉 ========== SNAPSHOT JOB COMPLETED SUCCESSFULLY ==========`);
-    
-    // Send batched digest emails
+    console.log(`🔍 DEBUG: About to return success response...`);
+    // Send batched digest emails for all commission/MEV changes
     console.log(`\n📧 ========== SENDING BATCHED ALERT EMAILS ==========`);
     logProgress(`Sending batched alert emails...`);
     
@@ -1189,6 +1282,7 @@ export async function POST(req: NextRequest) {
     
     if (totalAlerts > 0) {
       try {
+        // Build digest email content
         let digestSubject = "";
         let digestBody = "";
         
@@ -1200,6 +1294,7 @@ export async function POST(req: NextRequest) {
         
         digestBody = `Validator Alert Digest - Epoch ${epoch}\n\n`;
         
+        // Commission Rugs
         if (commissionRugs.length > 0) {
           digestBody += `🚨 COMMISSION RUGS (${commissionRugs.length}):\n`;
           for (const rug of commissionRugs) {
@@ -1211,6 +1306,7 @@ export async function POST(req: NextRequest) {
           digestBody += `\n`;
         }
         
+        // MEV Rugs
         if (mevRugs.length > 0) {
           digestBody += `🚨 MEV COMMISSION RUGS (${mevRugs.length}):\n`;
           for (const rug of mevRugs) {
@@ -1222,6 +1318,7 @@ export async function POST(req: NextRequest) {
           digestBody += `\n`;
         }
         
+        // Commission Cautions
         if (commissionCautions.length > 0) {
           digestBody += `⚠️ COMMISSION INCREASES (${commissionCautions.length}):\n`;
           for (const caution of commissionCautions) {
@@ -1232,6 +1329,7 @@ export async function POST(req: NextRequest) {
           digestBody += `\n`;
         }
         
+        // MEV Cautions
         if (mevCautions.length > 0) {
           digestBody += `⚠️ MEV COMMISSION INCREASES (${mevCautions.length}):\n`;
           for (const caution of mevCautions) {
@@ -1241,6 +1339,7 @@ export async function POST(req: NextRequest) {
           }
         }
         
+        // Send the digest email (only one email for all alerts)
         await sendEmail(digestSubject, digestBody, commissionRugs.length + mevRugs.length > 0 ? "RUG" : "CAUTION");
         console.log(`✅ Sent digest email with ${totalAlerts} alerts`);
         logProgress(`✅ Sent digest email with ${totalAlerts} alerts`);
@@ -1252,7 +1351,7 @@ export async function POST(req: NextRequest) {
       console.log(`ℹ️ No alerts to send`);
     }
     
-    // Send batched INFO emails
+    // Send batched INFO emails separately (for subscribers with "all" preference)
     if (commissionInfos.length > 0) {
       try {
         const infoSubject = `📊 ${commissionInfos.length} Validator Commission Change${commissionInfos.length > 1 ? 's' : ''} (Epoch ${epoch})`;
@@ -1302,4 +1401,3 @@ export async function POST(req: NextRequest) {
     }, { status: 500 });
   }
 }
-

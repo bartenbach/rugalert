@@ -1,21 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { tb } from '../../../lib/airtable'
+import { sql } from '../../../lib/db-neon'
 
-export const dynamic = 'force-dynamic'
+// Cache for 2 minutes to improve performance
+export const revalidate = 120
 
 export async function GET(req: NextRequest) {
   try {
     const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
     const showAll = new URL(req.url).searchParams.get('showAll') === 'true'
     
-    // Try to get latest epoch from snapshots first, fall back to events if empty
-    let latestSnapshot = await tb.snapshots.select({ sort: [{ field: 'epoch', direction: 'desc' }], maxRecords: 1 }).firstPage()
-    let latestEpoch = latestSnapshot[0]?.get('epoch') as number | undefined
+    // Get latest epoch from snapshots first, fall back to events if empty
+    const latestSnapshotRow = await sql`
+      SELECT epoch FROM snapshots ORDER BY epoch DESC LIMIT 1
+    `
+    let latestEpoch = latestSnapshotRow[0]?.epoch
     
     // If no snapshots exist, get latest epoch from events table
     if (!latestEpoch) {
-      const latestEvent = await tb.events.select({ sort: [{ field: 'epoch', direction: 'desc' }], maxRecords: 1 }).firstPage()
-      latestEpoch = latestEvent[0]?.get('epoch') as number | undefined
+      const latestEventRow = await sql`
+        SELECT epoch FROM events ORDER BY epoch DESC LIMIT 1
+      `
+      latestEpoch = latestEventRow[0]?.epoch
     }
     
     // If still no epoch found, return empty (truly no data)
@@ -24,52 +29,65 @@ export async function GET(req: NextRequest) {
     const minEpoch = Number(latestEpoch) - epochs
 
     // Fetch all events in the epoch range
-    const all: any[] = []
-    await tb.events.select({
-      filterByFormula: `{epoch} >= ${minEpoch}`,
-      sort: [{ field: 'epoch', direction: 'desc' }],
-      pageSize: 100
-    }).eachPage((recs, next) => { all.push(...recs); next() })
+    const all = await sql`
+      SELECT 
+        id,
+        vote_pubkey,
+        type,
+        from_commission,
+        to_commission,
+        delta,
+        epoch,
+        created_at
+      FROM events
+      WHERE epoch >= ${minEpoch}
+      ORDER BY epoch DESC, created_at DESC
+    `
     
     console.log(`📊 Found ${all.length} total events in epochs ${minEpoch}-${latestEpoch}, showAll=${showAll}`)
     
+    // Pre-fetch ALL validators once to avoid N+1 queries
+    const validatorsMap = new Map<string, any>()
+    const validators = await sql`
+      SELECT vote_pubkey, name, icon_url, delinquent
+      FROM validators
+    `
+    
+    validators.forEach((record: any) => {
+      validatorsMap.set(record.vote_pubkey, {
+        name: record.name || null,
+        iconUrl: record.icon_url || null,
+        delinquent: Boolean(record.delinquent),
+      })
+    })
+    
     // If showAll=true (INFO filter enabled), return ALL events
     if (showAll) {
-      // Sort by createdTime (descending) for consistent ordering
-      all.sort((a, b) => {
-        const timeA = new Date(a._rawJson.createdTime).getTime()
-        const timeB = new Date(b._rawJson.createdTime).getTime()
-        return timeB - timeA
-      })
-      
-      const allEvents: any[] = []
-      for (const r of all) {
-        const vp = String(r.get('votePubkey'))
-        const v = await tb.validators.select({ filterByFormula: `{votePubkey} = "${vp}"`, maxRecords: 1 }).firstPage()
-        allEvents.push({
+      const allEvents = all.map((r: any) => {
+        const v = validatorsMap.get(r.vote_pubkey) || { name: null, iconUrl: null, delinquent: false }
+        return {
           id: r.id,
-          vote_pubkey: vp,
-          type: r.get('type'),
-          from_commission: r.get('fromCommission'),
-          to_commission: r.get('toCommission'),
-          delta: r.get('delta'),
-          epoch: r.get('epoch'),
-          created_at: r._rawJson.createdTime,
-          name: v[0]?.get('name') || null,
-          icon_url: v[0]?.get('iconUrl') || null,
-          delinquent: Boolean(v[0]?.get('delinquent')),
-        })
-      }
+          vote_pubkey: r.vote_pubkey,
+          type: r.type,
+          from_commission: r.from_commission,
+          to_commission: r.to_commission,
+          delta: r.delta,
+          epoch: r.epoch,
+          created_at: r.created_at,
+          name: v.name,
+          icon_url: v.iconUrl,
+          delinquent: v.delinquent,
+        }
+      })
       
       console.log(`📊 Returning ${allEvents.length} events (ALL events mode)`)
       return NextResponse.json({ items: allEvents })
     }
     
     // Otherwise, return only the most severe event per validator
-    // Group events by validator
     const eventsByValidator = new Map<string, any[]>()
     for (const r of all) {
-      const vp = String(r.get('votePubkey'))
+      const vp = r.vote_pubkey
       if (!eventsByValidator.has(vp)) {
         eventsByValidator.set(vp, [])
       }
@@ -77,51 +95,44 @@ export async function GET(req: NextRequest) {
     }
     
     // For each validator, pick the MOST SEVERE event (RUG > CAUTION > INFO)
-    // If multiple events of same severity, pick the latest by createdTime
     const severityOrder: Record<string, number> = { "RUG": 3, "CAUTION": 2, "INFO": 1 }
     
-    const latestPer: any[] = []
-    for (const [vp, events] of eventsByValidator.entries()) {
-      // Sort by severity (descending) then by createdTime (descending)
+    const latestPer = []
+    for (const [vp, events] of eventsByValidator) {
+      // Sort by severity DESC, then by createdTime DESC
       events.sort((a, b) => {
-        const typeA = String(a.get('type'))
-        const typeB = String(b.get('type'))
-        const severityA = severityOrder[typeA] || 0
-        const severityB = severityOrder[typeB] || 0
-        
-        if (severityA !== severityB) {
-          return severityB - severityA // Higher severity first
-        }
-        
-        // Same severity, use createdTime
-        const timeA = new Date(a._rawJson.createdTime).getTime()
-        const timeB = new Date(b._rawJson.createdTime).getTime()
-        return timeB - timeA // Newer first
+        const sevA = severityOrder[a.type] ?? 0
+        const sevB = severityOrder[b.type] ?? 0
+        if (sevA !== sevB) return sevB - sevA
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
       
-      // Take the first event (most severe, or latest if same severity)
-      const r = events[0]
+      // Pick the most severe (first after sort)
+      const chosen = events[0]
+      const v = validatorsMap.get(vp) || { name: null, iconUrl: null, delinquent: false }
       
-      const v = await tb.validators.select({ filterByFormula: `{votePubkey} = "${vp}"`, maxRecords: 1 }).firstPage()
       latestPer.push({
-        id: r.id,
+        id: chosen.id,
         vote_pubkey: vp,
-        type: r.get('type'),
-        from_commission: r.get('fromCommission'),
-        to_commission: r.get('toCommission'),
-        delta: r.get('delta'),
-        epoch: r.get('epoch'),
-        created_at: r._rawJson.createdTime,
-        name: v[0]?.get('name') || null,
-        icon_url: v[0]?.get('iconUrl') || null,
-        delinquent: Boolean(v[0]?.get('delinquent')),
+        type: chosen.type,
+        from_commission: chosen.from_commission,
+        to_commission: chosen.to_commission,
+        delta: chosen.delta,
+        epoch: chosen.epoch,
+        created_at: chosen.created_at,
+        name: v.name,
+        icon_url: v.iconUrl,
+        delinquent: v.delinquent,
       })
     }
     
-    console.log(`📊 Returning ${latestPer.length} validators (prioritized by severity: RUG > CAUTION > INFO)`)
-
+    // Sort by createdTime DESC
+    latestPer.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    
+    console.log(`📊 Returning ${latestPer.length} events (most severe per validator)`)
     return NextResponse.json({ items: latestPer })
-  } catch (e: any) {
-    return NextResponse.json({ items: [], error: String(e?.message || e) }, { status: 500 })
+  } catch (err: any) {
+    console.error('events/route error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
