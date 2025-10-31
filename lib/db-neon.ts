@@ -1,10 +1,8 @@
 // lib/db-neon.ts - Neon Serverless Postgres Client
-import { neon, neonConfig } from '@neondatabase/serverless'
-
-// Configure for Vercel Edge (optional, but recommended)
-neonConfig.fetchConnectionCache = true
+import { neon } from '@neondatabase/serverless'
 
 // Initialize Neon client with connection string
+// Note: fetchConnectionCache is now always true by default (deprecated option removed)
 const sql = neon(process.env.DATABASE_URL!)
 
 // ============================================

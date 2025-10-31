@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sql } from '../../../lib/db-neon'
 
+// Force dynamic rendering (query params)
+export const dynamic = 'force-dynamic'
+
 // Cache for 2 minutes to improve performance
 export const revalidate = 120
 

@@ -2,6 +2,9 @@ import { Connection, clusterApiUrl } from "@solana/web3.js";
 import { sql } from "../../../lib/db-neon";
 import { NextRequest, NextResponse } from "next/server";
 
+// Force dynamic rendering (query params)
+export const dynamic = 'force-dynamic';
+
 // Cache for 5 minutes to improve performance
 export const revalidate = 300;
 
