@@ -10,30 +10,41 @@ export async function GET(
   try {
     const votePubkey = params.votePubkey
     
-    // Fetch all events for this validator (both commission and MEV)
+    // Fetch validator info separately to avoid JOIN multiplication bug
+    const validators = await sql`
+      SELECT name, icon_url
+      FROM validators
+      WHERE vote_pubkey = ${votePubkey}
+      LIMIT 1
+    `
+    const validator = validators[0]
+    
+    // Fetch events without JOIN
     const events = await sql`
       SELECT 
-        e.id,
-        e.vote_pubkey,
-        e.type,
-        e.from_commission,
-        e.to_commission,
-        e.delta,
-        e.epoch,
-        e.created_at,
-        v.name,
-        v.icon_url
-      FROM events e
-      LEFT JOIN validators v ON e.vote_pubkey = v.vote_pubkey
-      WHERE e.vote_pubkey = ${votePubkey}
-      ORDER BY e.created_at DESC
+        id,
+        vote_pubkey,
+        type,
+        from_commission,
+        to_commission,
+        delta,
+        epoch,
+        created_at
+      FROM events
+      WHERE vote_pubkey = ${votePubkey}
+      ORDER BY created_at DESC
     `
     
-    console.log(`📊 Returning ${events.length} events for validator ${votePubkey}`)
-    console.log(`📊 Event IDs:`, events.map(e => e.id))
-    console.log(`📊 First event:`, JSON.stringify(events[0]))
+    // Add validator info to each event
+    const enrichedEvents = events.map(e => ({
+      ...e,
+      name: validator?.name || null,
+      icon_url: validator?.icon_url || null
+    }))
     
-    return NextResponse.json({ items: events }, {
+    console.log(`📊 Returning ${enrichedEvents.length} events for validator ${votePubkey}`)
+    
+    return NextResponse.json({ items: enrichedEvents }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
         'CDN-Cache-Control': 'no-store',
