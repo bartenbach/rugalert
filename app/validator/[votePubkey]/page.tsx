@@ -112,7 +112,8 @@ type InfoHistory = {
   description: string | null;
   website: string | null;
   iconUrl: string | null;
-  changedAt: string;
+  changedAt: string | null;
+  createdAt: string;
   epoch: number;
 };
 
@@ -1361,7 +1362,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                 {record.name || "(No name)"}
                               </div>
                               <div className="text-xs text-gray-400 mt-0.5">
-                                {new Date(record.changedAt).toLocaleDateString(
+                                {new Date(record.changedAt || record.createdAt).toLocaleDateString(
                                   "en-US",
                                   {
                                     year: "numeric",

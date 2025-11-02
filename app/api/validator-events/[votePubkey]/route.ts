@@ -31,7 +31,13 @@ export async function GET(
     
     console.log(`📊 Returning ${events.length} events for validator ${votePubkey}`)
     
-    return NextResponse.json({ items: events })
+    return NextResponse.json({ items: events }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      }
+    })
   } catch (e: any) {
     console.error('❌ validator-events error:', e)
     return NextResponse.json({ 

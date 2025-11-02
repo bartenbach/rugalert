@@ -20,10 +20,11 @@ export async function GET(
         website,
         icon_url as "iconUrl",
         changed_at as "changedAt",
+        created_at as "createdAt",
         epoch
       FROM validator_info_history
       WHERE vote_pubkey = ${votePubkey}
-      ORDER BY changed_at DESC
+      ORDER BY COALESCE(changed_at, created_at) DESC NULLS LAST
       LIMIT 100
     `;
 

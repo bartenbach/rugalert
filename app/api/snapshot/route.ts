@@ -1110,6 +1110,7 @@ export async function POST(req: NextRequest) {
       await sql`
         INSERT INTO events (vote_pubkey, epoch, type, from_commission, to_commission, delta)
         VALUES (${event.votePubkey}, ${event.epoch}, ${event.type}, ${event.fromCommission}, ${event.toCommission}, ${event.delta})
+        ON CONFLICT (vote_pubkey, epoch, from_commission, to_commission) DO NOTHING
       `;
       eventsCreated++;
     }
@@ -1145,6 +1146,7 @@ export async function POST(req: NextRequest) {
           ${mevEvent.toMevCommission},
           ${mevEvent.delta}
         )
+        ON CONFLICT (vote_pubkey, epoch, from_mev_commission, to_mev_commission) DO NOTHING
       `;
     }
     if (mevEventsToCreate.length > 0) logProgress(`Created ${mevEventsToCreate.length} MEV events`);
