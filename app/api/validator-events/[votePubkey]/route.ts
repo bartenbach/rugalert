@@ -30,6 +30,8 @@ export async function GET(
     `
     
     console.log(`📊 Returning ${events.length} events for validator ${votePubkey}`)
+    console.log(`📊 Event IDs:`, events.map(e => e.id))
+    console.log(`📊 First event:`, JSON.stringify(events[0]))
     
     return NextResponse.json({ items: events }, {
       headers: {
