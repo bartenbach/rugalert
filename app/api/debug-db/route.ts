@@ -16,9 +16,31 @@ export async function GET() {
       WHERE vote_pubkey = 'DXv73X82WCjVMsqDszK3z764tTJMU3nPXyCU3UktudBG'
     `
     
+    // Also run the EXACT query that validator-events uses
+    const votePubkey = 'DXv73X82WCjVMsqDszK3z764tTJMU3nPXyCU3UktudBG'
+    const events = await sql`
+      SELECT 
+        e.id,
+        e.vote_pubkey,
+        e.type,
+        e.from_commission,
+        e.to_commission,
+        e.delta,
+        e.epoch,
+        e.created_at,
+        v.name,
+        v.icon_url
+      FROM events e
+      LEFT JOIN validators v ON e.vote_pubkey = v.vote_pubkey
+      WHERE e.vote_pubkey = ${votePubkey}
+      ORDER BY e.created_at DESC
+    `
+    
     return NextResponse.json({
       database_url: maskedUrl,
       event_count: result[0].count,
+      full_query_count: events.length,
+      event_ids: events.map(e => e.id),
       timestamp: new Date().toISOString()
     })
   } catch (error: any) {
