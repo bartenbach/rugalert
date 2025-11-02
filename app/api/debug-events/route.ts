@@ -1,17 +1,17 @@
-import { tb } from '@/lib/airtable'
+import { sql } from '@/lib/db-neon'
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
-    // Fetch ALL events (not filtered)
-    const allEvents: any[] = []
-    await tb.events.select({
-      sort: [{ field: 'epoch', direction: 'desc' }],
-      maxRecords: 50, // Get latest 50
-    }).eachPage((records, fetchNextPage) => {
-      allEvents.push(...records)
-      fetchNextPage()
-    })
+    // Fetch latest 50 events from postgres
+    const allEvents = await sql`
+      SELECT type, from_commission, to_commission, epoch, vote_pubkey
+      FROM events
+      ORDER BY created_at DESC
+      LIMIT 50
+    `
 
     // Count by type
     const typeCounts = {
@@ -22,11 +22,11 @@ export async function GET(req: NextRequest) {
     }
 
     const eventDetails = allEvents.map(e => {
-      const type = e.get('type') as string
-      const from = e.get('fromCommission') as number
-      const to = e.get('toCommission') as number
-      const epoch = e.get('epoch') as number
-      const votePubkey = e.get('votePubkey') as string
+      const type = e.type as string
+      const from = e.from_commission as number
+      const to = e.to_commission as number
+      const epoch = e.epoch as number
+      const votePubkey = e.vote_pubkey as string
 
       // Count types
       if (type === "RUG") typeCounts.RUG++

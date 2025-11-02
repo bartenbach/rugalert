@@ -1,5 +1,7 @@
-import { tb } from '@/lib/airtable'
+import { sql } from '@/lib/db-neon'
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,35 +15,32 @@ export async function GET(req: NextRequest) {
     
     // Fetch subscribers
     logs.push("=== Fetching Subscribers ===")
-    const subs = await tb.subs.select().firstPage()
+    const subs = await sql`SELECT email, preferences FROM subscribers`
     logs.push(`Total subscribers: ${subs.length}`)
     logs.push("")
     
     // Analyze each subscriber
     logs.push("=== Subscriber Details ===")
     for (const sub of subs) {
-      const email = sub.get("email")
-      const prefs = sub.get("preferences") as string | undefined
-      logs.push(`  • ${email}`)
-      logs.push(`    Preference: ${prefs || "UNDEFINED (will default to rugs_only)"}`)
+      logs.push(`  • ${sub.email}`)
+      logs.push(`    Preference: ${sub.preferences || "UNDEFINED (will default to rugs_only)"}`)
     }
     logs.push("")
     
     // Test email filtering for RUG event
     logs.push("=== Email Filtering Test (RUG Event) ===")
     const eligibleForRug = subs.filter((s) => {
-      const email = s.get("email")
+      const email = s.email
       if (!email) return false
       
-      const prefs = s.get("preferences") as string | undefined
-      const preference = prefs || "rugs_only"
+      const preference = s.preferences || "rugs_only"
       
       return preference === "all" || 
              preference === "rugs_and_cautions" || 
              preference === "rugs_only"
     })
     logs.push(`Eligible recipients for RUG: ${eligibleForRug.length}`)
-    eligibleForRug.forEach(s => logs.push(`  • ${s.get("email")}`))
+    eligibleForRug.forEach(s => logs.push(`  • ${s.email}`))
     logs.push("")
     
     // Actually send a test email if requested
@@ -50,7 +49,7 @@ export async function GET(req: NextRequest) {
     if (shouldSend && process.env.RESEND_API_KEY && process.env.ALERTS_FROM) {
       logs.push("=== Attempting to Send Test Email ===")
       
-      const to = eligibleForRug.map((s) => String(s.get("email"))).filter(Boolean)
+      const to = eligibleForRug.map((s) => s.email).filter(Boolean)
       
       if (to.length === 0) {
         logs.push("❌ No eligible recipients!")

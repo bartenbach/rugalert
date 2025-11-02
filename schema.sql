@@ -11,7 +11,8 @@ CREATE TABLE validators (
   identity_pubkey TEXT,
   name TEXT,
   icon_url TEXT,
-  avatar_url TEXT,
+  website TEXT,
+  description TEXT,
   version TEXT,
   commission INTEGER DEFAULT 0,
   active_stake BIGINT DEFAULT 0,
@@ -128,9 +129,12 @@ CREATE TABLE validator_info_history (
   key TEXT UNIQUE NOT NULL, -- format: "{vote_pubkey}-{epoch}"
   vote_pubkey TEXT NOT NULL,
   epoch INTEGER NOT NULL,
+  identity_pubkey TEXT,
   name TEXT,
   icon_url TEXT,
-  version TEXT,
+  website TEXT,
+  description TEXT,
+  changed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   FOREIGN KEY (vote_pubkey) REFERENCES validators(vote_pubkey) ON DELETE CASCADE
 );

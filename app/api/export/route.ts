@@ -1,20 +1,21 @@
-import { tb } from '@/lib/airtable'
+import { sql } from '@/lib/db-neon'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const rows: any[] = []
-  
-  // Use eachPage instead of firstPage to paginate properly
-  await tb.events.select({
-    filterByFormula: `{type} = "RUG"`,
-    sort: [{ field: 'epoch', direction: 'desc' }],
-    pageSize: 100,
-  }).eachPage((records, fetchNextPage) => {
-    rows.push(...records)
-    fetchNextPage()
-  })
-  
-  const header = ['vote_pubkey','epoch','from','to','delta']
-  const data = rows.map(r => [r.get('votePubkey'), r.get('epoch'), r.get('fromCommission'), r.get('toCommission'), r.get('delta')])
-  const csv = [header, ...data].map(r => r.join(',')).join('\n')
-  return new Response(csv, { headers: { 'Content-Type': 'text/csv' } })
+  try {
+    const rows = await sql`
+      SELECT vote_pubkey, epoch, from_commission, to_commission, delta
+      FROM events
+      WHERE type = 'RUG'
+      ORDER BY epoch DESC
+    `
+    
+    const header = ['vote_pubkey','epoch','from','to','delta']
+    const data = rows.map(r => [r.vote_pubkey, r.epoch, r.from_commission, r.to_commission, r.delta])
+    const csv = [header, ...data].map(r => r.join(',')).join('\n')
+    return new Response(csv, { headers: { 'Content-Type': 'text/csv' } })
+  } catch (error: any) {
+    return new Response(`Error: ${error.message}`, { status: 500 })
+  }
 }

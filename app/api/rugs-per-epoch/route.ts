@@ -135,7 +135,8 @@ export async function GET(req: NextRequest) {
         repeatOffenders,  // Validators who rugged in 2+ epochs
         includesMevRugs: true,
         totalCommissionEvents,
-        totalMevEvents
+        totalMevEvents,
+        validatorEpochCounts: Object.fromEntries(validatorEpochCount) // Map of validator -> epoch count
       }
     })
   } catch (e: any) {

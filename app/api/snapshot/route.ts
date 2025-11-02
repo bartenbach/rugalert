@@ -538,7 +538,7 @@ export async function POST(req: NextRequest) {
       const allInfoHistory = await sql`
         SELECT DISTINCT ON (vote_pubkey) *
         FROM validator_info_history
-        ORDER BY vote_pubkey, changed_at DESC
+        ORDER BY vote_pubkey, COALESCE(changed_at, created_at) DESC NULLS LAST
       `;
       
       console.log(`✅ Successfully fetched ${allInfoHistory.length} info history records`);

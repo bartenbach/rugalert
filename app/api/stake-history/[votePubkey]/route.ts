@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { tb } from '../../../../lib/airtable';
+import { sql } from '@/lib/db-neon';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,16 +10,13 @@ export async function GET(
   try {
     const { votePubkey } = params;
 
-    // Fetch stake history records
-    const stakeRecords: any[] = [];
-    await tb.stakeHistory.select({
-      filterByFormula: `{votePubkey} = "${votePubkey}"`,
-      sort: [{ field: 'epoch', direction: 'asc' }],
-      pageSize: 100,
-    }).eachPage((records, fetchNextPage) => {
-      stakeRecords.push(...records);
-      fetchNextPage();
-    });
+    // Fetch stake history records from postgres
+    const stakeRecords = await sql`
+      SELECT epoch, active_stake
+      FROM stake_history
+      WHERE vote_pubkey = ${votePubkey}
+      ORDER BY epoch ASC
+    `;
 
     // Convert lamports to SOL
     const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -27,8 +24,8 @@ export async function GET(
     // Note: activatingStake and deactivatingStake are NOT in stake_history
     // They are cached in the validators table as current ephemeral state
     const history = stakeRecords.map(r => ({
-      epoch: Number(r.get('epoch')),
-      activeStake: Number(r.get('activeStake') || 0) / LAMPORTS_PER_SOL,
+      epoch: Number(r.epoch),
+      activeStake: Number(r.active_stake || 0) / LAMPORTS_PER_SOL,
     }));
 
     return NextResponse.json({

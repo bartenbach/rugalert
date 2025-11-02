@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tb } from "../../../../lib/airtable";
+import { sql } from '@/lib/db-neon';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,45 +31,38 @@ export async function GET(
 
     console.log(`📅 Fetching uptime for ${votePubkey.substring(0, 8)}... from ${startDate} to ${endDate}`);
 
-    // Fetch daily uptime records
-    // Note: Filtering by votePubkey only, then filter by date in JS to avoid Airtable Date field comparison issues
-    const allRecords: any[] = [];
-    await tb.dailyUptime
-      .select({
-        filterByFormula: `{votePubkey} = "${votePubkey}"`,
-        sort: [{ field: 'date', direction: 'asc' }],
-        fields: ['date', 'uptimeChecks', 'delinquentChecks', 'uptimePercent'],
-        pageSize: 100,
-      })
-      .eachPage((records, fetchNextPage) => {
-        records.forEach((record) => {
-          const uptimeChecks = Number(record.get('uptimeChecks') || 0);
-          const delinquentChecks = Number(record.get('delinquentChecks') || 0);
-          // ALWAYS calculate uptimePercent from raw checks (source of truth)
-          const uptimePercent = uptimeChecks > 0 
-            ? ((uptimeChecks - delinquentChecks) / uptimeChecks) * 100 
-            : 100;
-          
-          allRecords.push({
-            date: record.get('date') as string,
-            uptimeChecks,
-            delinquentChecks,
-            uptimePercent,
-          });
-        });
-        fetchNextPage();
-      });
-    
-    // Filter by date range in JavaScript (more reliable than Airtable's Date field string comparison)
-    const dailyRecords = allRecords.filter(record => {
-      const recordDate = record.date;
-      return recordDate >= startDate && recordDate <= endDate;
+    // Fetch daily uptime records from postgres
+    const records = await sql`
+      SELECT 
+        date,
+        uptime_checks as "uptimeChecks",
+        delinquent_checks as "delinquentChecks"
+      FROM daily_uptime
+      WHERE vote_pubkey = ${votePubkey}
+        AND date >= ${startDate}
+        AND date <= ${endDate}
+      ORDER BY date ASC
+    `;
+
+    // Calculate uptimePercent from raw checks (source of truth)
+    const dailyRecords = records.map(record => {
+      const uptimeChecks = Number(record.uptimeChecks || 0);
+      const delinquentChecks = Number(record.delinquentChecks || 0);
+      const uptimePercent = uptimeChecks > 0 
+        ? ((uptimeChecks - delinquentChecks) / uptimeChecks) * 100 
+        : 100;
+      
+      return {
+        date: record.date,
+        uptimeChecks,
+        delinquentChecks,
+        uptimePercent,
+      };
     });
 
-    console.log(`📊 Fetched ${allRecords.length} total records, filtered to ${dailyRecords.length} days in range ${startDate} to ${endDate}`);
+    console.log(`📊 Fetched ${dailyRecords.length} days in range ${startDate} to ${endDate}`);
     if (dailyRecords.length > 0) {
       console.log(`📅 Date range in records: ${dailyRecords[0]?.date} to ${dailyRecords[dailyRecords.length - 1]?.date}`);
-      console.log(`📊 All dates: ${dailyRecords.map(r => r.date).join(', ')}`);
     }
 
     // Calculate overall stats

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tb } from "../../../../lib/airtable";
+import { sql } from '@/lib/db-neon';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,23 +12,22 @@ export async function GET(
     const { votePubkey } = params;
 
     // Fetch all info history records for this validator, sorted by date descending
-    const records = await tb.validatorInfoHistory.select({
-      filterByFormula: `{votePubkey} = "${votePubkey}"`,
-      sort: [{ field: 'changedAt', direction: 'desc' }],
-      maxRecords: 100, // Limit to last 100 changes
-    }).all();
+    const records = await sql`
+      SELECT 
+        identity_pubkey as "identityPubkey",
+        name,
+        description,
+        website,
+        icon_url as "iconUrl",
+        changed_at as "changedAt",
+        epoch
+      FROM validator_info_history
+      WHERE vote_pubkey = ${votePubkey}
+      ORDER BY changed_at DESC
+      LIMIT 100
+    `;
 
-    const history = records.map((r) => ({
-      identityPubkey: r.get('identityPubkey') as string,
-      name: r.get('name') as string | null,
-      description: r.get('description') as string | null,
-      website: r.get('website') as string | null,
-      iconUrl: r.get('iconUrl') as string | null,
-      changedAt: r.get('changedAt') as string,
-      epoch: r.get('epoch') as number,
-    }));
-
-    return NextResponse.json({ history }, {
+    return NextResponse.json({ history: records }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',
         'CDN-Cache-Control': 'no-store',

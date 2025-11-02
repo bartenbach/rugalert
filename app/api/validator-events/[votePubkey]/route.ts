@@ -1,4 +1,4 @@
-import { tb } from '@/lib/airtable'
+import { sql } from '@/lib/db-neon'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -10,46 +10,28 @@ export async function GET(
   try {
     const votePubkey = params.votePubkey
     
-    // Fetch all events for this specific validator
-    const events: any[] = []
-    await tb.events.select({
-      filterByFormula: `{votePubkey} = "${votePubkey}"`,
-      sort: [{ field: 'epoch', direction: 'desc' }],
-      pageSize: 100
-    }).eachPage((recs, next) => { 
-      events.push(...recs)
-      next() 
-    })
+    // Fetch all events for this validator (both commission and MEV)
+    const events = await sql`
+      SELECT 
+        e.id,
+        e.vote_pubkey,
+        e.type,
+        e.from_commission,
+        e.to_commission,
+        e.delta,
+        e.epoch,
+        e.created_at,
+        v.name,
+        v.icon_url
+      FROM events e
+      LEFT JOIN validators v ON e.vote_pubkey = v.vote_pubkey
+      WHERE e.vote_pubkey = ${votePubkey}
+      ORDER BY e.created_at DESC
+    `
     
-    // Sort by createdTime (descending) for accurate ordering
-    events.sort((a, b) => {
-      const timeA = new Date(a._rawJson.createdTime).getTime()
-      const timeB = new Date(b._rawJson.createdTime).getTime()
-      return timeB - timeA
-    })
+    console.log(`📊 Returning ${events.length} events for validator ${votePubkey}`)
     
-    // Get validator metadata
-    const validator = await tb.validators.select({ 
-      filterByFormula: `{votePubkey} = "${votePubkey}"`, 
-      maxRecords: 1 
-    }).firstPage()
-    
-    const items = events.map(r => ({
-      id: r.id,
-      vote_pubkey: votePubkey,
-      type: r.get('type'),
-      from_commission: r.get('fromCommission'),
-      to_commission: r.get('toCommission'),
-      delta: r.get('delta'),
-      epoch: r.get('epoch'),
-      created_at: r._rawJson.createdTime,
-      name: validator[0]?.get('name') || null,
-      icon_url: validator[0]?.get('iconUrl') || null,
-    }))
-    
-    console.log(`📊 Returning ${items.length} events for validator ${votePubkey}`)
-    
-    return NextResponse.json({ items })
+    return NextResponse.json({ items: events })
   } catch (e: any) {
     console.error('❌ validator-events error:', e)
     return NextResponse.json({ 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { tb } from '../../../../lib/airtable';
+import { sql } from '@/lib/db-neon';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -11,11 +11,12 @@ export async function GET(
   try {
     const { votePubkey } = params;
 
-    // Fetch validator info
-    const validatorRecords = await tb.validators.select({
-      filterByFormula: `{votePubkey} = "${votePubkey}"`,
-      maxRecords: 1,
-    }).firstPage();
+    // Fetch validator info from postgres
+    const validatorRecords = await sql`
+      SELECT * FROM validators 
+      WHERE vote_pubkey = ${votePubkey}
+      LIMIT 1
+    `;
 
     if (!validatorRecords[0]) {
       return NextResponse.json(
@@ -66,38 +67,49 @@ export async function GET(
     ) || false;
 
     // Fetch performance data for CURRENT epoch (not most recent completed)
-    const perfRecords = await tb.performanceHistory.select({
-      filterByFormula: `AND({votePubkey} = "${votePubkey}", {epoch} = ${currentEpoch})`,
-      maxRecords: 1,
-    }).firstPage();
+    const perfRecords = await sql`
+      SELECT * FROM performance_history
+      WHERE vote_pubkey = ${votePubkey} AND epoch = ${currentEpoch}
+      LIMIT 1
+    `;
 
     // Convert lamports to SOL (1 SOL = 1,000,000,000 lamports)
     const LAMPORTS_PER_SOL = 1_000_000_000;
     
-    // Get stake data from validator record (cached by snapshot job)
-    const activatingAccountsJson = validator.get('activatingAccounts');
-    const deactivatingAccountsJson = validator.get('deactivatingAccounts');
-    const stakeDistributionJson = validator.get('stakeDistribution');
+    // Parse JSONB fields (postgres stores them as objects already)
+    const parseJsonField = (field: any) => {
+      if (!field) return [];
+      if (Array.isArray(field)) return field;
+      if (typeof field === 'string') {
+        try {
+          return JSON.parse(field);
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
     
+    // Get stake data from validator record (cached by snapshot job)
     const stakeData = {
-      activeStake: Number(validator.get('activeStake') || 0) / LAMPORTS_PER_SOL,
-      activatingStake: Number(validator.get('activatingStake') || 0) / LAMPORTS_PER_SOL,
-      deactivatingStake: Number(validator.get('deactivatingStake') || 0) / LAMPORTS_PER_SOL,
-      activatingAccounts: activatingAccountsJson ? JSON.parse(activatingAccountsJson as string) : [],
-      deactivatingAccounts: deactivatingAccountsJson ? JSON.parse(deactivatingAccountsJson as string) : [],
-      stakeDistribution: stakeDistributionJson ? JSON.parse(stakeDistributionJson as string) : [],
+      activeStake: Number(validator.active_stake || 0) / LAMPORTS_PER_SOL,
+      activatingStake: Number(validator.activating_stake || 0) / LAMPORTS_PER_SOL,
+      deactivatingStake: Number(validator.deactivating_stake || 0) / LAMPORTS_PER_SOL,
+      activatingAccounts: parseJsonField(validator.activating_accounts),
+      deactivatingAccounts: parseJsonField(validator.deactivating_accounts),
+      stakeDistribution: parseJsonField(validator.stake_distribution),
       epoch: currentEpoch,
     };
 
     const perfData = perfRecords[0] ? {
-      skipRate: Number(perfRecords[0].get('skipRate') || 0),
-      leaderSlots: Number(perfRecords[0].get('leaderSlots') || 0),
-      blocksProduced: Number(perfRecords[0].get('blocksProduced') || 0),
-      voteCredits: Number(perfRecords[0].get('voteCredits') || 0),
-      epoch: Number(perfRecords[0].get('epoch')),
+      skipRate: Number(perfRecords[0].skip_rate || 0),
+      leaderSlots: Number(perfRecords[0].leader_slots || 0),
+      blocksProduced: Number(perfRecords[0].blocks_produced || 0),
+      voteCredits: Number(perfRecords[0].vote_credits || 0),
+      epoch: Number(perfRecords[0].epoch),
       // Use the pre-calculated percentage from snapshot job (relative to best performer)
-      voteCreditsPercentage: Number(perfRecords[0].get('voteCreditsPercentage') || 0),
-      maxPossibleCredits: Number(perfRecords[0].get('maxPossibleCredits') || 0),
+      voteCreditsPercentage: Number(perfRecords[0].vote_credits_percentage || 0),
+      maxPossibleCredits: Number(perfRecords[0].max_possible_credits || 0),
     } : null;
 
     // Debug logging for vote credits
@@ -108,37 +120,39 @@ export async function GET(
     }
 
     // Fetch latest MEV data if validator is Jito-enabled
-    const jitoEnabled = Boolean(validator.get('jitoEnabled'));
+    const jitoEnabled = Boolean(validator.jito_enabled);
     let mevData = null;
     
     if (jitoEnabled) {
-      const mevRecords = await tb.mevSnapshots.select({
-        filterByFormula: `{votePubkey} = "${votePubkey}"`,
-        sort: [{ field: 'epoch', direction: 'desc' }],
-        maxRecords: 1,
-      }).firstPage();
+      const mevRecords = await sql`
+        SELECT * FROM mev_snapshots
+        WHERE vote_pubkey = ${votePubkey}
+        ORDER BY epoch DESC
+        LIMIT 1
+      `;
 
       if (mevRecords[0]) {
         mevData = {
-          mevCommission: Number(mevRecords[0].get('mevCommission') || 0),
-          priorityFeeCommission: Number(mevRecords[0].get('priorityFeeCommission') || 0),
-          epoch: Number(mevRecords[0].get('epoch')),
+          mevCommission: Number(mevRecords[0].mev_commission || 0),
+          priorityFeeCommission: Number(mevRecords[0].priority_fee_commission || 0),
+          epoch: Number(mevRecords[0].epoch),
         };
       }
     }
 
     const response = NextResponse.json({
       validator: {
-        votePubkey: validator.get('votePubkey'),
-        identityPubkey: validator.get('identityPubkey'),
-        name: validator.get('name'),
-        iconUrl: validator.get('iconUrl'),
-        website: validator.get('website'),
-        version: validator.get('version'),
+        votePubkey: validator.vote_pubkey,
+        identityPubkey: validator.identity_pubkey,
+        name: validator.name,
+        iconUrl: validator.icon_url,
+        website: validator.website,
+        version: validator.version,
+        commission: Number(validator.commission || 0), // ADD THIS BACK!
         delinquent: isDelinquent, // Use real-time RPC data
         jitoEnabled,
-        firstSeenEpoch: Number(validator.get('firstSeenEpoch') || 0),
-        stakeAccountCount: Number(validator.get('stakeAccountCount') || 0),
+        firstSeenEpoch: Number(validator.first_seen_epoch || 0),
+        stakeAccountCount: Number(validator.stake_account_count || 0),
       },
       performance: perfData,
       stake: stakeData,

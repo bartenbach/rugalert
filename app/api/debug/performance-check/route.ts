@@ -1,4 +1,4 @@
-import { tb } from "@/lib/airtable";
+import { sql } from "@/lib/db-neon";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -13,63 +13,34 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "votePubkey required" }, { status: 400 });
     }
 
-    // Fetch the latest performance record for this validator
-    const perfRecords = await tb.performanceHistory
-      .select({
-        filterByFormula: `{votePubkey} = "${votePubkey}"`,
-        sort: [{ field: "epoch", direction: "desc" }],
-        maxRecords: 1,
-      })
-      .firstPage();
+    // Fetch the latest performance record for this validator from postgres
+    const perfRecords = await sql`
+      SELECT * FROM performance_history
+      WHERE vote_pubkey = ${votePubkey}
+      ORDER BY epoch DESC
+      LIMIT 1
+    `;
 
     if (perfRecords.length === 0) {
       return NextResponse.json({ error: "No performance records found" }, { status: 404 });
     }
 
     const record = perfRecords[0];
-    const fields = record.fields;
 
-    // Log all fields to see exactly what's in Airtable
-    console.log("Performance record fields:", JSON.stringify(fields, null, 2));
-
-    // Check for various possible field names (case variations)
-    const possibleLeaderSlotsFields = ['leaderSlots', 'leaderslots', 'LeaderSlots', 'leader_slots'];
-    const possibleBlocksProducedFields = ['blocksProduced', 'blocksproduced', 'BlocksProduced', 'blocks_produced'];
-
-    const foundFields = {
-      leaderSlots: {},
-      blocksProduced: {},
-    };
-
-    for (const fieldName of possibleLeaderSlotsFields) {
-      if (fieldName in fields) {
-        foundFields.leaderSlots = {
-          fieldName,
-          value: fields[fieldName],
-          type: typeof fields[fieldName],
-        };
-        break;
-      }
-    }
-
-    for (const fieldName of possibleBlocksProducedFields) {
-      if (fieldName in fields) {
-        foundFields.blocksProduced = {
-          fieldName,
-          value: fields[fieldName],
-          type: typeof fields[fieldName],
-        };
-        break;
-      }
-    }
+    // Log all fields to see exactly what's in the database
+    console.log("Performance record fields:", JSON.stringify(record, null, 2));
 
     return NextResponse.json({
       votePubkey,
-      epoch: fields.epoch,
-      skipRate: fields.skipRate,
-      allFields: fields,
-      foundFields,
-      allFieldNames: Object.keys(fields),
+      epoch: record.epoch,
+      skipRate: record.skip_rate,
+      leaderSlots: record.leader_slots,
+      blocksProduced: record.blocks_produced,
+      voteCredits: record.vote_credits,
+      voteCreditsPercentage: record.vote_credits_percentage,
+      maxPossibleCredits: record.max_possible_credits,
+      allFields: record,
+      allFieldNames: Object.keys(record),
     }, {
       headers: {
         'Cache-Control': 'no-store',

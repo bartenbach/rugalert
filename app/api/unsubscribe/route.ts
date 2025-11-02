@@ -1,4 +1,4 @@
-import { tb } from '@/lib/airtable'
+import { sql } from '@/lib/db-neon'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
@@ -9,18 +9,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
     }
     
-    // Find subscriber by email
-    const found = await tb.subs.select({ 
-      filterByFormula: `{email} = "${email}"`, 
-      maxRecords: 1 
-    }).firstPage()
+    // Delete the subscription
+    const result = await sql`
+      DELETE FROM subscribers 
+      WHERE email = ${email}
+      RETURNING id
+    `
     
-    if (!found[0]) {
+    if (result.length === 0) {
       return NextResponse.json({ error: 'Email not found' }, { status: 404 })
     }
-    
-    // Delete the subscription
-    await tb.subs.destroy([found[0].id])
     
     console.log(`✅ Unsubscribed: ${email}`)
     

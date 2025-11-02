@@ -383,102 +383,6 @@ function ValidatorsPageContent() {
         )}
       </div>
 
-      {/* Stats */}
-      {!loading && networkStats && (
-        <div className="glass rounded-2xl p-4 sm:p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
-            <div className="text-center">
-              <div className="text-gray-400 text-xs sm:text-sm mb-1">
-                Total Validators
-              </div>
-              <div className="text-xl sm:text-3xl font-bold text-white">
-                {networkStats.totalValidators.toLocaleString()}
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                <span className="hidden sm:inline">
-                  {networkStats.activeValidators.toLocaleString()} active •{" "}
-                </span>
-                <span className="hidden sm:inline">
-                  {networkStats.delinquentValidators.toLocaleString()}{" "}
-                  delinquent
-                </span>
-                <span className="sm:hidden">
-                  {networkStats.activeValidators.toLocaleString()} active
-                </span>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-gray-400 text-xs sm:text-sm mb-1">
-                Total Stake
-              </div>
-              <div className="text-xl sm:text-3xl font-bold text-orange-400">
-                <span className="hidden sm:inline">
-                  {networkStats.totalStake.toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })}{" "}
-                  <span className="text-xl">SOL</span>
-                </span>
-                <span className="sm:hidden">
-                  {(networkStats.totalStake / 1000000).toFixed(1)}M
-                </span>
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                <span className="hidden sm:inline">
-                  Network-wide (real-time)
-                </span>
-                <span className="sm:hidden">SOL</span>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-gray-400 text-xs sm:text-sm mb-1">
-                Active Stake
-              </div>
-              <div className="text-xl sm:text-3xl font-bold text-green-400">
-                <span className="hidden sm:inline">
-                  {networkStats.activeStake.toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })}{" "}
-                  <span className="text-xl">SOL</span>
-                </span>
-                <span className="sm:hidden">
-                  {(networkStats.activeStake / 1000000).toFixed(1)}M
-                </span>
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                {(
-                  (networkStats.activeStake / networkStats.totalStake) *
-                  100
-                ).toFixed(2)}
-                %
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-gray-400 text-xs sm:text-sm mb-1">
-                Delinquent Stake
-              </div>
-              <div className="text-xl sm:text-3xl font-bold text-red-400">
-                <span className="hidden sm:inline">
-                  {networkStats.delinquentStake.toLocaleString(undefined, {
-                    maximumFractionDigits: 0,
-                  })}{" "}
-                  <span className="text-xl">SOL</span>
-                </span>
-                <span className="sm:hidden">
-                  {(networkStats.delinquentStake / 1000000).toFixed(1)}M
-                </span>
-              </div>
-              <div className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                {(
-                  (networkStats.delinquentStake / networkStats.totalStake) *
-                  100
-                ).toFixed(2)}
-                %
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Validators Table - Desktop */}
       <div className="hidden md:block glass rounded-2xl shadow-2xl shadow-black/30">
         <table className="w-full">
@@ -1045,3 +949,4 @@ export default function ValidatorsPage() {
     </Suspense>
   );
 }
+

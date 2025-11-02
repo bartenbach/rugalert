@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { tb } from '../../../lib/airtable';
+import { sql } from '@/lib/db-neon';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,32 +14,27 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Search validators by name or vote pubkey
-    const validators: any[] = [];
-    
-    await tb.validators.select({
-      pageSize: 100,
-      // Search by name (case insensitive) or vote pubkey
-      filterByFormula: `OR(
-        SEARCH(LOWER("${query.toLowerCase()}"), LOWER({name})),
-        SEARCH(LOWER("${query.toLowerCase()}"), LOWER({votePubkey}))
-      )`,
-    }).eachPage((records, fetchNextPage) => {
-      validators.push(...records);
-      fetchNextPage();
-    });
+    // Search validators by name or vote pubkey (case insensitive)
+    const validators = await sql`
+      SELECT vote_pubkey, name, icon_url, identity_pubkey
+      FROM validators
+      WHERE 
+        LOWER(name) LIKE ${`%${query.toLowerCase()}%`}
+        OR LOWER(vote_pubkey) LIKE ${`%${query.toLowerCase()}%`}
+      LIMIT 20
+    `;
 
     // Format results
-    const results = validators.slice(0, 20).map(v => ({
-      votePubkey: v.get('votePubkey'),
-      name: v.get('name') || 'Unknown Validator',
-      iconUrl: v.get('iconUrl'),
-      identityPubkey: v.get('identityPubkey'),
+    const results = validators.map(v => ({
+      votePubkey: v.vote_pubkey,
+      name: v.name || 'Unknown Validator',
+      iconUrl: v.icon_url,
+      identityPubkey: v.identity_pubkey,
     }));
 
     return NextResponse.json({
       results,
-      total: validators.length,
+      total: results.length,
     });
   } catch (error: any) {
     console.error('❌ search-validators error:', error);

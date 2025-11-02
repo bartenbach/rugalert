@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { tb } from "../../../lib/airtable";
+import { sql } from "@/lib/db-neon";
 
 // ---- JSON-RPC helper ----
 async function rpc(method: string, params: any[] = []) {
@@ -19,12 +19,10 @@ export const revalidate = 0;
 export const maxDuration = 60; // 60 seconds for Vercel Pro
 
 /**
- * DAILY UPTIME TRACKING (Fixed Design):
+ * DAILY UPTIME TRACKING:
  * - One record per validator per day
- * - UPSERT (update if exists, create if not) based on key = "votePubkey-date"
+ * - UPSERT based on key = "votePubkey-date"
  * - Increment uptimeChecks and delinquentChecks for today's record
- * 
- * Result: 1,000 new records per day (not per minute!)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -33,12 +31,10 @@ export async function GET(req: NextRequest) {
 
     // Verify authorization (either from Vercel Cron or manual trigger with Bearer token)
     const authHeader = req.headers.get("authorization");
-    const userAgent = req.headers.get("user-agent");
-    const isVercelCron = userAgent?.includes("vercel-cron");
     const hasValidAuth = authHeader === `Bearer ${process.env.CRON_SECRET}`;
     
-    if (!isVercelCron && !hasValidAuth) {
-      console.error(`❌ Unauthorized request - UA: ${userAgent}, Auth: ${authHeader ? 'present' : 'missing'}`);
+    if (!hasValidAuth) {
+      console.error(`❌ Unauthorized request`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -61,142 +57,65 @@ export async function GET(req: NextRequest) {
     console.log(`📊 Network: ${activeValidators.length} active, ${delinquentValidators.length} delinquent`);
     console.log(`📅 Processing date: ${today}`);
 
-    // Fetch existing records for today - SIMPLE: key ends with today's date
-    // Key format: "votePubkey-YYYY-MM-DD"
-    const existingRecordsMap = new Map<string, { id: string; uptimeChecks: number; delinquentChecks: number }>();
-    
-    await tb.dailyUptime
-      .select({
-        filterByFormula: `FIND("-${today}", {key}) > 0`,
-        fields: ['key', 'votePubkey', 'uptimeChecks', 'delinquentChecks'],
-        pageSize: 100,
-      })
-      .eachPage((records, fetchNextPage) => {
-        records.forEach((record) => {
-          const votePubkey = record.get('votePubkey') as string;
-          if (votePubkey) {
-            existingRecordsMap.set(votePubkey, {
-              id: record.id,
-              uptimeChecks: Number(record.get('uptimeChecks') || 0),
-              delinquentChecks: Number(record.get('delinquentChecks') || 0),
-            });
-          }
-        });
-        fetchNextPage();
-      });
-
-    console.log(`📦 Found ${existingRecordsMap.size}/${allVotePubkeys.length} existing records for ${today}`);
-
-    // Prepare updates and creates
-    const recordsToUpdate: any[] = [];
-    const recordsToCreate: any[] = [];
+    // Upsert daily_uptime records using Postgres ON CONFLICT
+    let updated = 0;
+    let created = 0;
 
     for (const votePubkey of allVotePubkeys) {
       const isDelinquent = delinquentSet.has(votePubkey);
-      const existing = existingRecordsMap.get(votePubkey);
-
-      if (existing) {
-        // UPDATE existing record
-        const newUptimeChecks = existing.uptimeChecks + 1;
-        const newDelinquentChecks = isDelinquent ? existing.delinquentChecks + 1 : existing.delinquentChecks;
-        const uptimePercent = Math.round(((newUptimeChecks - newDelinquentChecks) / newUptimeChecks) * 10000) / 100; // Round to 2 decimals
-        
-        recordsToUpdate.push({
-          id: existing.id,
-          fields: {
-            uptimeChecks: newUptimeChecks,
-            delinquentChecks: newDelinquentChecks,
-            uptimePercent: Math.max(0, Math.min(100, uptimePercent)), // Clamp to 0-100
-          }
-        });
-      } else {
-        // CREATE new record for today
-        const uptimeChecks = 1;
-        const delinquentChecks = isDelinquent ? 1 : 0;
-        const uptimePercent = Math.round(((uptimeChecks - delinquentChecks) / uptimeChecks) * 10000) / 100;
-        
-        recordsToCreate.push({
-          fields: {
-            key: `${votePubkey}-${today}`,
-            votePubkey,
-            date: today,
-            uptimeChecks,
-            delinquentChecks,
-            uptimePercent: Math.max(0, Math.min(100, uptimePercent)),
-          }
-        });
-      }
-    }
-
-    console.log(`📝 Updating ${recordsToUpdate.length} records, creating ${recordsToCreate.length} records`);
-
-    // Batch operations (10 at a time)
-    let updated = 0;
-    for (let i = 0; i < recordsToUpdate.length; i += 10) {
-      const batch = recordsToUpdate.slice(i, i + 10);
+      const key = `${votePubkey}-${today}`;
+      
       try {
-        await tb.dailyUptime.update(batch);
-        updated += batch.length;
-      } catch (error: any) {
-        console.error(`❌ Failed to update batch ${i}-${i+10}:`, error.message);
-        console.error(`Full error:`, JSON.stringify(error, null, 2));
-        // Log first failed record for debugging
-        if (batch.length > 0) {
-          console.error(`First record in failed batch:`, JSON.stringify(batch[0], null, 2));
+        const result = await sql`
+          INSERT INTO daily_uptime (key, vote_pubkey, date, uptime_checks, delinquent_checks, uptime_percent)
+          VALUES (
+            ${key},
+            ${votePubkey},
+            ${today},
+            1,
+            ${isDelinquent ? 1 : 0},
+            ${isDelinquent ? 0 : 100}
+          )
+          ON CONFLICT (key) DO UPDATE SET
+            uptime_checks = daily_uptime.uptime_checks + 1,
+            delinquent_checks = daily_uptime.delinquent_checks + ${isDelinquent ? 1 : 0},
+            uptime_percent = ROUND(
+              ((daily_uptime.uptime_checks + 1 - (daily_uptime.delinquent_checks + ${isDelinquent ? 1 : 0})) 
+              / (daily_uptime.uptime_checks + 1)::numeric) * 100, 
+              2
+            )
+          RETURNING (xmax = 0) AS inserted
+        `;
+        
+        // xmax = 0 means INSERT, xmax != 0 means UPDATE
+        if (result[0]?.inserted) {
+          created++;
+        } else {
+          updated++;
         }
+      } catch (err) {
+        console.error(`Error upserting ${votePubkey}:`, err);
       }
     }
 
-    let created = 0;
-    for (let i = 0; i < recordsToCreate.length; i += 10) {
-      const batch = recordsToCreate.slice(i, i + 10);
-      try {
-        await tb.dailyUptime.create(batch);
-        created += batch.length;
-      } catch (error: any) {
-        console.error(`❌ Failed to create batch ${i}-${i+10}:`, error.message);
-        if (batch.length > 0) {
-          console.error(`First record in failed batch:`, JSON.stringify(batch[0], null, 2));
-        }
-      }
-    }
+    console.log(`📝 Updated ${updated} records, created ${created} records`);
 
-    // Also update validator's current delinquent status
-    const validatorsToUpdate: any[] = [];
-    await tb.validators
-      .select({
-        fields: ['votePubkey', 'delinquent'],
-        pageSize: 100,
-      })
-      .eachPage((records, fetchNextPage) => {
-        records.forEach((record) => {
-          const votePubkey = record.get('votePubkey') as string;
-          const currentDelinquent = Boolean(record.get('delinquent'));
-          const shouldBeDelinquent = delinquentSet.has(votePubkey);
-          
-          // Only update if status changed
-          if (currentDelinquent !== shouldBeDelinquent) {
-            validatorsToUpdate.push({
-              id: record.id,
-              fields: { delinquent: shouldBeDelinquent }
-            });
-          }
-        });
-        fetchNextPage();
-      });
-
+    // Update validator delinquent status in bulk
+    console.log(`📝 Updating validator delinquent statuses...`);
     let validatorsUpdated = 0;
-    if (validatorsToUpdate.length > 0) {
-      console.log(`📝 Updating ${validatorsToUpdate.length} validator delinquent statuses`);
-      for (let i = 0; i < validatorsToUpdate.length; i += 10) {
-        const batch = validatorsToUpdate.slice(i, i + 10);
-        try {
-          await tb.validators.update(batch);
-          validatorsUpdated += batch.length;
-        } catch (error: any) {
-          console.error(`❌ Failed to update validator batch ${i}-${i+10}:`, error.message);
-        }
-      }
+    
+    // Set all to not delinquent first
+    await sql`UPDATE validators SET delinquent = false`;
+    
+    // Then set delinquent ones to true
+    if (delinquentSet.size > 0) {
+      const delinquentArray = Array.from(delinquentSet);
+      await sql`
+        UPDATE validators 
+        SET delinquent = true 
+        WHERE vote_pubkey = ANY(${delinquentArray})
+      `;
+      validatorsUpdated = delinquentSet.size;
     }
 
     const elapsed = Date.now() - startTime;

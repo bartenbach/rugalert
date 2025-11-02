@@ -22,6 +22,7 @@ interface ApiResponse {
     includesMevRugs: boolean;
     totalCommissionEvents: number;
     totalMevEvents: number;
+    validatorEpochCounts?: Record<string, number>;
   };
 }
 
@@ -42,6 +43,7 @@ interface RugEvent {
 export default function RugsPerEpochChart() {
   const [data, setData] = useState<EpochData[]>([]);
   const [repeatOffenders, setRepeatOffenders] = useState<number>(0);
+  const [validatorEpochCounts, setValidatorEpochCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
   const [epochEvents, setEpochEvents] = useState<RugEvent[]>([]);
@@ -57,6 +59,7 @@ export default function RugsPerEpochChart() {
         const json: ApiResponse = await res.json();
         setData(json.data || []);
         setRepeatOffenders(json.meta?.repeatOffenders || 0);
+        setValidatorEpochCounts(json.meta?.validatorEpochCounts || {});
       } catch (error) {
         console.error("Failed to load rugs per epoch:", error);
       } finally {
@@ -189,7 +192,7 @@ export default function RugsPerEpochChart() {
                             width: `${((item.commissionValidators - item.bothTypes) / maxCount) * 100}%`,
                             minWidth: "2rem",
                           }}
-                          title={`${item.commissionValidators - item.bothTypes} commission only`}
+                          title={`${item.commissionValidators - item.bothTypes} inflation commission only`}
                         >
                           <span className="text-white font-bold text-xs">
                             {item.commissionValidators - item.bothTypes}
@@ -205,7 +208,7 @@ export default function RugsPerEpochChart() {
                             width: `${((item.mevValidators - item.bothTypes) / maxCount) * 100}%`,
                             minWidth: "2rem",
                           }}
-                          title={`${item.mevValidators - item.bothTypes} MEV only`}
+                          title={`${item.mevValidators - item.bothTypes} MEV commission only`}
                         >
                           <span className="text-white font-bold text-xs">
                             {item.mevValidators - item.bothTypes}
@@ -221,7 +224,7 @@ export default function RugsPerEpochChart() {
                             width: `${(item.bothTypes / maxCount) * 100}%`,
                             minWidth: "2rem",
                           }}
-                          title={`${item.bothTypes} rugged both commission and MEV`}
+                          title={`${item.bothTypes} rugged both inflation commission and MEV commission`}
                         >
                           <span className="text-white font-bold text-xs">
                             {item.bothTypes}
@@ -281,10 +284,14 @@ export default function RugsPerEpochChart() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {epochEvents.map((event) => (
+                        {epochEvents.map((event) => {
+                          const isRepeatOffender = (validatorEpochCounts[event.vote_pubkey] || 0) > 1;
+                          return (
                           <tr
                             key={event.id}
-                            className="hover:bg-white/5 transition-colors"
+                            className={`hover:bg-white/5 transition-colors ${
+                              isRepeatOffender ? 'bg-orange-500/5' : ''
+                            }`}
                           >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
@@ -315,10 +322,20 @@ export default function RugsPerEpochChart() {
                                   >
                                     <span className="text-sm">🔷</span>
                                   </div>
-                                  <span className="text-sm font-medium text-white">
-                                    {event.name ||
-                                      event.vote_pubkey.slice(0, 8)}
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-white">
+                                      {event.name ||
+                                        event.vote_pubkey.slice(0, 8)}
+                                    </span>
+                                    {isRepeatOffender && (
+                                      <span 
+                                        className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-semibold border border-orange-500/30"
+                                        title={`Rugged in ${validatorEpochCounts[event.vote_pubkey]} epochs`}
+                                      >
+                                        ⚠️ {validatorEpochCounts[event.vote_pubkey]}x
+                                      </span>
+                                    )}
+                                  </div>
                                 </a>
                               </div>
                             </td>
@@ -350,7 +367,8 @@ export default function RugsPerEpochChart() {
                               </span>
                             </td>
                           </tr>
-                        ))}
+                        );
+                        })}
                       </tbody>
                     </table>
                   </div>

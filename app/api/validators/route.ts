@@ -274,11 +274,22 @@ export async function GET(request: NextRequest) {
       paginatedValidators = deduplicatedValidators.slice(start, end);
     }
 
+    // Calculate network statistics
+    const networkStats = {
+      totalValidators: deduplicatedValidators.length,
+      activeValidators: deduplicatedValidators.filter(v => !v.delinquent).length,
+      delinquentValidators: deduplicatedValidators.filter(v => v.delinquent).length,
+      totalStake: networkTotalStake,
+      activeStake: totalActiveStake,
+      delinquentStake: totalDelinquentStake,
+    };
+
     return NextResponse.json({
       validators: paginatedValidators,
       total: deduplicatedValidators.length,
       currentEpoch,
       networkTotalStake,
+      networkStats,
     });
   } catch (error: any) {
     console.error("Error fetching validators:", error);

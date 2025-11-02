@@ -1,7 +1,9 @@
+snapshot.sh
 # Dependencies
 node_modules/
 /.pnp
 .pnp.js
+scripts/
 
 # Testing
 /coverage
