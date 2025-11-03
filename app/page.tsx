@@ -14,6 +14,9 @@ type Row = {
   epoch: number;
   created_at?: string;
   delinquent?: boolean;
+  event_source?: "COMMISSION" | "MEV";
+  from_disabled?: boolean;
+  to_disabled?: boolean;
 };
 
 // Utility function to format relative time
