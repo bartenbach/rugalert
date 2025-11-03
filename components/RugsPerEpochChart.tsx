@@ -88,7 +88,8 @@ export default function RugsPerEpochChart() {
     setSelectedEpoch(epoch);
     setLoadingEvents(true);
     try {
-      const res = await fetch(`/api/epoch-events/${epoch}`, {
+      // Add timestamp to bust Vercel edge cache
+      const res = await fetch(`/api/epoch-events/${epoch}?t=${Date.now()}`, {
         cache: "no-store"
       });
       const json = await res.json();
