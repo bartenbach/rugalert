@@ -603,13 +603,26 @@ export default function Page() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-gray-400">
-                          {it.from_commission}%
-                        </span>
-                        <span className="text-gray-400">→</span>
-                        <span className="text-white font-semibold">
-                          {it.to_commission}%
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-gray-400">
+                            {it.event_source === 'MEV' && it.from_disabled
+                              ? 'MEV Disabled'
+                              : `${it.from_commission}%`}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className="text-white font-semibold">
+                            {it.event_source === 'MEV' && it.to_disabled
+                              ? 'MEV Disabled'
+                              : `${it.to_commission}%`}
+                          </span>
+                        </div>
+                        <span className={`text-[10px] font-semibold ${
+                          it.event_source === 'MEV' 
+                            ? 'text-purple-400' 
+                            : 'text-orange-400'
+                        }`}>
+                          {it.event_source === 'MEV' ? 'MEV Commission' : 'Inflation Commission'}
                         </span>
                       </div>
                     </td>

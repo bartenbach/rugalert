@@ -898,11 +898,21 @@ export async function POST(req: NextRequest) {
           
           const latestMev = latestMevByValidator.get(v.votePubkey);
           if (latestMev) {
-            const prevMevCommission = Number(latestMev.mev_commission || 0);
-            const currentMevCommission = jitoInfo.mevCommission || 0;
+            // Keep NULL as NULL (MEV was disabled), don't convert to 0
+            const prevMevCommission = latestMev.mev_commission !== null && latestMev.mev_commission !== undefined
+              ? Number(latestMev.mev_commission)
+              : null;
+            const currentMevCommission = jitoInfo.mevCommission !== null && jitoInfo.mevCommission !== undefined
+              ? Number(jitoInfo.mevCommission)
+              : null;
             
-            if (prevMevCommission !== currentMevCommission) {
-              const delta = currentMevCommission - prevMevCommission;
+            // Compare with proper NULL handling
+            const changed = (prevMevCommission === null && currentMevCommission !== null) ||
+                           (prevMevCommission !== null && currentMevCommission === null) ||
+                           (prevMevCommission !== null && currentMevCommission !== null && prevMevCommission !== currentMevCommission);
+            
+            if (changed) {
+              const delta = (currentMevCommission ?? 0) - (prevMevCommission ?? 0);
               const eventType = detectMevRug(prevMevCommission, currentMevCommission);
               
               mevEventsToCreate.push({
@@ -937,20 +947,22 @@ export async function POST(req: NextRequest) {
       } else {
         // NOT running Jito now - check if they WERE running it before (MEV disabled event)
         const latestMev = latestMevByValidator.get(v.votePubkey);
-        if (latestMev && Number(latestMev.mev_commission || 0) > 0) {
+        if (latestMev && latestMev.mev_commission !== null && latestMev.mev_commission !== undefined && Number(latestMev.mev_commission) > 0) {
           // They previously had MEV commission > 0, now disabled
           // NOTE: We use NULL (not 0) because:
           // - 0% commission = staker gets ALL MEV rewards (good!)
           // - NULL/disabled = there are NO MEV rewards (bad!)
           const prevMevCommission = Number(latestMev.mev_commission);
+          const currentMevCommission = null;
           const delta = -prevMevCommission;
+          const eventType = detectMevRug(prevMevCommission, currentMevCommission);
           
           mevEventsToCreate.push({
             votePubkey: v.votePubkey,
             epoch,
-            type: 'INFO',
+            type: eventType,
             fromMevCommission: prevMevCommission,
-            toMevCommission: null, // NULL = MEV disabled (not 0 = low commission)
+            toMevCommission: currentMevCommission, // NULL = MEV disabled (not 0 = low commission)
             delta,
           });
           

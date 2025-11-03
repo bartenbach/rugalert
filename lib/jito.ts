@@ -104,15 +104,41 @@ export async function checkJitoValidator(
 
 /**
  * Detect MEV rug - similar logic to regular commission rugs
+ * 
+ * Special case: fromCommission can be NULL when MEV was disabled
+ * NULL → 100% is CAUTION (not RUG) because stakers weren't earning MEV rewards before
  */
 export function detectMevRug(
-  fromCommission: number,
-  toCommission: number
+  fromCommission: number | null,
+  toCommission: number | null
 ): 'RUG' | 'CAUTION' | 'INFO' {
-  const delta = toCommission - fromCommission;
+  // Handle NULL (MEV disabled) cases
+  if (fromCommission === null && toCommission !== null) {
+    // Enabling MEV: NULL → X%
+    if (toCommission >= 90) {
+      // MEV Disabled → 90%+: CAUTION (not RUG, because no rewards were being earned before)
+      // This is similar to a new validator starting at 100%
+      return 'CAUTION';
+    }
+    return 'INFO';
+  }
   
-  // MEV RUG: Increased TO 90% or higher
-  if (toCommission >= 90 && delta > 0) {
+  if (fromCommission !== null && toCommission === null) {
+    // Disabling MEV: X% → NULL
+    // This is INFO (stakers lose MEV rewards, but validator isn't taking more)
+    return 'INFO';
+  }
+  
+  // Both NULL (shouldn't happen, but handle gracefully)
+  if (fromCommission === null && toCommission === null) {
+    return 'INFO';
+  }
+  
+  // Normal case: both are numbers
+  const delta = toCommission! - fromCommission!;
+  
+  // MEV RUG: Increased TO 90% or higher (from a non-NULL commission)
+  if (toCommission! >= 90 && delta > 0) {
     return 'RUG';
   }
   

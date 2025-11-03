@@ -77,26 +77,32 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
     
     // Process inflation events - only add "to" values (the actual changes)
     // The "from" value is implied by the previous point
+    let lastInflationValue: number | null = initialInflation;
+    
     inflationEvents.forEach((e, index) => {
       const time = new Date(e.created_at).getTime();
+      const fromValue = Number(e.from_commission);
+      const toValue = Number(e.to_commission);
       
-      // Only add "from" for the very first event (if no initial snapshot)
+      // Only add "from" if it's different from the last value (not redundant)
       if (index === 0 && initialInflation === null) {
         points.push({
           epoch: e.epoch,
-          commission: Number(e.from_commission),
+          commission: fromValue,
           mevCommission: null,
           time: time - 1
         });
+        lastInflationValue = fromValue;
       }
       
       // Always add the "to" value (the change)
       points.push({
         epoch: e.epoch,
-        commission: Number(e.to_commission),
+        commission: toValue,
         mevCommission: null,
         time: time
       });
+      lastInflationValue = toValue;
     });
     
     // Process MEV events - only add "to" values
@@ -126,8 +132,12 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
       }
     });
     
-    // Sort by time
-    points.sort((a, b) => a.time - b.time);
+    // Sort by EPOCH first (not time), then by time within same epoch
+    // This ensures chronological order even if events were detected out of order
+    points.sort((a, b) => {
+      if (a.epoch !== b.epoch) return a.epoch - b.epoch;
+      return a.time - b.time;
+    });
     
     // Forward-fill: merge points at same time and carry values forward
     let lastInflation: number | null = null;

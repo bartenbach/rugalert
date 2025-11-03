@@ -62,7 +62,9 @@ export async function GET(req: NextRequest) {
         delta,
         epoch,
         created_at,
-        'MEV' as event_source
+        'MEV' as event_source,
+        from_mev_commission IS NULL as from_disabled,
+        to_mev_commission IS NULL as to_disabled
       FROM mev_events
       WHERE epoch >= ${minEpoch}
       ORDER BY epoch DESC, created_at DESC
@@ -106,6 +108,8 @@ export async function GET(req: NextRequest) {
           epoch: r.epoch,
           created_at: r.created_at,
           event_source: r.event_source, // 'COMMISSION' or 'MEV'
+          from_disabled: r.from_disabled || false,
+          to_disabled: r.to_disabled || false,
           name: v.name,
           icon_url: v.iconUrl,
           delinquent: v.delinquent,
@@ -159,6 +163,8 @@ export async function GET(req: NextRequest) {
         epoch: chosen.epoch,
         created_at: chosen.created_at,
         event_source: chosen.event_source, // 'COMMISSION' or 'MEV'
+        from_disabled: chosen.from_disabled || false,
+        to_disabled: chosen.to_disabled || false,
         name: v.name,
         icon_url: v.iconUrl,
         delinquent: v.delinquent,

@@ -1298,6 +1298,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                   Change
                                 </th>
                                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
+                                  Epoch
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
                                   Detected
                                 </th>
                               </tr>
@@ -1360,6 +1363,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                       {event.delta > 0 ? "+" : ""}
                                       {event.delta}pp
                                     </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-sm text-gray-400">
+                                    {event.epoch}
                                   </td>
                                   <td className="py-3 px-4 text-sm text-gray-400">
                                     {event.created_at
