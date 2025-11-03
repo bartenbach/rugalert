@@ -97,7 +97,7 @@ export async function GET(
         ...r,
         name: info?.name || null,
         icon_url: info?.icon_url || null
-      }
+      } as typeof r & { name: string | null; icon_url: string | null }
     })
     
     const enrichedMevRugs = mevRugs.map(r => {
@@ -106,7 +106,7 @@ export async function GET(
         ...r,
         name: info?.name || null,
         icon_url: info?.icon_url || null
-      }
+      } as typeof r & { name: string | null; icon_url: string | null }
     })
     
     // Deduplicate within each type (keep only the latest event per validator per type)
