@@ -33,6 +33,16 @@ export async function GET(
       ORDER BY e.created_at DESC
     `
     
+    console.log(`📊 Epoch ${epoch} DEBUG: Found ${commissionRugs.length} commission rugs`)
+    if (commissionRugs.length > 0) {
+      console.log('First 3 commission rugs:', commissionRugs.slice(0, 3).map(r => ({ 
+        name: r.name, 
+        vote_pubkey: String(r.vote_pubkey).substring(0, 8),
+        from: r.from_commission,
+        to: r.to_commission 
+      })))
+    }
+    
     const mevRugs = await sql`
       SELECT 
         m.id,
@@ -52,6 +62,18 @@ export async function GET(
       WHERE m.type = 'RUG' AND m.epoch = ${epoch}
       ORDER BY m.created_at DESC
     `
+    
+    console.log(`📊 Epoch ${epoch} DEBUG: Found ${mevRugs.length} MEV rugs`)
+    if (mevRugs.length > 0) {
+      console.log('First 3 MEV rugs:', mevRugs.slice(0, 3).map(r => ({ 
+        name: r.name, 
+        vote_pubkey: String(r.vote_pubkey).substring(0, 8),
+        from: r.from_commission,
+        to: r.to_commission,
+        from_disabled: r.from_disabled,
+        to_disabled: r.to_disabled
+      })))
+    }
     
     // Deduplicate within each type (keep only the latest event per validator per type)
     // But DO show BOTH commission AND MEV if a validator did both
@@ -112,7 +134,13 @@ export async function GET(
     const uniqueValidators = new Set(allRugs.map(r => r.vote_pubkey)).size
     console.log(`📊 Epoch ${epoch}: ${seenCommission.size} unique commission + ${seenMEV.size} unique MEV = ${allRugs.length} rows from ${uniqueValidators} unique validators`)
     
-    return NextResponse.json({ items })
+    return NextResponse.json({ items }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      }
+    })
   } catch (e: any) {
     console.error('❌ epoch-events error:', e)
     return NextResponse.json({ 

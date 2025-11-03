@@ -88,7 +88,9 @@ export default function RugsPerEpochChart() {
     setSelectedEpoch(epoch);
     setLoadingEvents(true);
     try {
-      const res = await fetch(`/api/epoch-events/${epoch}`);
+      const res = await fetch(`/api/epoch-events/${epoch}`, {
+        cache: "no-store"
+      });
       const json = await res.json();
       setEpochEvents(json.items || []);
     } catch (error) {
