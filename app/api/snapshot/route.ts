@@ -1358,10 +1358,18 @@ export async function POST(req: NextRequest) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.error(`❌ [${elapsed}s] Snapshot error:`, err.message || err);
     console.error("Stack trace:", err.stack);
+    
+    // TODO: Set up proper monitoring
+    // Options:
+    // 1. BetterUptime monitoring /api/snapshot-health endpoint
+    // 2. Separate Discord webhook for ops alerts (DISCORD_OPS_WEBHOOK_URL)
+    // 3. PagerDuty/Slack integration
+    
     return NextResponse.json({ 
       error: String(err?.message || err),
       elapsed: `${elapsed}s`,
-      hint: "Check logs above for where the job stopped"
+      hint: "Check logs and /api/snapshot-health for diagnosis",
+      timestamp: new Date().toISOString()
     }, { status: 500 });
   }
 }
