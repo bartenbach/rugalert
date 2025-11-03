@@ -935,12 +935,14 @@ export async function POST(req: NextRequest) {
           }
         }
       } else {
-        // NOT running Jito now - check if they WERE running it before (Jito disabled event)
+        // NOT running Jito now - check if they WERE running it before (MEV disabled event)
         const latestMev = latestMevByValidator.get(v.votePubkey);
         if (latestMev && Number(latestMev.mev_commission || 0) > 0) {
           // They previously had MEV commission > 0, now disabled
+          // NOTE: We use NULL (not 0) because:
+          // - 0% commission = staker gets ALL MEV rewards (good!)
+          // - NULL/disabled = there are NO MEV rewards (bad!)
           const prevMevCommission = Number(latestMev.mev_commission);
-          const currentMevCommission = 0;
           const delta = -prevMevCommission;
           
           mevEventsToCreate.push({
@@ -948,19 +950,19 @@ export async function POST(req: NextRequest) {
             epoch,
             type: 'INFO',
             fromMevCommission: prevMevCommission,
-            toMevCommission: currentMevCommission,
+            toMevCommission: null, // NULL = MEV disabled (not 0 = low commission)
             delta,
           });
           
-          // Create snapshot showing Jito is disabled (0 commission)
+          // Create snapshot showing MEV is disabled (NULL commission)
           const mevKey = `${v.votePubkey}-${epoch}`;
           if (!existingMevKeys.has(mevKey)) {
             mevSnapshotsToCreate.push({
               key: mevKey,
               votePubkey: v.votePubkey,
               epoch,
-              mevCommission: 0,
-              priorityFeeCommission: 0,
+              mevCommission: null, // NULL = MEV disabled
+              priorityFeeCommission: null,
               mevRewards: 0,
               priorityFeeRewards: 0,
             });

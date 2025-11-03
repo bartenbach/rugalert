@@ -1327,11 +1327,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                     <div className="flex flex-col gap-1">
                                       <div className="flex items-center gap-2">
                                         <span className="text-gray-400">
-                                          {event.from_commission}%
+                                          {event.from_commission !== null && event.from_commission !== undefined
+                                            ? `${event.from_commission}%`
+                                            : 'MEV Disabled'}
                                         </span>
                                         <span className="text-gray-600">→</span>
                                         <span className="text-white font-semibold">
-                                          {event.to_commission}%
+                                          {event.to_commission !== null && event.to_commission !== undefined
+                                            ? `${event.to_commission}%`
+                                            : 'MEV Disabled'}
                                         </span>
                                       </div>
                                       <span className={`text-[10px] font-semibold ${
