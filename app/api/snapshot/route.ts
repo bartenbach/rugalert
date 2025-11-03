@@ -929,17 +929,30 @@ export async function POST(req: NextRequest) {
               const validatorName = chainName || v.votePubkey;
               
               if (eventType === "RUG") {
-                mevRugs.push({ validatorName, votePubkey: v.votePubkey, from: prevMevCommission, to: currentMevCommission, delta, validatorUrl, epoch });
-                const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+                // RUG means both values are numbers (not NULL)
+                const fromVal = prevMevCommission ?? 0;
+                const toVal = currentMevCommission ?? 0;
+                mevRugs.push({ validatorName, votePubkey: v.votePubkey, from: fromVal, to: toVal, delta, validatorUrl, epoch });
+                const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
+                const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
+                const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr}\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
-                const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
-                await postToTwitter(twitterMsg);
+                if (prevMevCommission !== null && currentMevCommission !== null) {
+                  const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
+                  await postToTwitter(twitterMsg);
+                }
               } else if (eventType === "CAUTION") {
-                mevCautions.push({ validatorName, votePubkey: v.votePubkey, from: prevMevCommission, to: currentMevCommission, delta, validatorUrl, epoch });
-                const msg = `⚠️ CAUTION: Large MEV Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${prevMevCommission}% → ${currentMevCommission}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+                const fromVal = prevMevCommission ?? 0;
+                const toVal = currentMevCommission ?? 0;
+                mevCautions.push({ validatorName, votePubkey: v.votePubkey, from: fromVal, to: toVal, delta, validatorUrl, epoch });
+                const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
+                const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
+                const msg = `⚠️ CAUTION: MEV Commission Change Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr} (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
                 await sendDiscord(msg);
-                const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
-                await postToTwitter(twitterMsg);
+                if (prevMevCommission !== null && currentMevCommission !== null) {
+                  const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
+                  await postToTwitter(twitterMsg);
+                }
               }
             }
           }
