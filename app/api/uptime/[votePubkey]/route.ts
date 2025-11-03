@@ -52,8 +52,14 @@ export async function GET(
         ? ((uptimeChecks - delinquentChecks) / uptimeChecks) * 100 
         : 100;
       
+      // Convert date to YYYY-MM-DD string format
+      const dateObj = typeof record.date === 'string' ? new Date(record.date) : record.date;
+      const dateStr = dateObj instanceof Date 
+        ? dateObj.toISOString().split('T')[0]
+        : String(record.date);
+      
       return {
-        date: record.date,
+        date: dateStr,
         uptimeChecks,
         delinquentChecks,
         uptimePercent,
