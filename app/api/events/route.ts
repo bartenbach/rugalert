@@ -34,7 +34,20 @@ export async function GET(req: NextRequest) {
     
     const minEpoch = Number(latestEpoch) - epochs
 
+    // DEBUG: Check raw database counts for epoch 874
+    const rawCount874 = await sql`
+      SELECT 
+        COUNT(*) FILTER (WHERE type = 'RUG') as rug_count,
+        COUNT(*) FILTER (WHERE type = 'INFO') as info_count,
+        COUNT(*) FILTER (WHERE type = 'CAUTION') as caution_count,
+        COUNT(*) as total_count
+      FROM events
+      WHERE epoch = 874
+    `
+    console.log(`📊 /api/events RAW DB COUNT for epoch 874:`, rawCount874[0])
+
     // Fetch all inflation commission events
+    // Force exact epoch match to avoid any query planner issues
     const commissionEvents = await sql`
       SELECT 
         id,
@@ -47,7 +60,7 @@ export async function GET(req: NextRequest) {
         created_at,
         'COMMISSION' as event_source
       FROM events
-      WHERE epoch >= ${minEpoch}
+      WHERE epoch >= ${minEpoch} AND epoch <= ${latestEpoch}
       ORDER BY epoch DESC, created_at DESC
     `
     
