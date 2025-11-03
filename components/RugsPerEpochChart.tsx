@@ -355,11 +355,15 @@ export default function RugsPerEpochChart() {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2 text-sm">
                                 <span className="text-gray-400">
-                                  {event.from_commission}%
+                                  {event.rug_type === 'MEV' && event.from_disabled
+                                    ? 'MEV Disabled'
+                                    : `${event.from_commission}%`}
                                 </span>
                                 <span className="text-gray-600">→</span>
                                 <span className="text-red-400 font-semibold">
-                                  {event.to_commission}%
+                                  {event.rug_type === 'MEV' && event.to_disabled
+                                    ? 'MEV Disabled'
+                                    : `${event.to_commission}%`}
                                 </span>
                               </div>
                             </td>

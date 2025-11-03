@@ -40,6 +40,8 @@ export async function GET(
         m.type,
         m.from_mev_commission as from_commission,
         m.to_mev_commission as to_commission,
+        m.from_mev_commission IS NULL as from_disabled,
+        m.to_mev_commission IS NULL as to_disabled,
         m.delta,
         m.epoch,
         m.created_at,
@@ -98,6 +100,8 @@ export async function GET(
       rug_type: r.rug_type,  // 'COMMISSION' or 'MEV'
       from_commission: r.from_commission,
       to_commission: r.to_commission,
+      from_disabled: r.from_disabled || false,
+      to_disabled: r.to_disabled || false,
       delta: r.delta,
       epoch: r.epoch,
       created_at: r.created_at,
