@@ -138,6 +138,12 @@ export async function GET(req: NextRequest) {
         totalMevEvents,
         validatorEpochCounts: Object.fromEntries(validatorEpochCount) // Map of validator -> epoch count
       }
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      }
     })
   } catch (e: any) {
     console.error('❌ rugs-per-epoch error:', e)

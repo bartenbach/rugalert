@@ -63,16 +63,25 @@ export default function Page() {
     try {
       // If INFO filter is enabled, request all events (not just most severe per validator)
       const showAllEvents = showInfo ? "&showAll=true" : "";
-      const res = await fetch(`/api/events?epochs=${epochs}${showAllEvents}`);
+      const res = await fetch(`/api/events?epochs=${epochs}${showAllEvents}`, {
+        cache: "no-store"
+      });
       const json = await res.json();
       const newItems = json.items || [];
 
-      // Detect new RUG events for visual alert
+      // Detect new RUG events for visual alert (only for RECENT rugs - within last 5 minutes)
       if (isAutoRefresh && previousRugsRef.current.size > 0) {
         const currentRugs = newItems.filter((it: Row) => it.type === "RUG");
-        const newRug = currentRugs.find(
-          (rug: Row) => !previousRugsRef.current.has(rug.id)
-        );
+        const newRug = currentRugs.find((rug: Row) => {
+          if (previousRugsRef.current.has(rug.id)) return false;
+          
+          // Only alert if rug was detected in the last 5 minutes
+          const rugTime = new Date(rug.created_at).getTime();
+          const now = Date.now();
+          const fiveMinutesAgo = now - (5 * 60 * 1000);
+          
+          return rugTime >= fiveMinutesAgo;
+        });
 
         if (newRug) {
           triggerSirenAlert(newRug);
@@ -558,13 +567,10 @@ export default function Page() {
                             onClick={(e) => {
                               e.stopPropagation();
                               navigator.clipboard.writeText(it.vote_pubkey);
-                              e.currentTarget
-                                .querySelector(".copy-icon")
-                                ?.classList.add("text-green-400");
+                              const icon = e.currentTarget.querySelector(".copy-icon");
+                              icon?.classList.add("text-green-400");
                               setTimeout(() => {
-                                e.currentTarget
-                                  .querySelector(".copy-icon")
-                                  ?.classList.remove("text-green-400");
+                                icon?.classList.remove("text-green-400");
                               }, 1000);
                             }}
                             className="text-xs text-gray-500 font-mono hover:text-orange-400 transition-colors cursor-pointer text-left flex items-center gap-1.5 group/copy"

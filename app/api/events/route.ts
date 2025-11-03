@@ -4,9 +4,6 @@ import { sql } from '../../../lib/db-neon'
 // Force dynamic rendering (query params)
 export const dynamic = 'force-dynamic'
 
-// Cache for 2 minutes to improve performance
-export const revalidate = 120
-
 export async function GET(req: NextRequest) {
   try {
     const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
@@ -27,12 +24,18 @@ export async function GET(req: NextRequest) {
     }
     
     // If still no epoch found, return empty (truly no data)
-    if (!latestEpoch) return NextResponse.json({ items: [] })
+    if (!latestEpoch) return NextResponse.json({ items: [] }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      }
+    })
     
     const minEpoch = Number(latestEpoch) - epochs
 
-    // Fetch all events in the epoch range
-    const all = await sql`
+    // Fetch all inflation commission events
+    const commissionEvents = await sql`
       SELECT 
         id,
         vote_pubkey,
@@ -41,13 +44,38 @@ export async function GET(req: NextRequest) {
         to_commission,
         delta,
         epoch,
-        created_at
+        created_at,
+        'COMMISSION' as event_source
       FROM events
       WHERE epoch >= ${minEpoch}
       ORDER BY epoch DESC, created_at DESC
     `
     
-    console.log(`📊 Found ${all.length} total events in epochs ${minEpoch}-${latestEpoch}, showAll=${showAll}`)
+    // Fetch all MEV commission events
+    const mevEvents = await sql`
+      SELECT 
+        id,
+        vote_pubkey,
+        type,
+        from_mev_commission as from_commission,
+        to_mev_commission as to_commission,
+        delta,
+        epoch,
+        created_at,
+        'MEV' as event_source
+      FROM mev_events
+      WHERE epoch >= ${minEpoch}
+      ORDER BY epoch DESC, created_at DESC
+    `
+    
+    // Combine both types of events
+    const all = [...commissionEvents, ...mevEvents].sort((a, b) => {
+      // Sort by epoch DESC, then created_at DESC
+      if (a.epoch !== b.epoch) return b.epoch - a.epoch
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+    
+    console.log(`📊 Found ${commissionEvents.length} commission + ${mevEvents.length} MEV = ${all.length} total events in epochs ${minEpoch}-${latestEpoch}, showAll=${showAll}`)
     
     // Pre-fetch ALL validators once to avoid N+1 queries
     const validatorsMap = new Map<string, any>()
@@ -77,6 +105,7 @@ export async function GET(req: NextRequest) {
           delta: r.delta,
           epoch: r.epoch,
           created_at: r.created_at,
+          event_source: r.event_source, // 'COMMISSION' or 'MEV'
           name: v.name,
           icon_url: v.iconUrl,
           delinquent: v.delinquent,
@@ -84,7 +113,13 @@ export async function GET(req: NextRequest) {
       })
       
       console.log(`📊 Returning ${allEvents.length} events (ALL events mode)`)
-      return NextResponse.json({ items: allEvents })
+      return NextResponse.json({ items: allEvents }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store',
+        }
+      })
     }
     
     // Otherwise, return only the most severe event per validator
@@ -123,6 +158,7 @@ export async function GET(req: NextRequest) {
         delta: chosen.delta,
         epoch: chosen.epoch,
         created_at: chosen.created_at,
+        event_source: chosen.event_source, // 'COMMISSION' or 'MEV'
         name: v.name,
         icon_url: v.iconUrl,
         delinquent: v.delinquent,
@@ -133,7 +169,13 @@ export async function GET(req: NextRequest) {
     latestPer.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     
     console.log(`📊 Returning ${latestPer.length} events (most severe per validator)`)
-    return NextResponse.json({ items: latestPer })
+    return NextResponse.json({ items: latestPer }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
+      }
+    })
   } catch (err: any) {
     console.error('events/route error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
