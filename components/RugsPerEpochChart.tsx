@@ -35,6 +35,8 @@ interface RugEvent {
   rug_type: 'COMMISSION' | 'MEV'; // NEW: which type of rug
   from_commission: number;
   to_commission: number;
+  from_disabled?: boolean; // MEV was disabled (NULL)
+  to_disabled?: boolean; // MEV was disabled (NULL)
   delta: number;
   epoch: number;
   created_at?: string;
