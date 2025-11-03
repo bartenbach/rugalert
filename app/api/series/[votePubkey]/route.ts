@@ -26,39 +26,33 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
       ORDER BY epoch ASC, created_at ASC
     `
     
-    // If no events exist, get current commission from snapshots to seed the chart
-    let initialInflation: number | null = null;
-    let initialMev: number | null = null;
+    // ALWAYS fetch the earliest snapshot to establish the starting point
+    // This is critical for validators with constant commission (no events)
+    const inflationSnapshot = await sql`
+      SELECT epoch, commission
+      FROM snapshots
+      WHERE vote_pubkey = ${params.votePubkey} AND commission IS NOT NULL
+      ORDER BY epoch ASC
+      LIMIT 1
+    `;
+    
+    const mevSnapshot = await sql`
+      SELECT epoch, mev_commission
+      FROM mev_snapshots
+      WHERE vote_pubkey = ${params.votePubkey} AND mev_commission IS NOT NULL
+      ORDER BY epoch ASC
+      LIMIT 1
+    `;
+    
+    let initialInflation: number | null = inflationSnapshot[0] ? Number(inflationSnapshot[0].commission) : null;
+    let initialMev: number | null = mevSnapshot[0] ? Number(mevSnapshot[0].mev_commission) : null;
     let initialEpoch: number | null = null;
     
-    if (inflationEvents.length === 0) {
-      const snapshot = await sql`
-        SELECT epoch, commission
-        FROM snapshots
-        WHERE vote_pubkey = ${params.votePubkey} AND commission IS NOT NULL
-        ORDER BY epoch DESC
-        LIMIT 1
-      `;
-      if (snapshot[0]) {
-        initialInflation = Number(snapshot[0].commission);
-        initialEpoch = snapshot[0].epoch;
-      }
+    if (inflationSnapshot[0]) {
+      initialEpoch = inflationSnapshot[0].epoch;
     }
-    
-    if (mevEvents.length === 0) {
-      const snapshot = await sql`
-        SELECT epoch, mev_commission
-        FROM mev_snapshots
-        WHERE vote_pubkey = ${params.votePubkey} AND mev_commission IS NOT NULL
-        ORDER BY epoch DESC
-        LIMIT 1
-      `;
-      if (snapshot[0]) {
-        initialMev = Number(snapshot[0].mev_commission);
-        if (!initialEpoch || snapshot[0].epoch < initialEpoch) {
-          initialEpoch = snapshot[0].epoch;
-        }
-      }
+    if (mevSnapshot[0] && (!initialEpoch || mevSnapshot[0].epoch < initialEpoch)) {
+      initialEpoch = mevSnapshot[0].epoch;
     }
     
     // Build timeline with ALL data points (before and after each change)
