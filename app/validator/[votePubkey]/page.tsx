@@ -18,6 +18,8 @@ type Event = {
   epoch: number;
   created_at?: string;
   commission_type: "INFLATION" | "MEV";
+  from_disabled?: boolean; // For MEV events: true if MEV was disabled
+  to_disabled?: boolean; // For MEV events: true if MEV is now disabled
 };
 
 // Utility function to format relative time
@@ -1327,15 +1329,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                     <div className="flex flex-col gap-1">
                                       <div className="flex items-center gap-2">
                                         <span className="text-gray-400">
-                                          {event.from_commission !== null && event.from_commission !== undefined
-                                            ? `${event.from_commission}%`
-                                            : 'MEV Disabled'}
+                                          {event.commission_type === 'MEV' && event.from_disabled
+                                            ? 'MEV Disabled'
+                                            : `${event.from_commission}%`}
                                         </span>
                                         <span className="text-gray-600">→</span>
                                         <span className="text-white font-semibold">
-                                          {event.to_commission !== null && event.to_commission !== undefined
-                                            ? `${event.to_commission}%`
-                                            : 'MEV Disabled'}
+                                          {event.commission_type === 'MEV' && event.to_disabled
+                                            ? 'MEV Disabled'
+                                            : `${event.to_commission}%`}
                                         </span>
                                       </div>
                                       <span className={`text-[10px] font-semibold ${

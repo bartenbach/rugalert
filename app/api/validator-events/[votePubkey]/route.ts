@@ -37,6 +37,7 @@ export async function GET(
     `
     
     // Fetch MEV commission events
+    // Note: NULL means "MEV disabled" (no rewards), 0 means "0% commission" (staker gets all rewards)
     const mevEvents = await sql`
       SELECT 
         id,
@@ -47,7 +48,9 @@ export async function GET(
         delta,
         epoch,
         created_at,
-        'MEV' as commission_type
+        'MEV' as commission_type,
+        from_mev_commission IS NULL as from_disabled,
+        to_mev_commission IS NULL as to_disabled
       FROM mev_events
       WHERE vote_pubkey = ${votePubkey}
       ORDER BY created_at DESC
