@@ -39,6 +39,31 @@ function getRelativeTime(timestamp: string): string {
   return then.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Utility function to format SOL amounts with smart precision
+function formatSOL(amount: number): string {
+  if (amount >= 1000) {
+    // Large amounts: no decimals (10,107 SOL)
+    return amount.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  } else if (amount >= 1) {
+    // Medium amounts: 2 decimals (1.09 SOL)
+    return amount.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  } else {
+    // Small amounts: up to 8 decimals (full SOL precision), but strip trailing zeros
+    // This handles cases like 0.00002 SOL (shows as "0.00002") and 0.1234 SOL (shows as "0.1234")
+    const formatted = amount.toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8, // SOL has 9 decimals (lamports), but 8 is reasonable display limit
+    });
+    return formatted;
+  }
+}
+
 type ValidatorSearchResult = {
   votePubkey: string;
   name: string;
@@ -335,11 +360,7 @@ function StakeBreakdown({
                   {displayName}
                 </a>
                 <span className="text-gray-300 font-mono">
-                  ◎{" "}
-                  {solAmount.toLocaleString("en-US", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 6,
-                  })}
+                  ◎ {formatSOL(solAmount)}
                 </span>
               </div>
             );
@@ -860,11 +881,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <div className="flex items-baseline gap-2">
                       <span className="text-gray-500">Stake:</span>
                       <span className="text-white font-semibold">
-                        ◎{" "}
-                        {validatorInfo.stake.activeStake.toLocaleString(
-                          "en-US",
-                          { maximumFractionDigits: 0 }
-                        )}
+                        ◎ {formatSOL(validatorInfo.stake.activeStake)}
                       </span>
                       {(() => {
                         const delta =
@@ -879,17 +896,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                   : "bg-red-500/20 border border-red-500/50 text-red-300"
                               }`}
                               title={`Net stake change: ${
-                                delta > 0 ? "+" : ""
-                              }${delta.toLocaleString("en-US", {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 6,
-                              })} SOL`}
-                            >
-                              {delta > 0 ? "+" : "−"}◎{" "}
-                              {Math.abs(delta).toLocaleString("en-US", {
-                                minimumFractionDigits: 0,
-                                maximumFractionDigits: 6,
-                              })}
+                              delta > 0 ? "+" : ""
+                            }${formatSOL(Math.abs(delta))} SOL`}
+                          >
+                            {delta > 0 ? "+" : "−"}◎ {formatSOL(Math.abs(delta))}
                             </span>
                           );
                         }
@@ -1172,12 +1182,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     >
                       {isNeutral
                         ? "—"
-                        : `${delta > 0 ? "+" : "−"}◎ ${Math.abs(
-                            delta
-                          ).toLocaleString("en-US", {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 6,
-                          })}`}
+                        : `${delta > 0 ? "+" : "−"}◎ ${formatSOL(Math.abs(delta))}`}
                     </div>
                   </div>
                 );
@@ -1188,13 +1193,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-green-400 mb-3">
                   {validatorInfo.stake.activatingStake > 0
-                    ? `◎ ${validatorInfo.stake.activatingStake.toLocaleString(
-                        "en-US",
-                        {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 6,
-                        }
-                      )}`
+                    ? `◎ ${formatSOL(validatorInfo.stake.activatingStake)}`
                     : "—"}
                 </div>
                 {validatorInfo.stake.activatingAccounts.length > 0 && (
@@ -1210,13 +1209,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 </div>
                 <div className="text-2xl sm:text-3xl font-bold text-red-400 mb-3">
                   {validatorInfo.stake.deactivatingStake > 0
-                    ? `◎ ${validatorInfo.stake.deactivatingStake.toLocaleString(
-                        "en-US",
-                        {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 6,
-                        }
-                      )}`
+                    ? `◎ ${formatSOL(validatorInfo.stake.deactivatingStake)}`
                     : "—"}
                 </div>
                 {validatorInfo.stake.deactivatingAccounts.length > 0 && (
