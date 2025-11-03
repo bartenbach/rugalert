@@ -51,6 +51,18 @@ export async function GET(req: NextRequest) {
       ORDER BY epoch DESC, created_at DESC
     `
     
+    console.log(`📊 /api/events DEBUG: Found ${commissionEvents.length} commission events (epochs ${minEpoch}-${latestEpoch})`)
+    const epoch874Commission = commissionEvents.filter(e => e.epoch === 874)
+    console.log(`📊 /api/events DEBUG: Epoch 874 has ${epoch874Commission.length} commission events`)
+    if (epoch874Commission.length > 0) {
+      console.log('First 3 epoch 874 commission events:', epoch874Commission.slice(0, 3).map(e => ({
+        type: e.type,
+        vote_pubkey: String(e.vote_pubkey).substring(0, 8),
+        from: e.from_commission,
+        to: e.to_commission
+      })))
+    }
+    
     // Fetch all MEV commission events
     const mevEvents = await sql`
       SELECT 
@@ -174,7 +186,9 @@ export async function GET(req: NextRequest) {
     // Sort by createdTime DESC
     latestPer.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     
+    const epoch874Final = latestPer.filter(e => e.epoch === 874)
     console.log(`📊 Returning ${latestPer.length} events (most severe per validator)`)
+    console.log(`📊 DEBUG: ${epoch874Final.length} events from epoch 874 in final result (${epoch874Final.filter(e => e.event_source === 'COMMISSION').length} commission, ${epoch874Final.filter(e => e.event_source === 'MEV').length} MEV)`)
     return NextResponse.json({ items: latestPer }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
