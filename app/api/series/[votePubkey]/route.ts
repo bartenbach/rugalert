@@ -104,7 +104,8 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
       const time = new Date(e.created_at).getTime();
       
       // Only add "from" for the very first event (if no initial snapshot)
-      if (index === 0 && initialMev === null) {
+      // BUT: Skip if from_commission is NULL (MEV was disabled - shouldn't show as 0%)
+      if (index === 0 && initialMev === null && e.from_commission !== null) {
         points.push({
           epoch: e.epoch,
           commission: null,
@@ -114,12 +115,15 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
       }
       
       // Always add the "to" value (the change)
-      points.push({
-        epoch: e.epoch,
-        commission: null,
-        mevCommission: Number(e.to_commission),
-        time: time
-      });
+      // Skip if to_commission is NULL (MEV is now disabled)
+      if (e.to_commission !== null) {
+        points.push({
+          epoch: e.epoch,
+          commission: null,
+          mevCommission: Number(e.to_commission),
+          time: time
+        });
+      }
     });
     
     // Sort by time
