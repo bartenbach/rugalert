@@ -11,6 +11,9 @@ interface EpochInfo {
 
 export default function EpochProgress() {
   const [epochInfo, setEpochInfo] = useState<EpochInfo | null>(null);
+  const [baseSlotIndex, setBaseSlotIndex] = useState<number>(0);
+  const [fetchTime, setFetchTime] = useState<number>(Date.now());
+  const [currentSlotIndex, setCurrentSlotIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +30,9 @@ export default function EpochProgress() {
       }
       const data = await response.json();
       setEpochInfo(data);
+      setBaseSlotIndex(data.slotIndex);
+      setFetchTime(Date.now());
+      setCurrentSlotIndex(data.slotIndex);
       setError(null);
     } catch (err: any) {
       console.error("Error fetching epoch info:", err);
@@ -38,10 +44,29 @@ export default function EpochProgress() {
 
   useEffect(() => {
     fetchEpochInfo();
-    // Refresh every 10 seconds for more accurate epoch tracking
+    // Refresh every 10 seconds to stay accurate
     const interval = setInterval(fetchEpochInfo, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  // Update slot index every 400ms to estimate current slot
+  useEffect(() => {
+    if (!epochInfo) return;
+
+    const updateSlot = () => {
+      const elapsedMs = Date.now() - fetchTime;
+      const elapsedSlots = Math.floor(elapsedMs / 400);
+      const estimatedSlot = Math.min(
+        baseSlotIndex + elapsedSlots,
+        epochInfo.slotsInEpoch
+      );
+      setCurrentSlotIndex(estimatedSlot);
+    };
+
+    // Update every 400ms (one slot)
+    const interval = setInterval(updateSlot, 400);
+    return () => clearInterval(interval);
+  }, [epochInfo, baseSlotIndex, fetchTime]);
 
   if (isLoading) {
     return (
@@ -61,17 +86,23 @@ export default function EpochProgress() {
   }
 
   const progressPercentage =
-    (epochInfo.slotIndex / epochInfo.slotsInEpoch) * 100;
-  const remainingSlots = epochInfo.slotsInEpoch - epochInfo.slotIndex;
+    (currentSlotIndex / epochInfo.slotsInEpoch) * 100;
+  const remainingSlots = epochInfo.slotsInEpoch - currentSlotIndex;
 
   // Estimate time remaining (assuming ~400ms per slot)
-  const remainingSeconds = (remainingSlots * 0.4).toFixed(0);
-  const remainingMinutes = Math.floor(Number(remainingSeconds) / 60);
+  const remainingSeconds = Math.floor(remainingSlots * 0.4);
+  const remainingMinutes = Math.floor(remainingSeconds / 60);
   const remainingHours = Math.floor(remainingMinutes / 60);
+  const remainingDays = Math.floor(remainingHours / 24);
 
   let timeRemaining = "";
-  if (remainingHours > 0) {
-    timeRemaining = `~${remainingHours}h ${remainingMinutes % 60}m remaining`;
+  if (remainingDays > 0) {
+    const hoursLeft = remainingHours % 24;
+    const minutesLeft = remainingMinutes % 60;
+    timeRemaining = `~${remainingDays}d ${hoursLeft}h ${minutesLeft}m remaining`;
+  } else if (remainingHours > 0) {
+    const minutesLeft = remainingMinutes % 60;
+    timeRemaining = `~${remainingHours}h ${minutesLeft}m remaining`;
   } else if (remainingMinutes > 0) {
     timeRemaining = `~${remainingMinutes}m remaining`;
   } else {
@@ -97,7 +128,7 @@ export default function EpochProgress() {
         </span>
       </div>
       <div className="text-[10px] text-gray-500 text-center">
-        {epochInfo.slotIndex.toLocaleString()} /{" "}
+        {currentSlotIndex.toLocaleString()} /{" "}
         {epochInfo.slotsInEpoch.toLocaleString()} • {timeRemaining}
       </div>
     </div>

@@ -47,8 +47,9 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
   }, [votePubkey]);
 
   // Determine color based on uptime percentage
+  // Green only for perfect uptime, yellow for any downtime
   const getUptimeColor = (uptimePercent: number) => {
-    if (uptimePercent >= 99) return "bg-green-500";
+    if (uptimePercent === 100) return "bg-green-500";
     if (uptimePercent >= 95) return "bg-yellow-400";
     if (uptimePercent >= 90) return "bg-orange-500";
     return "bg-red-500";
@@ -181,7 +182,7 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
       <div className="flex items-center gap-4 text-xs text-gray-400">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-green-500"></div>
-          <span>99-100%</span>
+          <span>100%</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-yellow-400"></div>

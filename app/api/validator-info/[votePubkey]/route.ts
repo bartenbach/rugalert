@@ -65,6 +65,14 @@ export async function GET(
     const isDelinquent = voteAccountsJson.result?.delinquent?.some(
       (v: any) => v.votePubkey === votePubkey
     ) || false;
+    
+    // Get real-time commission from RPC vote accounts
+    const allVoteAccounts = [
+      ...(voteAccountsJson.result?.current || []),
+      ...(voteAccountsJson.result?.delinquent || [])
+    ];
+    const rpcVoteAccount = allVoteAccounts.find((v: any) => v.votePubkey === votePubkey);
+    const rpcCommission = rpcVoteAccount?.commission ?? null;
 
     // Fetch performance data for CURRENT epoch (not most recent completed)
     const perfRecords = await sql`
@@ -140,6 +148,11 @@ export async function GET(
       }
     }
 
+    // Use real-time RPC commission if database has NULL, otherwise use database value
+    const finalCommission = validator.commission !== null && validator.commission !== undefined
+      ? Number(validator.commission)
+      : (rpcCommission !== null ? Number(rpcCommission) : null);
+
     const response = NextResponse.json({
       validator: {
         votePubkey: validator.vote_pubkey,
@@ -148,7 +161,7 @@ export async function GET(
         iconUrl: validator.icon_url,
         website: validator.website,
         version: validator.version,
-        commission: Number(validator.commission || 0), // ADD THIS BACK!
+        commission: finalCommission,
         delinquent: isDelinquent, // Use real-time RPC data
         jitoEnabled,
         firstSeenEpoch: Number(validator.first_seen_epoch || 0),

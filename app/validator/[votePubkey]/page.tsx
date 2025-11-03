@@ -424,6 +424,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   );
   const [searching, setSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  
+  // Pagination for commission events
+  const [eventsToShow, setEventsToShow] = useState(10);
   const [isMounted, setIsMounted] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState<{
     top: number;
@@ -579,8 +582,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
     }
   }, [showSearchResults, searchResults.length]);
 
-  const currentCommission =
-    series.length > 0 ? series[series.length - 1].commission : null;
+  // Use the real-time commission from validator info, not the series data
+  const currentCommission = validatorInfo?.validator?.commission ?? null;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -1239,257 +1242,268 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
             )}
           </div>
 
-          {/* Commission History - Only show if commission has changed */}
+          {/* Commission History */}
           {(() => {
-            if (series.length === 0) return null;
+            // Always show the section, even if no history data
+            if (!validatorInfo) return null;
 
-            // Check if there are multiple unique commission values
-            const uniqueCommissions = new Set(series.map((s) => s.commission));
-            const hasCommissionChanges = uniqueCommissions.size > 1;
-
-            if (!hasCommissionChanges) return null;
+            // Check if there are enough data points to draw a meaningful chart
+            // Need at least 2 data points for each series to draw a line
+            const inflationDataPoints = series.filter((s) => s.commission !== null);
+            const mevDataPoints = series.filter((s) => s.mevCommission !== null);
+            
+            const hasInflationData = inflationDataPoints.length >= 2;
+            const hasMevData = mevDataPoints.length >= 2;
+            const hasAnyData = hasInflationData || hasMevData;
 
             return (
               <div className="glass rounded-2xl p-4 sm:p-5 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
                 <h2 className="text-base sm:text-lg font-bold text-white mb-3">
                   Commission History
                 </h2>
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3 sm:mb-4">
-                  <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
-                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                      Current
+                {hasAnyData ? (
+                  <>
+                    <div className="h-[200px] mb-6">
+                      <CommissionChart data={series} />
                     </div>
-                    <div className="text-base sm:text-xl font-bold text-white">
-                      {currentCommission}%
-                    </div>
+                    
+                    {/* Commission Changes Table */}
+                    {events.length > 0 && (
+                      <div className="mt-6 pt-6 border-t border-white/10">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-base sm:text-lg font-bold text-white">
+                            Recent Commission Changes
+                          </h3>
+                          {events.length > eventsToShow && (
+                            <span className="text-xs text-gray-500">
+                              Showing {eventsToShow} of {events.length} changes
+                            </span>
+                          )}
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full">
+                            <thead>
+                              <tr className="border-b border-white/10">
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
+                                  Type
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
+                                  Commission
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
+                                  Change
+                                </th>
+                                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
+                                  Detected
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {events.slice(0, eventsToShow).map((event) => (
+                                <tr
+                                  key={event.id}
+                                  className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                                >
+                                  <td className="py-3 px-4">
+                                    {event.type === "RUG" && (
+                                      <span className="px-2 py-1 bg-red-500/20 border border-red-500 rounded text-xs font-bold text-red-400">
+                                        RUG
+                                      </span>
+                                    )}
+                                    {event.type === "CAUTION" && (
+                                      <span className="px-2 py-1 bg-yellow-500/20 border border-yellow-500 rounded text-xs font-bold text-yellow-400">
+                                        CAUTION
+                                      </span>
+                                    )}
+                                    {event.type === "INFO" && (
+                                      <span className="px-2 py-1 bg-blue-500/20 border border-blue-500 rounded text-xs font-bold text-blue-400">
+                                        INFO
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-gray-400">
+                                        {event.from_commission}%
+                                      </span>
+                                      <span className="text-gray-600">→</span>
+                                      <span className="text-white font-semibold">
+                                        {event.to_commission}%
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span
+                                      className={`font-semibold ${
+                                        event.delta > 0
+                                          ? "text-red-400"
+                                          : "text-green-400"
+                                      }`}
+                                    >
+                                      {event.delta > 0 ? "+" : ""}
+                                      {event.delta}pp
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-sm text-gray-400">
+                                    {event.created_at
+                                      ? getRelativeTime(event.created_at)
+                                      : `Epoch ${event.epoch}`}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        
+                        {/* Show More Button */}
+                        {events.length > eventsToShow && (
+                          <div className="mt-4 text-center">
+                            <button
+                              onClick={() => setEventsToShow(prev => Math.min(prev + 10, events.length))}
+                              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-orange-400 rounded-lg text-sm text-gray-300 hover:text-white transition-all"
+                            >
+                              Show More ({Math.min(10, events.length - eventsToShow)} more)
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-12 text-gray-400">
+                    No commission changes
                   </div>
-                  <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
-                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                      Min
-                    </div>
-                    <div className="text-base sm:text-xl font-bold text-green-400">
-                      {Math.min(...series.map((s) => s.commission))}%
-                    </div>
-                  </div>
-                  <div className="bg-white/5 rounded-lg p-2 sm:p-3 border border-white/10">
-                    <div className="text-[9px] sm:text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                      Max
-                    </div>
-                    <div className="text-base sm:text-xl font-bold text-red-400">
-                      {Math.max(...series.map((s) => s.commission))}%
-                    </div>
-                  </div>
-                </div>
-                <div className="h-[200px]">
-                  <CommissionChart data={series} />
-                </div>
+                )}
               </div>
             );
           })()}
 
-          {/* Validator Info History - Only show if there are changes */}
-          {infoHistory.length > 1 && (
-            <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-base sm:text-lg font-bold text-white">
-                  📜 Validator Info History
-                </h2>
+          {/* Validator Info History */}
+          <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-base sm:text-lg font-bold text-white">
+                📜 Validator Info History
+              </h2>
+              {infoHistory.length > 1 && (
                 <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">
                   {infoHistory.length}{" "}
                   {infoHistory.length === 1 ? "change" : "changes"}
                 </span>
-              </div>
-              <p className="text-sm text-gray-400 mb-4">
-                Historical changes to validator name, description, website, and
-                icon. Useful for tracking rebrands or identifying validators
-                after rugs.
-              </p>
+              )}
+            </div>
+            {infoHistory.length > 1 ? (
+              <>
+                <p className="text-sm text-gray-400 mb-4">
+                  Historical changes to validator name, description, website,
+                  and icon. Useful for tracking rebrands or identifying
+                  validators after rugs.
+                </p>
 
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-                {infoHistory.map((record, index) => {
-                  const isLatest = index === 0;
-                  const prevRecord =
-                    index < infoHistory.length - 1
-                      ? infoHistory[index + 1]
-                      : null;
+                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                  {infoHistory.map((record, index) => {
+                    const isLatest = index === 0;
+                    const prevRecord =
+                      index < infoHistory.length - 1
+                        ? infoHistory[index + 1]
+                        : null;
 
-                  // Determine what changed
-                  const changes: string[] = [];
-                  if (prevRecord) {
-                    if (record.name !== prevRecord.name) changes.push("Name");
-                    if (record.description !== prevRecord.description)
-                      changes.push("Description");
-                    if (record.website !== prevRecord.website)
-                      changes.push("Website");
-                    if (record.iconUrl !== prevRecord.iconUrl)
-                      changes.push("Icon");
-                    if (record.identityPubkey !== prevRecord.identityPubkey)
-                      changes.push("Identity");
-                  }
+                    // Determine what changed
+                    const changes: string[] = [];
+                    if (prevRecord) {
+                      if (record.name !== prevRecord.name) changes.push("Name");
+                      if (record.description !== prevRecord.description)
+                        changes.push("Description");
+                      if (record.website !== prevRecord.website)
+                        changes.push("Website");
+                      if (record.iconUrl !== prevRecord.iconUrl)
+                        changes.push("Icon");
+                      if (record.identityPubkey !== prevRecord.identityPubkey)
+                        changes.push("Identity");
+                    }
 
-                  return (
-                    <div
-                      key={`${record.changedAt}-${index}`}
-                      className={`border rounded-lg p-3 sm:p-4 transition-all ${
-                        isLatest
-                          ? "border-green-500/50 bg-green-500/5"
-                          : "border-white/10 bg-white/5 hover:bg-white/10"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3 mb-2">
-                        {record.iconUrl ? (
-                          <img
-                            src={record.iconUrl}
-                            alt={record.name || "Icon"}
-                            className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg border border-white/20 bg-white/5 flex-shrink-0 flex items-center justify-center text-gray-500 text-lg">
-                            ?
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 flex-wrap">
-                            <div>
-                              <div className="font-semibold text-white text-sm truncate">
-                                {record.name || "(No name)"}
-                              </div>
-                              <div className="text-xs text-gray-400 mt-0.5">
-                                {new Date(record.changedAt || record.createdAt).toLocaleDateString(
-                                  "en-US",
-                                  {
+                    return (
+                      <div
+                        key={`${record.changedAt}-${index}`}
+                        className={`border rounded-lg p-3 sm:p-4 transition-all ${
+                          isLatest
+                            ? "border-green-500/50 bg-green-500/5"
+                            : "border-white/10 bg-white/5 hover:bg-white/10"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 mb-2">
+                          {record.iconUrl ? (
+                            <img
+                              src={record.iconUrl}
+                              alt={record.name || "Icon"}
+                              className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg border border-white/20 bg-white/5 flex-shrink-0 flex items-center justify-center text-gray-500 text-lg">
+                              ?
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div>
+                                <div className="font-semibold text-white text-sm truncate">
+                                  {record.name || "(No name)"}
+                                </div>
+                                <div className="text-xs text-gray-400 mt-0.5">
+                                  {new Date(
+                                    record.changedAt || record.createdAt
+                                  ).toLocaleDateString("en-US", {
                                     year: "numeric",
                                     month: "short",
                                     day: "numeric",
                                     hour: "2-digit",
                                     minute: "2-digit",
-                                  }
-                                )}
-                                {" · "}Epoch {record.epoch}
+                                  })}
+                                  {" · "}Epoch {record.epoch}
+                                </div>
                               </div>
+                              {isLatest ? (
+                                <span className="text-xs font-bold text-green-400 bg-green-500/20 px-2 py-1 rounded">
+                                  CURRENT
+                                </span>
+                              ) : changes.length > 0 ? (
+                                <span className="text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded">
+                                  Changed: {changes.join(", ")}
+                                </span>
+                              ) : null}
                             </div>
-                            {isLatest ? (
-                              <span className="text-xs font-bold text-green-400 bg-green-500/20 px-2 py-1 rounded">
-                                CURRENT
-                              </span>
-                            ) : changes.length > 0 ? (
-                              <span className="text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded">
-                                Changed: {changes.join(", ")}
-                              </span>
-                            ) : null}
+
+                            {record.website && (
+                              <a
+                                href={record.website}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-orange-400 hover:text-orange-300 mt-1 block truncate"
+                              >
+                                🔗{" "}
+                                {record.website
+                                  .replace(/^https?:\/\//, "")
+                                  .replace(/\/$/, "")}
+                              </a>
+                            )}
+
+                            {record.description && (
+                              <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+                                {record.description}
+                              </p>
+                            )}
                           </div>
-
-                          {record.website && (
-                            <a
-                              href={record.website}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-orange-400 hover:text-orange-300 mt-1 block truncate"
-                            >
-                              🔗{" "}
-                              {record.website
-                                .replace(/^https?:\/\//, "")
-                                .replace(/\/$/, "")}
-                            </a>
-                          )}
-
-                          {record.description && (
-                            <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                              {record.description}
-                            </p>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-12 text-gray-400">
+                No validator info history
               </div>
-            </div>
-          )}
-
-          {/* Commission Change Events Table - Only if events exist */}
-          {events.length > 0 && (
-            <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
-              <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
-                Commission Changes
-              </h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
-                        Type
-                      </th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
-                        Commission
-                      </th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
-                        Change
-                      </th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-400">
-                        Detected
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {events.map((event) => (
-                      <tr
-                        key={event.id}
-                        className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                      >
-                        <td className="py-3 px-4">
-                          {event.type === "RUG" && (
-                            <span className="px-2 py-1 bg-red-500/20 border border-red-500 rounded text-xs font-bold text-red-400">
-                              RUG
-                            </span>
-                          )}
-                          {event.type === "CAUTION" && (
-                            <span className="px-2 py-1 bg-yellow-500/20 border border-yellow-500 rounded text-xs font-bold text-yellow-400">
-                              CAUTION
-                            </span>
-                          )}
-                          {event.type === "INFO" && (
-                            <span className="px-2 py-1 bg-blue-500/20 border border-blue-500 rounded text-xs font-bold text-blue-400">
-                              INFO
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-400">
-                              {event.from_commission}%
-                            </span>
-                            <span className="text-gray-600">→</span>
-                            <span className="text-white font-semibold">
-                              {event.to_commission}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`font-semibold ${
-                              event.delta > 0
-                                ? "text-red-400"
-                                : "text-green-400"
-                            }`}
-                          >
-                            {event.delta > 0 ? "+" : ""}
-                            {event.delta}pp
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-400">
-                          {event.created_at
-                            ? getRelativeTime(event.created_at)
-                            : `Epoch ${event.epoch}`}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>
