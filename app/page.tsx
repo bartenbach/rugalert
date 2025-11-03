@@ -66,7 +66,8 @@ export default function Page() {
     try {
       // If INFO filter is enabled, request all events (not just most severe per validator)
       const showAllEvents = showInfo ? "&showAll=true" : "";
-      const res = await fetch(`/api/events?epochs=${epochs}${showAllEvents}`, {
+      // Add timestamp to bust Vercel edge cache
+      const res = await fetch(`/api/events?epochs=${epochs}${showAllEvents}&t=${Date.now()}`, {
         cache: "no-store"
       });
       const json = await res.json();
