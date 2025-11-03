@@ -402,7 +402,7 @@ function LinkifyText({ text }: { text: string }) {
 }
 
 export default function Detail({ params }: { params: { votePubkey: string } }) {
-  const [series, setSeries] = useState<{ epoch: number; commission: number }[]>(
+  const [series, setSeries] = useState<{ epoch: number; commission: number | null; mevCommission: number | null }[]>(
     []
   );
   const [stakeHistory, setStakeHistory] = useState<StakeHistory[]>([]);
