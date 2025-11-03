@@ -74,6 +74,7 @@ export default function Page() {
         const currentRugs = newItems.filter((it: Row) => it.type === "RUG");
         const newRug = currentRugs.find((rug: Row) => {
           if (previousRugsRef.current.has(rug.id)) return false;
+          if (!rug.created_at) return false;
           
           // Only alert if rug was detected in the last 5 minutes
           const rugTime = new Date(rug.created_at).getTime();
