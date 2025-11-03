@@ -966,7 +966,7 @@ export async function POST(req: NextRequest) {
             });
           }
           
-          console.log(`  📉 Jito disabled for ${v.votePubkey.substring(0, 8)}... (was ${prevMevCommission}%)`);
+          console.log(`  📉 MEV disabled for ${v.votePubkey.substring(0, 8)}... (was ${prevMevCommission}%)`);
         }
       }
       
