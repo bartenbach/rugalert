@@ -79,6 +79,7 @@ type ValidatorInfo = {
     iconUrl?: string;
     website?: string;
     version?: string;
+    commission?: number | null;
     delinquent?: boolean;
     jitoEnabled?: boolean;
     firstSeenEpoch?: number;
