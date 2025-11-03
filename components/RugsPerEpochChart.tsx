@@ -55,7 +55,9 @@ export default function RugsPerEpochChart() {
         // Get epochs from URL params (default 10, same as dashboard)
         const urlParams = new URLSearchParams(window.location.search);
         const epochs = urlParams.get("epochs") || "10";
-        const res = await fetch(`/api/rugs-per-epoch?epochs=${epochs}`);
+        const res = await fetch(`/api/rugs-per-epoch?epochs=${epochs}`, {
+          cache: "no-store"
+        });
         const json: ApiResponse = await res.json();
         setData(json.data || []);
         setRepeatOffenders(json.meta?.repeatOffenders || 0);

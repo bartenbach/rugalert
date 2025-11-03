@@ -2,6 +2,7 @@ import { sql } from '@/lib/db-neon'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest) {
     
     const minEpoch = Number(latestEpoch) - epochs
     
+    console.log(`📊 Querying rugs: latestEpoch=${latestEpoch}, minEpoch=${minEpoch}, range=${epochs}`)
+    
     // Fetch BOTH commission RUGs and MEV RUGs
     const commissionRugs = await sql`
       SELECT vote_pubkey, epoch, type, created_at
@@ -38,6 +41,8 @@ export async function GET(req: NextRequest) {
     `
 
     console.log(`📊 Found ${commissionRugs.length} commission RUGs + ${mevRugs.length} MEV RUGs in epochs ${minEpoch}-${latestEpoch}`)
+    console.log(`📊 Commission epochs: ${[...new Set(commissionRugs.map(r => r.epoch))].sort((a,b) => a-b).join(', ')}`)
+    console.log(`📊 MEV epochs: ${[...new Set(mevRugs.map(r => r.epoch))].sort((a,b) => a-b).join(', ')}`)
     
     // Group by epoch FIRST, track commission vs MEV separately
     interface EpochData {
