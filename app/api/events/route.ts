@@ -53,7 +53,15 @@ export async function GET(req: NextRequest) {
     
     console.log(`📊 /api/events DEBUG: Found ${commissionEvents.length} commission events (epochs ${minEpoch}-${latestEpoch})`)
     const epoch874Commission = commissionEvents.filter(e => e.epoch === 874)
-    console.log(`📊 /api/events DEBUG: Epoch 874 has ${epoch874Commission.length} commission events`)
+    const epoch874Rugs = epoch874Commission.filter(e => e.type === 'RUG')
+    const epoch874Info = epoch874Commission.filter(e => e.type === 'INFO')
+    const epoch874Caution = epoch874Commission.filter(e => e.type === 'CAUTION')
+    console.log(`📊 /api/events DEBUG: Epoch 874 has ${epoch874Commission.length} commission events (${epoch874Rugs.length} RUG, ${epoch874Caution.length} CAUTION, ${epoch874Info.length} INFO)`)
+    
+    // Also check what types exist across ALL epochs
+    const allRugs = commissionEvents.filter(e => e.type === 'RUG')
+    console.log(`📊 /api/events DEBUG: Across all epochs, found ${allRugs.length} RUG events total`)
+    
     if (epoch874Commission.length > 0) {
       console.log('First 3 epoch 874 commission events:', epoch874Commission.slice(0, 3).map(e => ({
         type: e.type,
