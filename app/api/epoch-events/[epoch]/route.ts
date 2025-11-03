@@ -94,19 +94,35 @@ export async function GET(
     const enrichedCommissionRugs = commissionRugs.map(r => {
       const info = validatorInfoMap.get(String(r.vote_pubkey))
       return {
-        ...r,
+        id: r.id,
+        vote_pubkey: r.vote_pubkey,
+        type: r.type,
+        from_commission: r.from_commission,
+        to_commission: r.to_commission,
+        delta: r.delta,
+        epoch: r.epoch,
+        created_at: r.created_at,
         name: info?.name || null,
         icon_url: info?.icon_url || null
-      } as typeof r & { name: string | null; icon_url: string | null }
+      }
     })
     
     const enrichedMevRugs = mevRugs.map(r => {
       const info = validatorInfoMap.get(String(r.vote_pubkey))
       return {
-        ...r,
+        id: r.id,
+        vote_pubkey: r.vote_pubkey,
+        type: r.type,
+        from_commission: r.from_commission,
+        to_commission: r.to_commission,
+        from_disabled: r.from_disabled,
+        to_disabled: r.to_disabled,
+        delta: r.delta,
+        epoch: r.epoch,
+        created_at: r.created_at,
         name: info?.name || null,
         icon_url: info?.icon_url || null
-      } as typeof r & { name: string | null; icon_url: string | null }
+      }
     })
     
     // Deduplicate within each type (keep only the latest event per validator per type)
