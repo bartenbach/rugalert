@@ -129,6 +129,7 @@ export default function CommissionChart({
             name="MEV Commission"
             stroke="#a855f7"
             strokeWidth={3}
+            strokeDasharray="5 5"
             fill="url(#mevGradient)"
             animationDuration={1000}
             connectNulls
@@ -141,6 +142,7 @@ export default function CommissionChart({
             name="MEV Commission"
             stroke="#a855f7"
             strokeWidth={3}
+            strokeDasharray="5 5"
             dot={{ fill: "#a855f7", strokeWidth: 2, r: 4, stroke: "#1a1a1a" }}
             activeDot={{
               r: 6,
