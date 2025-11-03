@@ -15,28 +15,25 @@ export async function GET(
     }
     
     // Fetch BOTH commission RUG events AND MEV RUG events for this epoch
+    // DO NOT use LEFT JOIN - it causes issues (see validator-events fix)
     const commissionRugs = await sql`
       SELECT 
-        e.id,
-        e.vote_pubkey,
-        e.type,
-        e.from_commission,
-        e.to_commission,
-        e.delta,
-        e.epoch,
-        e.created_at,
-        v.name,
-        v.icon_url
-      FROM events e
-      LEFT JOIN validators v ON e.vote_pubkey = v.vote_pubkey
-      WHERE e.type = 'RUG' AND e.epoch = ${epoch}
-      ORDER BY e.created_at DESC
+        id,
+        vote_pubkey,
+        type,
+        from_commission,
+        to_commission,
+        delta,
+        epoch,
+        created_at
+      FROM events
+      WHERE type = 'RUG' AND epoch = ${epoch}
+      ORDER BY created_at DESC
     `
     
     console.log(`📊 Epoch ${epoch} DEBUG: Found ${commissionRugs.length} commission rugs`)
     if (commissionRugs.length > 0) {
       console.log('First 3 commission rugs:', commissionRugs.slice(0, 3).map(r => ({ 
-        name: r.name, 
         vote_pubkey: String(r.vote_pubkey).substring(0, 8),
         from: r.from_commission,
         to: r.to_commission 
@@ -45,28 +42,24 @@ export async function GET(
     
     const mevRugs = await sql`
       SELECT 
-        m.id,
-        m.vote_pubkey,
-        m.type,
-        m.from_mev_commission as from_commission,
-        m.to_mev_commission as to_commission,
-        m.from_mev_commission IS NULL as from_disabled,
-        m.to_mev_commission IS NULL as to_disabled,
-        m.delta,
-        m.epoch,
-        m.created_at,
-        v.name,
-        v.icon_url
-      FROM mev_events m
-      LEFT JOIN validators v ON m.vote_pubkey = v.vote_pubkey
-      WHERE m.type = 'RUG' AND m.epoch = ${epoch}
-      ORDER BY m.created_at DESC
+        id,
+        vote_pubkey,
+        type,
+        from_mev_commission as from_commission,
+        to_mev_commission as to_commission,
+        from_mev_commission IS NULL as from_disabled,
+        to_mev_commission IS NULL as to_disabled,
+        delta,
+        epoch,
+        created_at
+      FROM mev_events
+      WHERE type = 'RUG' AND epoch = ${epoch}
+      ORDER BY created_at DESC
     `
     
     console.log(`📊 Epoch ${epoch} DEBUG: Found ${mevRugs.length} MEV rugs`)
     if (mevRugs.length > 0) {
       console.log('First 3 MEV rugs:', mevRugs.slice(0, 3).map(r => ({ 
-        name: r.name, 
         vote_pubkey: String(r.vote_pubkey).substring(0, 8),
         from: r.from_commission,
         to: r.to_commission,
@@ -75,13 +68,54 @@ export async function GET(
       })))
     }
     
+    // Fetch all unique vote_pubkeys to get validator info
+    const allVotePubkeys = [...new Set([
+      ...commissionRugs.map(r => r.vote_pubkey),
+      ...mevRugs.map(r => r.vote_pubkey)
+    ])]
+    
+    // Fetch validator info for all pubkeys
+    const validatorInfoMap = new Map<string, { name: string | null; icon_url: string | null }>()
+    if (allVotePubkeys.length > 0) {
+      const validators = await sql`
+        SELECT vote_pubkey, name, icon_url
+        FROM validators
+        WHERE vote_pubkey = ANY(${allVotePubkeys})
+      `
+      for (const v of validators) {
+        validatorInfoMap.set(String(v.vote_pubkey), {
+          name: v.name,
+          icon_url: v.icon_url
+        })
+      }
+    }
+    
+    // Enrich rugs with validator info
+    const enrichedCommissionRugs = commissionRugs.map(r => {
+      const info = validatorInfoMap.get(String(r.vote_pubkey))
+      return {
+        ...r,
+        name: info?.name || null,
+        icon_url: info?.icon_url || null
+      }
+    })
+    
+    const enrichedMevRugs = mevRugs.map(r => {
+      const info = validatorInfoMap.get(String(r.vote_pubkey))
+      return {
+        ...r,
+        name: info?.name || null,
+        icon_url: info?.icon_url || null
+      }
+    })
+    
     // Deduplicate within each type (keep only the latest event per validator per type)
     // But DO show BOTH commission AND MEV if a validator did both
     const seenCommission = new Map<string, any>()
     const seenMEV = new Map<string, any>()
     
     // Keep only the most recent commission rug per validator
-    for (const rug of commissionRugs) {
+    for (const rug of enrichedCommissionRugs) {
       const votePubkey = String(rug.vote_pubkey)
       if (!seenCommission.has(votePubkey)) {
         seenCommission.set(votePubkey, { ...rug, rug_type: 'COMMISSION' })
@@ -89,7 +123,7 @@ export async function GET(
     }
     
     // Keep only the most recent MEV rug per validator
-    for (const rug of mevRugs) {
+    for (const rug of enrichedMevRugs) {
       const votePubkey = String(rug.vote_pubkey)
       if (!seenMEV.has(votePubkey)) {
         seenMEV.set(votePubkey, { ...rug, rug_type: 'MEV' })
