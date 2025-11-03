@@ -19,8 +19,8 @@ export async function GET(
     `
     const validator = validators[0]
     
-    // Fetch events without JOIN
-    const events = await sql`
+    // Fetch inflation commission events
+    const inflationEvents = await sql`
       SELECT 
         id,
         vote_pubkey,
@@ -29,20 +29,43 @@ export async function GET(
         to_commission,
         delta,
         epoch,
-        created_at
+        created_at,
+        'INFLATION' as commission_type
       FROM events
       WHERE vote_pubkey = ${votePubkey}
       ORDER BY created_at DESC
     `
     
+    // Fetch MEV commission events
+    const mevEvents = await sql`
+      SELECT 
+        id,
+        vote_pubkey,
+        type,
+        from_mev_commission as from_commission,
+        to_mev_commission as to_commission,
+        delta,
+        epoch,
+        created_at,
+        'MEV' as commission_type
+      FROM mev_events
+      WHERE vote_pubkey = ${votePubkey}
+      ORDER BY created_at DESC
+    `
+    
+    // Merge and sort by created_at DESC
+    const allEvents = [...inflationEvents, ...mevEvents].sort((a, b) => {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+    
     // Add validator info to each event
-    const enrichedEvents = events.map(e => ({
+    const enrichedEvents = allEvents.map(e => ({
       ...e,
       name: validator?.name || null,
       icon_url: validator?.icon_url || null
     }))
     
-    console.log(`📊 Returning ${enrichedEvents.length} events for validator ${votePubkey}`)
+    console.log(`📊 Returning ${enrichedEvents.length} events for validator ${votePubkey} (${inflationEvents.length} inflation, ${mevEvents.length} MEV)`)
     
     return NextResponse.json({ items: enrichedEvents }, {
       headers: {

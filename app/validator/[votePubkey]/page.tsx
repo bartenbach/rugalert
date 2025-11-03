@@ -17,6 +17,7 @@ type Event = {
   delta: number;
   epoch: number;
   created_at?: string;
+  commission_type: "INFLATION" | "MEV";
 };
 
 // Utility function to format relative time
@@ -1323,13 +1324,22 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                     )}
                                   </td>
                                   <td className="py-3 px-4">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-gray-400">
-                                        {event.from_commission}%
-                                      </span>
-                                      <span className="text-gray-600">→</span>
-                                      <span className="text-white font-semibold">
-                                        {event.to_commission}%
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-gray-400">
+                                          {event.from_commission}%
+                                        </span>
+                                        <span className="text-gray-600">→</span>
+                                        <span className="text-white font-semibold">
+                                          {event.to_commission}%
+                                        </span>
+                                      </div>
+                                      <span className={`text-[10px] font-semibold ${
+                                        event.commission_type === 'MEV' 
+                                          ? 'text-purple-400' 
+                                          : 'text-orange-400'
+                                      }`}>
+                                        {event.commission_type === 'MEV' ? 'MEV Commission' : 'Inflation Commission'}
                                       </span>
                                     </div>
                                   </td>

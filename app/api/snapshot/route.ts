@@ -934,6 +934,40 @@ export async function POST(req: NextRequest) {
             }
           }
         }
+      } else {
+        // NOT running Jito now - check if they WERE running it before (Jito disabled event)
+        const latestMev = latestMevByValidator.get(v.votePubkey);
+        if (latestMev && Number(latestMev.mev_commission || 0) > 0) {
+          // They previously had MEV commission > 0, now disabled
+          const prevMevCommission = Number(latestMev.mev_commission);
+          const currentMevCommission = 0;
+          const delta = -prevMevCommission;
+          
+          mevEventsToCreate.push({
+            votePubkey: v.votePubkey,
+            epoch,
+            type: 'INFO',
+            fromMevCommission: prevMevCommission,
+            toMevCommission: currentMevCommission,
+            delta,
+          });
+          
+          // Create snapshot showing Jito is disabled (0 commission)
+          const mevKey = `${v.votePubkey}-${epoch}`;
+          if (!existingMevKeys.has(mevKey)) {
+            mevSnapshotsToCreate.push({
+              key: mevKey,
+              votePubkey: v.votePubkey,
+              epoch,
+              mevCommission: 0,
+              priorityFeeCommission: 0,
+              mevRewards: 0,
+              priorityFeeRewards: 0,
+            });
+          }
+          
+          console.log(`  📉 Jito disabled for ${v.votePubkey.substring(0, 8)}... (was ${prevMevCommission}%)`);
+        }
       }
       
       } catch (validatorError: any) {
