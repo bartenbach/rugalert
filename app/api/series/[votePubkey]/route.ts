@@ -5,7 +5,27 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(_: NextRequest, { params }: { params: { votePubkey: string } }) {
   try {
-    // Fetch inflation commission history from EVENTS (not snapshots) to show all changes
+    // Get initial commission from earliest snapshot (for validators with no commission changes)
+    const initialSnapshot = await sql`
+      SELECT epoch, commission
+      FROM snapshots
+      WHERE vote_pubkey = ${params.votePubkey}
+        AND commission IS NOT NULL
+      ORDER BY epoch ASC
+      LIMIT 1
+    `
+    
+    // Get initial MEV commission from earliest MEV snapshot
+    const initialMevSnapshot = await sql`
+      SELECT epoch, mev_commission
+      FROM mev_snapshots
+      WHERE vote_pubkey = ${params.votePubkey}
+        AND mev_commission IS NOT NULL
+      ORDER BY epoch ASC
+      LIMIT 1
+    `
+    
+    // Fetch inflation commission history from EVENTS to show all changes
     const inflationEvents = await sql`
       SELECT epoch, to_commission as commission, created_at
       FROM events 
@@ -21,8 +41,11 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
       ORDER BY epoch ASC, created_at ASC
     `
     
+    // Initialize starting commission values from snapshots
+    let currentInflationCommission: number | null = initialSnapshot[0]?.commission ?? null;
+    let currentMevCommission: number | null = initialMevSnapshot[0]?.mev_commission ?? null;
+    
     // Combine events into a single timeline
-    // Create array of all data points with timestamps
     type DataPoint = {
       epoch: number;
       commission: number | null;
@@ -31,6 +54,30 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
     };
     
     const allPoints: DataPoint[] = [];
+    
+    // Add initial snapshot as starting point if we have it and it's before first event
+    const firstEventEpoch = Math.min(
+      inflationEvents[0]?.epoch ?? Infinity,
+      mevEvents[0]?.epoch ?? Infinity
+    );
+    
+    if (initialSnapshot[0] && initialSnapshot[0].epoch < firstEventEpoch) {
+      allPoints.push({
+        epoch: initialSnapshot[0].epoch,
+        commission: initialSnapshot[0].commission,
+        mevCommission: null,
+        timestamp: new Date(0) // Use old timestamp so it sorts first
+      });
+    }
+    
+    if (initialMevSnapshot[0] && initialMevSnapshot[0].epoch < firstEventEpoch) {
+      allPoints.push({
+        epoch: initialMevSnapshot[0].epoch,
+        commission: null,
+        mevCommission: initialMevSnapshot[0].mev_commission,
+        timestamp: new Date(0)
+      });
+    }
     
     // Add inflation commission events
     inflationEvents.forEach(e => {
@@ -58,14 +105,11 @@ export async function GET(_: NextRequest, { params }: { params: { votePubkey: st
       return a.timestamp.getTime() - b.timestamp.getTime();
     });
     
-    // Build series by tracking current commission values
-    let currentInflationCommission: number | null = null;
-    let currentMevCommission: number | null = null;
-    
+    // Build series by tracking current commission values (already initialized from snapshots)
     const series: Array<{ epoch: number; commission: number | null; mevCommission: number | null }> = [];
     
     allPoints.forEach(point => {
-      // Update current values
+      // Update current values when we encounter a change
       if (point.commission !== null) {
         currentInflationCommission = point.commission;
       }
