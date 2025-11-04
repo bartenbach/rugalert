@@ -159,6 +159,15 @@ export async function POST(req: NextRequest) {
   console.log(`🔧 User-Agent: ${userAgent || 'none'}`);
   console.log(`🔑 Authorized: ${isAuthorized}`);
 
+  // Log job start
+  const jobRunResult = await sql`
+    INSERT INTO job_runs (job_name, status, started_at)
+    VALUES ('snapshot', 'running', NOW())
+    RETURNING id
+  `;
+  const jobRunId = jobRunResult[0].id;
+  console.log(`📝 Job run ID: ${jobRunId}`);
+
   try {
     logProgress("Starting snapshot job");
     
@@ -1339,10 +1348,33 @@ export async function POST(req: NextRequest) {
     console.log(`📧 ========== END BATCHED EMAIL SENDING ==========\n`);
     
     logProgress(`✅ Snapshot complete!`);
+    
+    // Log job success
+    const durationSeconds = Math.floor((Date.now() - startTime) / 1000);
+    await sql`
+      UPDATE job_runs
+      SET status = 'success',
+          completed_at = NOW(),
+          epoch = ${epoch},
+          duration_seconds = ${durationSeconds},
+          metrics = ${JSON.stringify({
+            stakeRecordsCreated,
+            performanceRecordsCreated,
+            snapshotsCreated,
+            eventsCreated,
+            mevSnapshotsCreated: mevSnapshotsToCreate.length,
+            mevEventsCreated: mevEventsToCreate.length,
+            infoHistoryCreated,
+            alertsDetected: totalAlerts,
+          })}
+      WHERE id = ${jobRunId}
+    `;
+    
     return NextResponse.json({ 
       ok: true, 
       epoch, 
       slot,
+      jobRunId,
       metrics: {
         stakeRecordsCreated,
         performanceRecordsCreated,
@@ -1358,6 +1390,20 @@ export async function POST(req: NextRequest) {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.error(`❌ [${elapsed}s] Snapshot error:`, err.message || err);
     console.error("Stack trace:", err.stack);
+    
+    // Log job failure
+    try {
+      await sql`
+        UPDATE job_runs
+        SET status = 'failed',
+            completed_at = NOW(),
+            duration_seconds = ${Math.floor((Date.now() - startTime) / 1000)},
+            error_message = ${String(err?.message || err)}
+        WHERE id = ${jobRunId}
+      `;
+    } catch (logErr) {
+      console.error("Failed to log job failure:", logErr);
+    }
     
     // TODO: Set up proper monitoring
     // Options:
