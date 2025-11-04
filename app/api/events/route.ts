@@ -33,20 +33,6 @@ export async function GET(req: NextRequest) {
     })
     
     const minEpoch = Number(latestEpoch) - epochs
-    
-    console.log(`🔍 /api/events RANGE: epochs=${epochs}, latestEpoch=${latestEpoch}, minEpoch=${minEpoch}, range=${minEpoch}-${latestEpoch}`)
-
-    // DEBUG: Check raw database counts for epoch 874
-    const rawCount874 = await sql`
-      SELECT 
-        COUNT(*) FILTER (WHERE type = 'RUG') as rug_count,
-        COUNT(*) FILTER (WHERE type = 'INFO') as info_count,
-        COUNT(*) FILTER (WHERE type = 'CAUTION') as caution_count,
-        COUNT(*) as total_count
-      FROM events
-      WHERE epoch = 874
-    `
-    console.log(`📊 /api/events RAW DB COUNT for epoch 874:`, rawCount874[0])
 
     // Fetch all inflation commission events
     // Force exact epoch match to avoid any query planner issues
@@ -65,26 +51,6 @@ export async function GET(req: NextRequest) {
       WHERE epoch >= ${minEpoch} AND epoch <= ${latestEpoch}
       ORDER BY epoch DESC, created_at DESC
     `
-    
-    console.log(`📊 /api/events DEBUG: Found ${commissionEvents.length} commission events (epochs ${minEpoch}-${latestEpoch})`)
-    const epoch874Commission = commissionEvents.filter(e => e.epoch === 874)
-    const epoch874Rugs = epoch874Commission.filter(e => e.type === 'RUG')
-    const epoch874Info = epoch874Commission.filter(e => e.type === 'INFO')
-    const epoch874Caution = epoch874Commission.filter(e => e.type === 'CAUTION')
-    console.log(`📊 /api/events DEBUG: Epoch 874 has ${epoch874Commission.length} commission events (${epoch874Rugs.length} RUG, ${epoch874Caution.length} CAUTION, ${epoch874Info.length} INFO)`)
-    
-    // Also check what types exist across ALL epochs
-    const allRugs = commissionEvents.filter(e => e.type === 'RUG')
-    console.log(`📊 /api/events DEBUG: Across all epochs, found ${allRugs.length} RUG events total`)
-    
-    if (epoch874Commission.length > 0) {
-      console.log('First 3 epoch 874 commission events:', epoch874Commission.slice(0, 3).map(e => ({
-        type: e.type,
-        vote_pubkey: String(e.vote_pubkey).substring(0, 8),
-        from: e.from_commission,
-        to: e.to_commission
-      })))
-    }
     
     // Fetch all MEV commission events
     const mevEvents = await sql`
@@ -111,8 +77,6 @@ export async function GET(req: NextRequest) {
       if (a.epoch !== b.epoch) return b.epoch - a.epoch
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
-    
-    console.log(`📊 Found ${commissionEvents.length} commission + ${mevEvents.length} MEV = ${all.length} total events in epochs ${minEpoch}-${latestEpoch}, showAll=${showAll}`)
     
     // Pre-fetch ALL validators once to avoid N+1 queries
     const validatorsMap = new Map<string, any>()
@@ -151,7 +115,6 @@ export async function GET(req: NextRequest) {
         }
       })
       
-      console.log(`📊 Returning ${allEvents.length} events (ALL events mode)`)
       return NextResponse.json({ items: allEvents }, {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
@@ -169,22 +132,6 @@ export async function GET(req: NextRequest) {
         eventsByValidator.set(vp, [])
       }
       eventsByValidator.get(vp)!.push(r)
-    }
-    
-    console.log(`🔍 DEDUP: ${all.length} total events → ${eventsByValidator.size} unique validators`)
-    
-    // Check for validators with multiple events
-    const multiEventValidators = Array.from(eventsByValidator.entries())
-      .filter(([_, events]) => events.length > 1)
-      .map(([vp, events]) => ({
-        vp: String(vp).substring(0, 8),
-        count: events.length,
-        events: events.map(e => ({ epoch: e.epoch, type: e.type, source: e.event_source }))
-      }))
-    
-    if (multiEventValidators.length > 0) {
-      console.log(`🔍 DEDUP: ${multiEventValidators.length} validators have multiple events:`, 
-        JSON.stringify(multiEventValidators.slice(0, 5), null, 2))
     }
     
     // For each validator, pick the MOST SEVERE event (RUG > CAUTION > INFO)
@@ -225,9 +172,17 @@ export async function GET(req: NextRequest) {
     // Sort by createdTime DESC
     latestPer.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     
-    const epoch874Final = latestPer.filter(e => e.epoch === 874)
-    console.log(`📊 Returning ${latestPer.length} events (most severe per validator)`)
-    console.log(`📊 DEBUG: ${epoch874Final.length} events from epoch 874 in final result (${epoch874Final.filter(e => e.event_source === 'COMMISSION').length} commission, ${epoch874Final.filter(e => e.event_source === 'MEV').length} MEV)`)
+    // DEBUG: Log the difference between epoch counts
+    console.log(`📊 FINAL: ${latestPer.length} unique validators after dedup (from ${all.length} total events, ${eventsByValidator.size} unique validators)`)
+    console.log(`📊 Breakdown: ${latestPer.filter(e => e.type === 'RUG').length} RUG, ${latestPer.filter(e => e.type === 'CAUTION').length} CAUTION, ${latestPer.filter(e => e.type === 'INFO').length} INFO`)
+    
+    // Find validators that were deduped away (had events but aren't in final list)
+    const finalValidators = new Set(latestPer.map(e => e.vote_pubkey))
+    const droppedValidators = Array.from(eventsByValidator.keys()).filter(vp => !finalValidators.has(vp))
+    if (droppedValidators.length > 0) {
+      console.log(`⚠️  BUG: ${droppedValidators.length} validators had events but aren't in final list:`, droppedValidators.map(vp => String(vp).substring(0, 8)))
+    }
+    
     return NextResponse.json({ items: latestPer }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

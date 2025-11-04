@@ -1,4 +1,5 @@
 snapshot.sh
+*.sql
 # Dependencies
 node_modules/
 /.pnp

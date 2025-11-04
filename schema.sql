@@ -47,7 +47,8 @@ CREATE TABLE events (
   delta INTEGER NOT NULL,
   epoch INTEGER NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  FOREIGN KEY (vote_pubkey) REFERENCES validators(vote_pubkey) ON DELETE CASCADE
+  FOREIGN KEY (vote_pubkey) REFERENCES validators(vote_pubkey) ON DELETE CASCADE,
+  CONSTRAINT events_unique_change UNIQUE (vote_pubkey, epoch, from_commission, to_commission)
 );
 
 -- 4. Subscribers table
@@ -99,17 +100,31 @@ CREATE TABLE mev_snapshots (
 );
 
 -- 8. MEV events table
+-- Note: from_mev_commission and to_mev_commission can be NULL (when MEV is disabled)
 CREATE TABLE mev_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vote_pubkey TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('RUG', 'CAUTION', 'INFO')),
-  from_commission INTEGER NOT NULL,
-  to_commission INTEGER NOT NULL,
+  from_mev_commission INTEGER, -- NULL when MEV was disabled
+  to_mev_commission INTEGER,   -- NULL when MEV is now disabled
   delta INTEGER NOT NULL,
   epoch INTEGER NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   FOREIGN KEY (vote_pubkey) REFERENCES validators(vote_pubkey) ON DELETE CASCADE
 );
+
+-- Unique constraints for MEV events (handles NULL properly with partial indexes)
+CREATE UNIQUE INDEX IF NOT EXISTS mev_events_unique_change
+ON mev_events (vote_pubkey, epoch, from_mev_commission, to_mev_commission)
+WHERE from_mev_commission IS NOT NULL AND to_mev_commission IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS mev_events_unique_disable
+ON mev_events (vote_pubkey, epoch, from_mev_commission)
+WHERE to_mev_commission IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS mev_events_unique_enable
+ON mev_events (vote_pubkey, epoch, to_mev_commission)
+WHERE from_mev_commission IS NULL;
 
 -- 9. Daily uptime table
 CREATE TABLE daily_uptime (
