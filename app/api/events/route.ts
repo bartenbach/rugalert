@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
     })
     
     const minEpoch = Number(latestEpoch) - epochs
+    
+    console.log(`🔍 /api/events RANGE: epochs=${epochs}, latestEpoch=${latestEpoch}, minEpoch=${minEpoch}, range=${minEpoch}-${latestEpoch}`)
 
     // DEBUG: Check raw database counts for epoch 874
     const rawCount874 = await sql`
@@ -167,6 +169,22 @@ export async function GET(req: NextRequest) {
         eventsByValidator.set(vp, [])
       }
       eventsByValidator.get(vp)!.push(r)
+    }
+    
+    console.log(`🔍 DEDUP: ${all.length} total events → ${eventsByValidator.size} unique validators`)
+    
+    // Check for validators with multiple events
+    const multiEventValidators = Array.from(eventsByValidator.entries())
+      .filter(([_, events]) => events.length > 1)
+      .map(([vp, events]) => ({
+        vp: String(vp).substring(0, 8),
+        count: events.length,
+        events: events.map(e => ({ epoch: e.epoch, type: e.type, source: e.event_source }))
+      }))
+    
+    if (multiEventValidators.length > 0) {
+      console.log(`🔍 DEDUP: ${multiEventValidators.length} validators have multiple events:`, 
+        JSON.stringify(multiEventValidators.slice(0, 5), null, 2))
     }
     
     // For each validator, pick the MOST SEVERE event (RUG > CAUTION > INFO)
