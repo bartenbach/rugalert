@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
       }
     })
     
-    const minEpoch = Number(latestEpoch) - epochs
+    // epochs=1 means "show current epoch only", so minEpoch = latestEpoch
+    // epochs=2 means "show current + 1 previous", so minEpoch = latestEpoch - 1
+    const minEpoch = Number(latestEpoch) - epochs + 1
 
     // Fetch all inflation commission events
     // Force exact epoch match to avoid any query planner issues

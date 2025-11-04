@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: [] })
     }
     
-    const minEpoch = Number(latestEpoch) - epochs
+    // epochs=1 means "show current epoch only", so minEpoch = latestEpoch
+    // epochs=2 means "show current + 1 previous", so minEpoch = latestEpoch - 1
+    const minEpoch = Number(latestEpoch) - epochs + 1
     
     console.log(`📊 Querying rugs: latestEpoch=${latestEpoch}, minEpoch=${minEpoch}, range=${epochs}`)
     
