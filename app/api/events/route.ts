@@ -126,66 +126,62 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Otherwise, return only the most severe event per validator
-    const eventsByValidator = new Map<string, any[]>()
-    for (const r of all) {
-      const vp = r.vote_pubkey
-      if (!eventsByValidator.has(vp)) {
-        eventsByValidator.set(vp, [])
+    // Dedup strategy: Show MOST SEVERE per (validator, epoch, event_source)
+    // This means: if validator rugs in epoch 873 AND 874, show BOTH
+    // But if validator has RUG + INFO in same epoch, show only the RUG
+    const deduped = new Map<string, any>()
+    
+    for (const event of all) {
+      const key = `${event.vote_pubkey}-${event.epoch}-${event.event_source}`
+      const existing = deduped.get(key)
+      
+      if (!existing) {
+        deduped.set(key, event)
+      } else {
+        // If there's already an event for this validator+epoch+source, keep the more severe one
+        const severityOrder: Record<string, number> = { "RUG": 3, "CAUTION": 2, "INFO": 1 }
+        const existingSev = severityOrder[existing.type] ?? 0
+        const newSev = severityOrder[event.type] ?? 0
+        
+        if (newSev > existingSev) {
+          deduped.set(key, event)
+        } else if (newSev === existingSev) {
+          // Same severity, keep the later one
+          if (new Date(event.created_at).getTime() > new Date(existing.created_at).getTime()) {
+            deduped.set(key, event)
+          }
+        }
       }
-      eventsByValidator.get(vp)!.push(r)
     }
     
-    // For each validator, pick the MOST SEVERE event (RUG > CAUTION > INFO)
-    const severityOrder: Record<string, number> = { "RUG": 3, "CAUTION": 2, "INFO": 1 }
-    
-    const latestPer = []
-    for (const [vp, events] of eventsByValidator) {
-      // Sort by severity DESC, then by createdTime DESC
-      events.sort((a, b) => {
-        const sevA = severityOrder[a.type] ?? 0
-        const sevB = severityOrder[b.type] ?? 0
-        if (sevA !== sevB) return sevB - sevA
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      })
-      
-      // Pick the most severe (first after sort)
-      const chosen = events[0]
-      const v = validatorsMap.get(vp) || { name: null, iconUrl: null, delinquent: false }
-      
-      latestPer.push({
-        id: chosen.id,
-        vote_pubkey: vp,
-        type: chosen.type,
-        from_commission: chosen.from_commission,
-        to_commission: chosen.to_commission,
-        delta: chosen.delta,
-        epoch: chosen.epoch,
-        created_at: chosen.created_at,
-        event_source: chosen.event_source, // 'COMMISSION' or 'MEV'
-        from_disabled: chosen.from_disabled || false,
-        to_disabled: chosen.to_disabled || false,
+    // Convert to array and enrich with validator info
+    const enriched = Array.from(deduped.values()).map(r => {
+      const v = validatorsMap.get(r.vote_pubkey) || { name: null, iconUrl: null, delinquent: false }
+      return {
+        id: r.id,
+        vote_pubkey: r.vote_pubkey,
+        type: r.type,
+        from_commission: r.from_commission,
+        to_commission: r.to_commission,
+        delta: r.delta,
+        epoch: r.epoch,
+        created_at: r.created_at,
+        event_source: r.event_source,
+        from_disabled: r.from_disabled || false,
+        to_disabled: r.to_disabled || false,
         name: v.name,
         icon_url: v.iconUrl,
         delinquent: v.delinquent,
-      })
-    }
+      }
+    })
     
     // Sort by createdTime DESC
-    latestPer.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    enriched.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     
-    // DEBUG: Log the difference between epoch counts
-    console.log(`📊 FINAL: ${latestPer.length} unique validators after dedup (from ${all.length} total events, ${eventsByValidator.size} unique validators)`)
-    console.log(`📊 Breakdown: ${latestPer.filter(e => e.type === 'RUG').length} RUG, ${latestPer.filter(e => e.type === 'CAUTION').length} CAUTION, ${latestPer.filter(e => e.type === 'INFO').length} INFO`)
+    console.log(`📊 DEDUP: ${all.length} total events → ${enriched.length} after dedup (per validator+epoch+source)`)
+    console.log(`📊 Breakdown: ${enriched.filter(e => e.type === 'RUG').length} RUG, ${enriched.filter(e => e.type === 'CAUTION').length} CAUTION, ${enriched.filter(e => e.type === 'INFO').length} INFO`)
     
-    // Find validators that were deduped away (had events but aren't in final list)
-    const finalValidators = new Set(latestPer.map(e => e.vote_pubkey))
-    const droppedValidators = Array.from(eventsByValidator.keys()).filter(vp => !finalValidators.has(vp))
-    if (droppedValidators.length > 0) {
-      console.log(`⚠️  BUG: ${droppedValidators.length} validators had events but aren't in final list:`, droppedValidators.map(vp => String(vp).substring(0, 8)))
-    }
-    
-    return NextResponse.json({ items: latestPer }, {
+    return NextResponse.json({ items: enriched }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
         'CDN-Cache-Control': 'no-store',
