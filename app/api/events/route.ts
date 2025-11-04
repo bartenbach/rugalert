@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
         from_mev_commission IS NULL as from_disabled,
         to_mev_commission IS NULL as to_disabled
       FROM mev_events
-      WHERE epoch >= ${minEpoch}
+      WHERE epoch >= ${minEpoch} AND epoch <= ${latestEpoch}
       ORDER BY epoch DESC, created_at DESC
     `
     
