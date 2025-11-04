@@ -7,7 +7,6 @@
 
 export const KNOWN_STAKERS: Record<string, string> = {
   "mpa4abUkjQoAvPzREkh5Mo75hZhPFQ2FSH6w7dWKuQ5": "Solana Foundation",
-  "FiRep26iRQbMaKbqhhs5CqXqy7YrHn462LbnQhXzB2ps": "Solana Foundation Firedancer",
   "stWirqFCf2Uts1JBL1Jsd3r6VBWhgnpdPxCTe1MFjrq": "Marinade",
   "6WecYymEARvjG5ZyqkrVQ6YkhPfujNzWpSPwNKXHCbV2": "Jito",
   "AKJt3m2xJ6ANda9adBGqb5BMrheKJSwxyCfYkLuZNmjn": "aeroSOL",

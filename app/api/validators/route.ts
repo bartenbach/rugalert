@@ -275,10 +275,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate network statistics
+    // Use RPC vote accounts for accurate validator counts (matches solana CLI)
     const networkStats = {
-      totalValidators: deduplicatedValidators.length,
-      activeValidators: deduplicatedValidators.filter(v => !v.delinquent).length,
-      delinquentValidators: deduplicatedValidators.filter(v => v.delinquent).length,
+      totalValidators: voteAccounts.current.length + voteAccounts.delinquent.length,
+      activeValidators: voteAccounts.current.length,
+      delinquentValidators: voteAccounts.delinquent.length,
       totalStake: networkTotalStake,
       activeStake: totalActiveStake,
       delinquentStake: totalDelinquentStake,

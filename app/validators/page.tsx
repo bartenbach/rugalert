@@ -290,6 +290,72 @@ function ValidatorsPageContent() {
 
   return (
     <div className="space-y-6">
+      {/* Network Stats Header */}
+      {networkStats && (
+        <div className="glass rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-6 shadow-2xl shadow-black/20">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Validators */}
+            <div className="space-y-3">
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Network
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-bold text-white">
+                    {networkStats.activeValidators.toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    / {networkStats.totalValidators.toLocaleString()} validators
+                  </div>
+                </div>
+                {networkStats.delinquentValidators > 0 && (
+                  <div className="text-xs text-gray-400">
+                    {networkStats.delinquentValidators.toLocaleString()} delinquent
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Stake */}
+            <div className="space-y-3">
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Stake
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-bold text-green-400">
+                    {(networkStats.activeStake / 1_000_000).toFixed(1)}M
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    / {(networkStats.totalStake / 1_000_000).toFixed(1)}M SOL
+                  </div>
+                </div>
+                {networkStats.delinquentStake > 0 && (
+                  <div className="text-xs text-gray-400">
+                    {(networkStats.delinquentStake / 1_000_000).toFixed(2)}M delinquent ({((networkStats.delinquentStake / networkStats.totalStake) * 100).toFixed(1)}%)
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Nakamoto Coefficient */}
+            <div className="space-y-3">
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                Nakamoto Coefficient
+              </div>
+              <div className="space-y-1">
+                <div className="text-3xl font-bold text-cyan-400">
+                  {displayedValidators.find(v => v.cumulativeStakePercent > 33.33)?.rank || '—'}
+                </div>
+                <div className="text-xs text-gray-400">
+                  Top validators to control 33% of stake
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Search Box */}
       <div>
         <div className="relative max-w-lg mx-auto">

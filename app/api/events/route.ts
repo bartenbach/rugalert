@@ -181,6 +181,23 @@ export async function GET(req: NextRequest) {
     console.log(`📊 DEDUP: ${all.length} total events → ${enriched.length} after dedup (per validator+epoch+source)`)
     console.log(`📊 Breakdown: ${enriched.filter(e => e.type === 'RUG').length} RUG, ${enriched.filter(e => e.type === 'CAUTION').length} CAUTION, ${enriched.filter(e => e.type === 'INFO').length} INFO`)
     
+    // Debug: Check what epoch 864 contains
+    const epoch864Events = enriched.filter(e => e.epoch === 864)
+    if (epoch864Events.length > 0) {
+      console.log(`📊 Epoch 864 has ${epoch864Events.length} events: ${epoch864Events.filter(e => e.type === 'RUG').length} RUG, ${epoch864Events.filter(e => e.type === 'CAUTION').length} CAUTION, ${epoch864Events.filter(e => e.type === 'INFO').length} INFO`)
+    }
+    
+    // Count events by epoch
+    const byEpoch = new Map()
+    enriched.forEach(e => {
+      const count = byEpoch.get(e.epoch) || { RUG: 0, CAUTION: 0, INFO: 0 }
+      count[e.type]++
+      byEpoch.set(e.epoch, count)
+    })
+    console.log(`📊 Events by epoch:`, Object.fromEntries(
+      Array.from(byEpoch.entries()).sort((a, b) => b[0] - a[0])
+    ))
+    
     return NextResponse.json({ items: enriched }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
