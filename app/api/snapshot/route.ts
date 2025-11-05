@@ -890,12 +890,15 @@ export async function POST(req: NextRequest) {
       if (isJitoEnabled && jitoInfo) {
         const mevKey = `${v.votePubkey}-${epoch}`;
         
+        // Create snapshot if it doesn't exist
         if (!existingMevKeys.has(mevKey)) {
           mevSnapshotsToCreate.push({
             key: mevKey,
             votePubkey: v.votePubkey,
             epoch,
-            mevCommission: jitoInfo.mevCommission || 0,
+            // Store the value exactly as it comes from Jito API
+            // null = no MEV commission (disabled), 0 = staker gets all MEV rewards, 1-100 = validator commission
+            mevCommission: jitoInfo.mevCommission,
             priorityFeeCommission: jitoInfo.priorityFeeCommission || 0,
             mevRewards: jitoInfo.mevRewards || 0,
             priorityFeeRewards: jitoInfo.priorityFeeRewards || 0,
@@ -904,64 +907,67 @@ export async function POST(req: NextRequest) {
           if (mevSnapshotsToCreate.length <= 3) {
             console.log(`  Queued MEV snapshot for ${v.votePubkey.substring(0, 8)}... - MEV: ${jitoInfo.mevCommission}%, Priority: ${jitoInfo.priorityFeeCommission || 0}%`);
           }
+        }
+        
+        // ALWAYS check for commission changes, regardless of whether we created a snapshot
+        // (snapshot might already exist from a previous run, but we still need to detect changes)
+        const latestMev = latestMevByValidator.get(v.votePubkey);
+        if (latestMev && latestMev.epoch < epoch) {
+          // Only compare if the latest snapshot is from a PREVIOUS epoch
+          // Keep NULL as NULL (MEV was disabled), don't convert to 0
+          const prevMevCommission = latestMev.mev_commission !== null && latestMev.mev_commission !== undefined
+            ? Number(latestMev.mev_commission)
+            : null;
+          const currentMevCommission = jitoInfo.mevCommission !== null && jitoInfo.mevCommission !== undefined
+            ? Number(jitoInfo.mevCommission)
+            : null;
           
-          const latestMev = latestMevByValidator.get(v.votePubkey);
-          if (latestMev) {
-            // Keep NULL as NULL (MEV was disabled), don't convert to 0
-            const prevMevCommission = latestMev.mev_commission !== null && latestMev.mev_commission !== undefined
-              ? Number(latestMev.mev_commission)
-              : null;
-            const currentMevCommission = jitoInfo.mevCommission !== null && jitoInfo.mevCommission !== undefined
-              ? Number(jitoInfo.mevCommission)
-              : null;
+          // Compare with proper NULL handling
+          const changed = (prevMevCommission === null && currentMevCommission !== null) ||
+                         (prevMevCommission !== null && currentMevCommission === null) ||
+                         (prevMevCommission !== null && currentMevCommission !== null && prevMevCommission !== currentMevCommission);
+          
+          if (changed) {
+            const delta = (currentMevCommission ?? 0) - (prevMevCommission ?? 0);
+            const eventType = detectMevRug(prevMevCommission, currentMevCommission);
             
-            // Compare with proper NULL handling
-            const changed = (prevMevCommission === null && currentMevCommission !== null) ||
-                           (prevMevCommission !== null && currentMevCommission === null) ||
-                           (prevMevCommission !== null && currentMevCommission !== null && prevMevCommission !== currentMevCommission);
+            mevEventsToCreate.push({
+              votePubkey: v.votePubkey,
+              epoch,
+              type: eventType,
+              fromMevCommission: prevMevCommission,
+              toMevCommission: currentMevCommission,
+              delta,
+            });
             
-            if (changed) {
-              const delta = (currentMevCommission ?? 0) - (prevMevCommission ?? 0);
-              const eventType = detectMevRug(prevMevCommission, currentMevCommission);
-              
-              mevEventsToCreate.push({
-                votePubkey: v.votePubkey,
-                epoch,
-                type: eventType,
-                fromMevCommission: prevMevCommission,
-                toMevCommission: currentMevCommission,
-                delta,
-              });
-              
-              const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
-              const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
-              const validatorName = chainName || v.votePubkey;
-              
-              if (eventType === "RUG") {
-                // RUG means both values are numbers (not NULL)
-                const fromVal = prevMevCommission ?? 0;
-                const toVal = currentMevCommission ?? 0;
-                mevRugs.push({ validatorName, votePubkey: v.votePubkey, from: fromVal, to: toVal, delta, validatorUrl, epoch });
-                const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
-                const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
-                const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr}\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
-                await sendDiscord(msg);
-                if (prevMevCommission !== null && currentMevCommission !== null) {
-                  const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
-                  await postToTwitter(twitterMsg);
-                }
-              } else if (eventType === "CAUTION") {
-                const fromVal = prevMevCommission ?? 0;
-                const toVal = currentMevCommission ?? 0;
-                mevCautions.push({ validatorName, votePubkey: v.votePubkey, from: fromVal, to: toVal, delta, validatorUrl, epoch });
-                const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
-                const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
-                const msg = `⚠️ CAUTION: MEV Commission Change Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr} (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
-                await sendDiscord(msg);
-                if (prevMevCommission !== null && currentMevCommission !== null) {
-                  const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
-                  await postToTwitter(twitterMsg);
-                }
+            const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
+            const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
+            const validatorName = chainName || v.votePubkey;
+            
+            if (eventType === "RUG") {
+              // RUG means both values are numbers (not NULL)
+              const fromVal = prevMevCommission ?? 0;
+              const toVal = currentMevCommission ?? 0;
+              mevRugs.push({ validatorName, votePubkey: v.votePubkey, from: fromVal, to: toVal, delta, validatorUrl, epoch });
+              const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
+              const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
+              const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr}\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+              await sendDiscord(msg);
+              if (prevMevCommission !== null && currentMevCommission !== null) {
+                const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
+                await postToTwitter(twitterMsg);
+              }
+            } else if (eventType === "CAUTION") {
+              const fromVal = prevMevCommission ?? 0;
+              const toVal = currentMevCommission ?? 0;
+              mevCautions.push({ validatorName, votePubkey: v.votePubkey, from: fromVal, to: toVal, delta, validatorUrl, epoch });
+              const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
+              const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
+              const msg = `⚠️ CAUTION: MEV Commission Change Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr} (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+              await sendDiscord(msg);
+              if (prevMevCommission !== null && currentMevCommission !== null) {
+                const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
+                await postToTwitter(twitterMsg);
               }
             }
           }
@@ -1206,17 +1212,24 @@ export async function POST(req: NextRequest) {
     
     // Create MEV events
     for (const mevEvent of mevEventsToCreate) {
+      // Use INSERT with WHERE NOT EXISTS to handle partial unique indexes
+      // (ON CONFLICT doesn't work with partial indexes in PostgreSQL)
       await sql`
         INSERT INTO mev_events (vote_pubkey, epoch, type, from_mev_commission, to_mev_commission, delta)
-        VALUES (
+        SELECT 
           ${mevEvent.votePubkey},
           ${mevEvent.epoch},
           ${mevEvent.type},
           ${mevEvent.fromMevCommission},
           ${mevEvent.toMevCommission},
           ${mevEvent.delta}
+        WHERE NOT EXISTS (
+          SELECT 1 FROM mev_events
+          WHERE vote_pubkey = ${mevEvent.votePubkey}
+            AND epoch = ${mevEvent.epoch}
+            AND from_mev_commission IS NOT DISTINCT FROM ${mevEvent.fromMevCommission}
+            AND to_mev_commission IS NOT DISTINCT FROM ${mevEvent.toMevCommission}
         )
-        ON CONFLICT (vote_pubkey, epoch, from_mev_commission, to_mev_commission) DO NOTHING
       `;
     }
     if (mevEventsToCreate.length > 0) logProgress(`Created ${mevEventsToCreate.length} MEV events`);
