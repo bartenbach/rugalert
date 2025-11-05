@@ -445,6 +445,11 @@ export async function POST(req: NextRequest) {
       existingPerfRecords.set(r.key, r);
     });
     
+    // Fetch existing commission snapshots for this epoch
+    const existingSnapshotKeys = new Set<string>();
+    const existingSnapshots = await sql`SELECT key FROM snapshots WHERE epoch = ${epoch}`;
+    existingSnapshots.forEach((r: any) => existingSnapshotKeys.add(r.key));
+    
     // Fetch existing MEV snapshots for this epoch
     const existingMevKeys = new Set<string>();
     const mevRecords = await sql`SELECT key FROM mev_snapshots WHERE epoch = ${epoch}`;
@@ -479,7 +484,7 @@ export async function POST(req: NextRequest) {
       });
     });
     
-    logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingMevKeys.size} MEV, ${latestCommissionByValidator.size} commission`);
+    logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingSnapshotKeys.size} commission snapshots, ${existingMevKeys.size} MEV, ${latestCommissionByValidator.size} commission`);
     
     // Batch arrays for bulk creation
     const validatorsToCreate: any[] = [];
@@ -817,17 +822,19 @@ export async function POST(req: NextRequest) {
         perfRecordsToCreate.push(perfFields);
       }
 
-      // 4) DELTA-ONLY SNAPSHOTS
+      // 4) DELTA-ONLY SNAPSHOTS (but also create one snapshot per epoch per validator)
       const lastSnapshot = latestCommissionByValidator.get(v.votePubkey);
       const prevCommission = lastSnapshot?.commission;
       const prevEpoch = lastSnapshot?.epoch;
 
       const hasPrev = prevCommission !== undefined && prevCommission !== null;
       const commissionChanged = !hasPrev || Number(prevCommission) !== v.commission;
+      const needsEpochSnapshot = !prevEpoch || prevEpoch < epoch; // Need a snapshot if we don't have one for this epoch yet
 
-      if (commissionChanged) {
+      if (commissionChanged || needsEpochSnapshot) {
         const key = `${v.votePubkey}-${slot}`;
-        if (!snapshotsBeingCreated.has(key)) {
+        // Only create if not already in DB and not already queued
+        if (!existingSnapshotKeys.has(key) && !snapshotsBeingCreated.has(key)) {
           snapshotsBeingCreated.add(key);
           snapshotsToCreate.push({
             key, 
