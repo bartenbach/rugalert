@@ -9,17 +9,17 @@ export async function GET(req: NextRequest) {
     const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
     const showAll = new URL(req.url).searchParams.get('showAll') === 'true'
     
-    // Get latest epoch from snapshots first, fall back to events if empty
+    // Get latest epoch from snapshots using MAX() to bypass pooler caching issues
     const latestSnapshotRow = await sql`
-      SELECT epoch FROM snapshots ORDER BY epoch DESC LIMIT 1
+      SELECT MAX(epoch) as epoch FROM snapshots
     `
     let latestEpoch = latestSnapshotRow[0]?.epoch
-    console.log(`[/api/events] Latest epoch from snapshots:`, latestEpoch, 'rawRow:', latestSnapshotRow[0])
+    console.log(`[/api/events] Latest epoch from snapshots (using MAX):`, latestEpoch, 'rawRow:', latestSnapshotRow[0])
     
     // If no snapshots exist, get latest epoch from events table
     if (!latestEpoch) {
       const latestEventRow = await sql`
-        SELECT epoch FROM events ORDER BY epoch DESC LIMIT 1
+        SELECT MAX(epoch) as epoch FROM events
       `
       latestEpoch = latestEventRow[0]?.epoch
       console.log(`[/api/events] Fell back to events, latest epoch:`, latestEpoch)
