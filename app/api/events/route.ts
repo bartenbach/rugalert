@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
       SELECT epoch FROM snapshots ORDER BY epoch DESC LIMIT 1
     `
     let latestEpoch = latestSnapshotRow[0]?.epoch
+    console.log(`[/api/events] Latest epoch from snapshots:`, latestEpoch, 'rawRow:', latestSnapshotRow[0])
     
     // If no snapshots exist, get latest epoch from events table
     if (!latestEpoch) {
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
         SELECT epoch FROM events ORDER BY epoch DESC LIMIT 1
       `
       latestEpoch = latestEventRow[0]?.epoch
+      console.log(`[/api/events] Fell back to events, latest epoch:`, latestEpoch)
     }
     
     // If still no epoch found, return empty (truly no data)
