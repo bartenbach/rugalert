@@ -128,31 +128,9 @@ export default function RugsPerEpochChart() {
     <div className="glass rounded-2xl p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <div className="flex items-center gap-4 mb-2">
-            <h2 className="text-2xl font-bold text-white">
-              🚨 Rugs per Epoch
-            </h2>
-            {/* Pagination Controls */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(p => p + 1)}
-                disabled={data.length < epochsPerPage}
-                className="px-3 py-1 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                ← Older
-              </button>
-              <span className="text-sm text-gray-400">
-                {page === 0 ? 'Most Recent' : `${page * epochsPerPage + 1}-${(page + 1) * epochsPerPage} epochs ago`}
-              </span>
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="px-3 py-1 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                Newer →
-              </button>
-            </div>
-          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            🚨 Rugs per Epoch
+          </h2>
           {/* Legend */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -443,6 +421,27 @@ export default function RugsPerEpochChart() {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-center gap-3">
+        <button
+          onClick={() => setPage(p => p + 1)}
+          disabled={data.length < epochsPerPage}
+          className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          ← Older
+        </button>
+        <span className="text-sm text-gray-400 min-w-[140px] text-center">
+          {page === 0 ? 'Most Recent' : `${page * epochsPerPage + 1}-${(page + 1) * epochsPerPage} epochs ago`}
+        </span>
+        <button
+          onClick={() => setPage(p => Math.max(0, p - 1))}
+          disabled={page === 0}
+          className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          Newer →
+        </button>
       </div>
     </div>
   );
