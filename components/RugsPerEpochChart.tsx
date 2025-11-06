@@ -135,21 +135,21 @@ export default function RugsPerEpochChart() {
             {/* Pagination Controls */}
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
+                onClick={() => setPage(p => p + 1)}
+                disabled={data.length < epochsPerPage}
                 className="px-3 py-1 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
-                ← Newer
+                ← Older
               </button>
               <span className="text-sm text-gray-400">
                 {page === 0 ? 'Most Recent' : `${page * epochsPerPage + 1}-${(page + 1) * epochsPerPage} epochs ago`}
               </span>
               <button
-                onClick={() => setPage(p => p + 1)}
-                disabled={data.length < epochsPerPage}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
                 className="px-3 py-1 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
-                Older →
+                Newer →
               </button>
             </div>
           </div>
