@@ -628,7 +628,7 @@ function ValidatorsPageContent() {
                                 </div>
                                 {validator.delinquent && (
                                   <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/50 rounded-md text-[10px] font-bold text-red-300 whitespace-nowrap">
-                                    OFFLINE
+                                    DELINQUENT
                                   </span>
                                 )}
                               </div>
@@ -847,7 +847,7 @@ function ValidatorsPageContent() {
                           </span>
                           {validator.delinquent && (
                             <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-[9px] font-bold text-red-300">
-                              OFFLINE
+                              DELINQUENT
                             </span>
                           )}
                         </div>
