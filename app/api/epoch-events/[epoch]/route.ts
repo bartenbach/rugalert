@@ -15,6 +15,11 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid epoch' }, { status: 400 })
     }
     
+    // Log which database connection we're using
+    const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || 'NONE'
+    const connType = dbUrl.includes('-pooler.') ? 'POOLED' : dbUrl.includes('ep-') ? 'DIRECT' : 'UNKNOWN'
+    console.log(`[epoch-events/${epoch}] Using ${connType} connection (has UNPOOLED: ${!!process.env.DATABASE_URL_UNPOOLED})`)
+    
     // Fetch BOTH commission RUG events AND MEV RUG events for this epoch
     // DO NOT use LEFT JOIN - it causes issues (see validator-events fix)
     const commissionRugs = await sql`
