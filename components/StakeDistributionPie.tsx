@@ -65,16 +65,12 @@ export default function StakeDistributionPie({
 
   // Always add "Others" if there's any unaccounted stake
   if (othersTotal > 0) {
-    const otherStakers = distribution.length - topStakers.length;
     const othersPercentage = (
       (othersTotal / 1_000_000_000 / totalStake) *
       100
     ).toFixed(1);
     chartData.push({
-      name:
-        otherStakers > 0
-          ? `${otherStakers} Others (${othersPercentage}%)`
-          : "Others",
+      name: `Others (${othersPercentage}%)`,
       value: othersTotal / 1_000_000_000,
       percentage: othersPercentage,
       fullAddress: "",
