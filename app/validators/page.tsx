@@ -382,7 +382,7 @@ function ValidatorsPageContent() {
               </div>
               <div className="space-y-1">
                 <div className="text-3xl font-bold text-cyan-400">
-                  {displayedValidators.find(v => v.cumulativeStakePercent > 33.33)?.rank || '—'}
+                  {hasActiveFilters ? '—' : (displayedValidators.find(v => v.cumulativeStakePercent > 33.33)?.rank || '—')}
                 </div>
                 <div className="text-xs text-gray-400">
                   Top validators to control 33% of stake
