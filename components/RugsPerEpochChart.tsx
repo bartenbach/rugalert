@@ -141,6 +141,8 @@ export default function RugsPerEpochChart() {
     );
   }
 
+  const maxCount = data.length > 0 ? Math.max(...data.map((d) => d.uniqueValidators)) : 0;
+
   return (
     <div className="glass rounded-2xl p-8">
       {/* Global Stats Section */}
