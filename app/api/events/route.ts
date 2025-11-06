@@ -60,11 +60,13 @@ export async function GET(req: NextRequest) {
     `
     
     // Fetch all MEV commission events
+    // Add random comment to bust Neon's query cache
+    const cacheBuster = Date.now()
     const mevEvents = await sql`
       SELECT 
         id,
         vote_pubkey,
-        type,
+        type, -- cache_bust_${cacheBuster}
         from_mev_commission as from_commission,
         to_mev_commission as to_commission,
         delta,
