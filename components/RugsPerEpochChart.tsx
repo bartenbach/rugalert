@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface EpochData {
   epoch: number;
@@ -50,12 +50,14 @@ export default function RugsPerEpochChart() {
   const [data, setData] = useState<EpochData[]>([]);
   const [repeatOffenders, setRepeatOffenders] = useState<number>(0);
   const [validatorEpochCounts, setValidatorEpochCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true); // Only true on first load
+  const [pageLoading, setPageLoading] = useState(false); // True when changing pages
   const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
   const [epochEvents, setEpochEvents] = useState<RugEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [page, setPage] = useState(0); // 0 = most recent 10 epochs, 1 = next 10, etc.
   const epochsPerPage = 10;
+  const hasLoadedRef = useRef(false); // Track if we've loaded data before
   
   // Global stats (all time)
   const [globalStats, setGlobalStats] = useState<{
@@ -67,7 +69,13 @@ export default function RugsPerEpochChart() {
   useEffect(() => {
     async function load() {
       try {
-        setLoading(true);
+        // Only show page loading if this is not the first load
+        if (hasLoadedRef.current) {
+          setPageLoading(true);
+        } else {
+          setInitialLoading(true);
+        }
+        
         const res = await fetch(`/api/rugs-per-epoch?epochs=${epochsPerPage}&offset=${page * epochsPerPage}`, {
           cache: "no-store"
         });
@@ -84,10 +92,14 @@ export default function RugsPerEpochChart() {
             avgPerEpoch: json.meta.globalAvgPerEpoch || 0,
           });
         }
+        
+        // Mark that we've successfully loaded data
+        hasLoadedRef.current = true;
       } catch (error) {
         console.error("Failed to load rugs per epoch:", error);
       } finally {
-        setLoading(false);
+        setInitialLoading(false);
+        setPageLoading(false);
       }
     }
     load();
@@ -122,7 +134,7 @@ export default function RugsPerEpochChart() {
     }
   }
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="glass rounded-2xl p-8">
         <div className="animate-pulse">
@@ -198,7 +210,10 @@ export default function RugsPerEpochChart() {
       </div>
 
       {/* Bar Chart */}
-      <div className="space-y-2">
+      <div className="space-y-2 relative">
+        {pageLoading && (
+          <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] rounded-lg z-10 pointer-events-none"></div>
+        )}
         {data.map((item) => (
           <div key={item.epoch}>
             <button
@@ -428,10 +443,15 @@ export default function RugsPerEpochChart() {
       </div>
 
       {/* Pagination Controls */}
-      <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-center gap-3">
+      <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-center gap-3 relative">
+        {pageLoading && (
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
         <button
           onClick={() => setPage(p => p + 1)}
-          disabled={data.length < epochsPerPage}
+          disabled={data.length < epochsPerPage || pageLoading}
           className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           ← Older
@@ -441,7 +461,7 @@ export default function RugsPerEpochChart() {
         </span>
         <button
           onClick={() => setPage(p => Math.max(0, p - 1))}
-          disabled={page === 0}
+          disabled={page === 0 || pageLoading}
           className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           Newer →
