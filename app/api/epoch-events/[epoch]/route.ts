@@ -1,4 +1,4 @@
-import { sql } from '@/lib/db-direct' // Use direct connection to avoid pooler lag
+import { getFreshSql } from '@/lib/db-direct' // Use fresh direct connection to avoid pooler lag
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -14,6 +14,9 @@ export async function GET(
     if (isNaN(epoch)) {
       return NextResponse.json({ error: 'Invalid epoch' }, { status: 400 })
     }
+    
+    // Get a FRESH SQL client for this request (no caching)
+    const sql = getFreshSql()
     
     // Log which database connection we're using
     const dbUrl = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || 'NONE'

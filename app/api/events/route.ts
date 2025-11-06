@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sql } from '../../../lib/db-direct' // Use direct connection to avoid pooler lag
+import { getFreshSql } from '../../../lib/db-direct' // Use fresh direct connection to avoid pooler lag
 
 // Force dynamic rendering (query params)
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {
+    // Get a FRESH SQL client for this request (no caching)
+    const sql = getFreshSql()
+    
     const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
     const showAll = new URL(req.url).searchParams.get('showAll') === 'true'
     
