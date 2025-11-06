@@ -12,9 +12,7 @@ if (!connectionString) {
 // Create a function that returns a FRESH SQL client on each call
 // This prevents caching issues where the same client instance reuses stale results
 export function getFreshSql(): NeonQueryFunction<false, false> {
-  return neon(connectionString, {
-    fetchConnectionCache: false, // Don't cache the connection
-  })
+  return neon(connectionString)
 }
 
 // Export a default client for backwards compatibility, but prefer getFreshSql()
