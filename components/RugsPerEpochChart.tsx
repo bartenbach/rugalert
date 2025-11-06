@@ -156,22 +156,19 @@ export default function RugsPerEpochChart() {
   const maxCount = data.length > 0 ? Math.max(...data.map((d) => d.uniqueValidators)) : 0;
 
   return (
-    <div className="glass rounded-2xl p-8">
-      {/* Global Stats Section */}
-      <div className="mb-8 pb-6 border-b border-white/10">
-        <h2 className="text-2xl font-bold text-white mb-4">
-          🚨 Rugs per Epoch
-        </h2>
-        <div className="grid grid-cols-3 gap-4 text-center">
+    <>
+      {/* Global Stats Header - Separate from chart */}
+      <div className="glass rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-6 shadow-2xl shadow-black/20 mb-6">
+        <div className="grid grid-cols-3 gap-6 text-center">
           <div>
             <div className="text-3xl font-bold text-white">{globalStats.totalEpochsTracked}</div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide">
+            <div className="text-xs text-gray-400 uppercase tracking-widest font-bold">
               Epochs Tracked
             </div>
           </div>
           <div>
             <div className="text-3xl font-bold text-red-400">{globalStats.peakRugs}</div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide">
+            <div className="text-xs text-gray-400 uppercase tracking-widest font-bold">
               Peak Unique Rugs
             </div>
           </div>
@@ -179,13 +176,13 @@ export default function RugsPerEpochChart() {
             <div className="text-3xl font-bold text-orange-400">
               {globalStats.avgPerEpoch}
             </div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide">
+            <div className="text-xs text-gray-400 uppercase tracking-widest font-bold">
               Avg per Epoch
             </div>
           </div>
         </div>
         {repeatOffenders > 0 && (
-          <div className="mt-4 text-center">
+          <div className="mt-4 pt-4 border-t border-white/10 text-center">
             <p className="text-sm text-gray-400">
               ⚠️ {repeatOffenders} validators rugged in multiple epochs (repeat offenders)
             </p>
@@ -193,24 +190,30 @@ export default function RugsPerEpochChart() {
         )}
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-gradient-to-r from-red-500 to-red-600"></div>
-          <span className="text-xs text-gray-400">Inflation Commission</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-500 to-purple-600"></div>
-          <span className="text-xs text-gray-400">MEV Commission</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded bg-gradient-to-r from-orange-500 to-orange-600"></div>
-          <span className="text-xs text-gray-400">Both</span>
-        </div>
-      </div>
+      {/* Chart Section */}
+      <div className="glass rounded-2xl p-8">
+        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+          🚨 Rugs per Epoch
+        </h2>
 
-      {/* Bar Chart */}
-      <div className="space-y-2 relative">
+        {/* Legend */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-gradient-to-r from-red-500 to-red-600"></div>
+            <span className="text-xs text-gray-400">Inflation Commission</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-500 to-purple-600"></div>
+            <span className="text-xs text-gray-400">MEV Commission</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded bg-gradient-to-r from-orange-500 to-orange-600"></div>
+            <span className="text-xs text-gray-400">Both</span>
+          </div>
+        </div>
+
+        {/* Bar Chart */}
+        <div className="space-y-2 relative">
         {pageLoading && (
           <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] rounded-lg z-10 pointer-events-none"></div>
         )}
@@ -440,34 +443,35 @@ export default function RugsPerEpochChart() {
             )}
           </div>
         ))}
-      </div>
+        </div>
 
-      {/* Pagination Controls */}
-      <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-center gap-3 relative">
-        {pageLoading && (
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        <button
-          onClick={() => setPage(p => p + 1)}
-          disabled={data.length < epochsPerPage || pageLoading}
-          className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          ← Older
-        </button>
-        <span className="text-sm text-gray-400 min-w-[140px] text-center">
-          {page === 0 ? 'Most Recent' : `${page * epochsPerPage + 1}-${(page + 1) * epochsPerPage} epochs ago`}
-        </span>
-        <button
-          onClick={() => setPage(p => Math.max(0, p - 1))}
-          disabled={page === 0 || pageLoading}
-          className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          Newer →
-        </button>
+        {/* Pagination Controls */}
+        <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-center gap-3 relative">
+          {pageLoading && (
+            <div className="absolute inset-0 bg-black/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={data.length < epochsPerPage || pageLoading}
+            className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            ← Older
+          </button>
+          <span className="text-sm text-gray-400 min-w-[140px] text-center">
+            {page === 0 ? 'Most Recent' : `${page * epochsPerPage + 1}-${(page + 1) * epochsPerPage} epochs ago`}
+          </span>
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0 || pageLoading}
+            className="px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Newer →
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
