@@ -3,6 +3,7 @@ import { getFreshSql } from '../../../lib/db-direct' // Use fresh direct connect
 
 // Force dynamic rendering (query params)
 export const dynamic = 'force-dynamic'
+export const revalidate = 0 // Disable ALL caching
 
 export async function GET(req: NextRequest) {
   try {
