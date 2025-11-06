@@ -2,6 +2,7 @@ import { sql } from '@/lib/db-neon'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0 // Disable all caching
 
 export async function GET(
   req: NextRequest,

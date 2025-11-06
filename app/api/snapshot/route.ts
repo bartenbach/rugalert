@@ -655,21 +655,12 @@ export async function POST(req: NextRequest) {
           jitoEnabled: isJitoEnabled,
           stakeAccountCount: accountCount,
           stakeDistribution: JSON.stringify(distributionArray),
+          name: chainName || null,
+          iconUrl: iconUrl || null,
+          website: website || null,
+          description: description || null,
+          version: version || null,
         };
-        
-        if (chainName) patch.name = chainName;
-        
-        // Handle iconUrl: update if we have a new one, or clear if existing is DiceBear
-        const existingIconUrl = existing.icon_url;
-        if (iconUrl) {
-          patch.iconUrl = iconUrl;
-        } else if (existingIconUrl && existingIconUrl.includes('dicebear.com')) {
-          patch.iconUrl = null;
-        }
-        
-        if (website) patch.website = website;
-        if (description) patch.description = description;
-        if (version) patch.version = version;
         
         validatorsToUpdate.push(patch);
       } else {
@@ -831,6 +822,7 @@ export async function POST(req: NextRequest) {
       const commissionChanged = !hasPrev || Number(prevCommission) !== v.commission;
       const needsEpochSnapshot = !prevEpoch || prevEpoch < epoch; // Need a snapshot if we don't have one for this epoch yet
 
+      // Always create a snapshot if commission changed OR we need one for this epoch
       if (commissionChanged || needsEpochSnapshot) {
         const key = `${v.votePubkey}-${slot}`;
         // Only create if not already in DB and not already queued
@@ -844,52 +836,53 @@ export async function POST(req: NextRequest) {
             commission: v.commission
           });
         }
+      }
 
-        if (hasPrev) {
-          const from = Number(prevCommission);
-          const to = Number(v.commission);
-          const delta = to - from;
+      // Only create an event if commission actually changed
+      if (hasPrev && commissionChanged) {
+        const from = Number(prevCommission);
+        const to = Number(v.commission);
+        const delta = to - from;
 
-          let type = "INFO";
-          let shouldNotify = false;
-          
-          if (to >= 90 && delta > 0) {
-            type = "RUG";
-            shouldNotify = true;
-          } 
-          else if (delta >= 10 && to < 90) {
-            type = "CAUTION";
-            shouldNotify = true;
-          }
+        let type = "INFO";
+        let shouldNotify = false;
+        
+        if (to >= 90 && delta > 0) {
+          type = "RUG";
+          shouldNotify = true;
+        } 
+        else if (delta >= 10 && to < 90) {
+          type = "CAUTION";
+          shouldNotify = true;
+        }
 
-          eventsToCreate.push({
-            votePubkey: v.votePubkey, 
-            epoch, 
-            type, 
-            fromCommission: from, 
-            toCommission: to, 
-            delta
-          });
+        eventsToCreate.push({
+          votePubkey: v.votePubkey, 
+          epoch, 
+          type, 
+          fromCommission: from, 
+          toCommission: to, 
+          delta
+        });
 
-          const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
-          const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
-          const validatorName = chainName || v.votePubkey;
-          
-          if (type === "RUG") {
-            commissionRugs.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
-            const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
-            await sendDiscord(msg);
-            const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
-            await postToTwitter(twitterMsg);
-          } else if (type === "CAUTION") {
-            commissionCautions.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
-            const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
-            await sendDiscord(msg);
-            const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
-            await postToTwitter(twitterMsg);
-          } else if (type === "INFO") {
-            commissionInfos.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
-          }
+        const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
+        const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
+        const validatorName = chainName || v.votePubkey;
+        
+        if (type === "RUG") {
+          commissionRugs.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
+          const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+          await sendDiscord(msg);
+          const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
+          await postToTwitter(twitterMsg);
+        } else if (type === "CAUTION") {
+          commissionCautions.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
+          const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+          await sendDiscord(msg);
+          const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
+          await postToTwitter(twitterMsg);
+        } else if (type === "INFO") {
+          commissionInfos.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
         }
       }
       
@@ -1108,11 +1101,11 @@ export async function POST(req: NextRequest) {
       await sql`
         UPDATE validators SET
           identity_pubkey = ${validator.identityPubkey},
-          name = COALESCE(${validator.name || null}, name),
-          icon_url = COALESCE(${validator.iconUrl || null}, icon_url),
-          website = COALESCE(${validator.website || null}, website),
-          description = COALESCE(${validator.description || null}, description),
-          version = COALESCE(${validator.version || null}, version),
+          name = ${validator.name},
+          icon_url = ${validator.iconUrl},
+          website = ${validator.website},
+          description = ${validator.description},
+          version = ${validator.version},
           commission = ${validator.commission},
           active_stake = ${validator.activeStake},
           activating_stake = ${validator.activatingStake},

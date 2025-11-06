@@ -82,9 +82,9 @@ export async function upsertValidator(
     VALUES (${votePubkey}, ${identityPubkey || null}, ${name || null}, ${iconUrl || null})
     ON CONFLICT (vote_pubkey) 
     DO UPDATE SET
-      identity_pubkey = COALESCE(EXCLUDED.identity_pubkey, validators.identity_pubkey),
-      name = COALESCE(EXCLUDED.name, validators.name),
-      icon_url = COALESCE(EXCLUDED.icon_url, validators.icon_url),
+      identity_pubkey = EXCLUDED.identity_pubkey,
+      name = EXCLUDED.name,
+      icon_url = EXCLUDED.icon_url,
       updated_at = NOW()
     RETURNING *
   `
