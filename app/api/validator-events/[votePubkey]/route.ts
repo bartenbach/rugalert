@@ -1,4 +1,4 @@
-import { sql } from '@/lib/db-neon'
+import { getFreshSql } from '@/lib/db-direct'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -8,6 +8,8 @@ export async function GET(
   { params }: { params: { votePubkey: string } }
 ) {
   try {
+    // Get a FRESH SQL client for this request (no pooler caching)
+    const sql = getFreshSql()
     const votePubkey = params.votePubkey
     
     // Fetch validator info separately to avoid JOIN multiplication bug
