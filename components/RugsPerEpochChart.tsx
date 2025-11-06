@@ -23,6 +23,10 @@ interface ApiResponse {
     totalCommissionEvents: number;
     totalMevEvents: number;
     validatorEpochCounts?: Record<string, number>;
+    // Global stats (all time)
+    globalTotalEpochsTracked?: number;
+    globalPeakRugs?: number;
+    globalAvgPerEpoch?: number;
   };
 }
 
@@ -52,6 +56,13 @@ export default function RugsPerEpochChart() {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [page, setPage] = useState(0); // 0 = most recent 10 epochs, 1 = next 10, etc.
   const epochsPerPage = 10;
+  
+  // Global stats (all time)
+  const [globalStats, setGlobalStats] = useState<{
+    totalEpochsTracked: number;
+    peakRugs: number;
+    avgPerEpoch: number;
+  }>({ totalEpochsTracked: 0, peakRugs: 0, avgPerEpoch: 0 });
 
   useEffect(() => {
     async function load() {
@@ -64,6 +75,15 @@ export default function RugsPerEpochChart() {
         setData(json.data || []);
         setRepeatOffenders(json.meta?.repeatOffenders || 0);
         setValidatorEpochCounts(json.meta?.validatorEpochCounts || {});
+        
+        // Set global stats (only from meta, doesn't change with pagination)
+        if (json.meta) {
+          setGlobalStats({
+            totalEpochsTracked: json.meta.globalTotalEpochsTracked || 0,
+            peakRugs: json.meta.globalPeakRugs || 0,
+            avgPerEpoch: json.meta.globalAvgPerEpoch || 0,
+          });
+        }
       } catch (error) {
         console.error("Failed to load rugs per epoch:", error);
       } finally {
@@ -121,42 +141,57 @@ export default function RugsPerEpochChart() {
     );
   }
 
-  const maxCount = Math.max(...data.map((d) => d.uniqueValidators));
-  const totalUniqueValidators = data.reduce((sum, d) => sum + d.uniqueValidators, 0);
-
   return (
     <div className="glass rounded-2xl p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-2">
-            🚨 Rugs per Epoch
-          </h2>
-          {/* Legend */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-gradient-to-r from-red-500 to-red-600"></div>
-              <span className="text-xs text-gray-400">Inflation Commission</span>
+      {/* Global Stats Section */}
+      <div className="mb-8 pb-6 border-b border-white/10">
+        <h2 className="text-2xl font-bold text-white mb-4">
+          🚨 Rugs per Epoch
+        </h2>
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-3xl font-bold text-white">{globalStats.totalEpochsTracked}</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wide">
+              Epochs Tracked
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-500 to-purple-600"></div>
-              <span className="text-xs text-gray-400">MEV Commission</span>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-red-400">{globalStats.peakRugs}</div>
+            <div className="text-xs text-gray-400 uppercase tracking-wide">
+              Peak Unique Rugs
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-gradient-to-r from-orange-500 to-orange-600"></div>
-              <span className="text-xs text-gray-400">Both</span>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-orange-400">
+              {globalStats.avgPerEpoch}
+            </div>
+            <div className="text-xs text-gray-400 uppercase tracking-wide">
+              Avg per Epoch
             </div>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-3xl font-bold text-red-400">{totalUniqueValidators}</div>
-          <div className="text-xs text-gray-400 uppercase tracking-wide">
-            Total Unique Validators
+        {repeatOffenders > 0 && (
+          <div className="mt-4 text-center">
+            <p className="text-sm text-gray-400">
+              ⚠️ {repeatOffenders} validators rugged in multiple epochs (repeat offenders)
+            </p>
           </div>
-          {repeatOffenders > 0 && (
-            <div className="text-xs text-orange-400 mt-1 font-semibold">
-              {repeatOffenders} repeat offenders
-            </div>
-          )}
+        )}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded bg-gradient-to-r from-red-500 to-red-600"></div>
+          <span className="text-xs text-gray-400">Inflation Commission</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-500 to-purple-600"></div>
+          <span className="text-xs text-gray-400">MEV Commission</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded bg-gradient-to-r from-orange-500 to-orange-600"></div>
+          <span className="text-xs text-gray-400">Both</span>
         </div>
       </div>
 
@@ -388,39 +423,6 @@ export default function RugsPerEpochChart() {
             )}
           </div>
         ))}
-      </div>
-
-      {/* Stats Summary */}
-      <div className="mt-6 pt-6 border-t border-white/10">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold text-white">{data.length}</div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide">
-              Epochs Tracked
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-red-400">{maxCount}</div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide">
-              Peak Unique Rugs
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-orange-400">
-              {(totalUniqueValidators / data.length).toFixed(1)}
-            </div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide">
-              Avg per Epoch
-            </div>
-          </div>
-        </div>
-        {repeatOffenders > 0 && (
-          <div className="mt-4 text-center">
-            <p className="text-sm text-gray-400">
-              ⚠️ {repeatOffenders} validators rugged in multiple epochs (repeat offenders)
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Pagination Controls */}

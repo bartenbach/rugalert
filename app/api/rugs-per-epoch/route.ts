@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => a.epoch - b.epoch)
 
-    // Count total UNIQUE validators across all epochs
+    // Count total UNIQUE validators across all epochs (for this page)
     const allUniqueValidators = new Set<string>()
     const validatorEpochCount = new Map<string, number>()
     
@@ -131,9 +131,48 @@ export async function GET(req: NextRequest) {
     const totalCommissionEvents = data.reduce((sum, d) => sum + d.commissionEvents, 0)
     const totalMevEvents = data.reduce((sum, d) => sum + d.mevEvents, 0)
 
+    // GLOBAL STATS (all time, not just this page)
+    // Get the earliest epoch with rugs
+    const earliestCommissionEpoch = await sql`SELECT MIN(epoch) as epoch FROM events WHERE type = 'RUG'`
+    const earliestMevEpoch = await sql`SELECT MIN(epoch) as epoch FROM mev_events WHERE type = 'RUG'`
+    const earliestEpoch = Math.min(
+      earliestCommissionEpoch[0]?.epoch || latestEpoch,
+      earliestMevEpoch[0]?.epoch || latestEpoch
+    )
+    const totalEpochsTracked = Number(latestEpoch) - Number(earliestEpoch) + 1
+    
+    // Get peak rugs in any single epoch (all time) by querying ALL epochs
+    const allCommissionRugs = await sql`SELECT epoch, COUNT(DISTINCT vote_pubkey) as count FROM events WHERE type = 'RUG' GROUP BY epoch`
+    const allMevRugs = await sql`SELECT epoch, COUNT(DISTINCT vote_pubkey) as count FROM mev_events WHERE type = 'RUG' GROUP BY epoch`
+    
+    // Combine and find max per epoch
+    const rugCountsByEpoch = new Map<number, Set<string>>()
+    for (const row of allCommissionRugs) {
+      if (!rugCountsByEpoch.has(Number(row.epoch))) rugCountsByEpoch.set(Number(row.epoch), new Set())
+    }
+    for (const row of allMevRugs) {
+      if (!rugCountsByEpoch.has(Number(row.epoch))) rugCountsByEpoch.set(Number(row.epoch), new Set())
+    }
+    
+    // Query all rugs to count unique validators per epoch
+    const allCommissionRugsList = await sql`SELECT epoch, vote_pubkey FROM events WHERE type = 'RUG'`
+    const allMevRugsList = await sql`SELECT epoch, vote_pubkey FROM mev_events WHERE type = 'RUG'`
+    
+    for (const rug of allCommissionRugsList) {
+      rugCountsByEpoch.get(Number(rug.epoch))?.add(String(rug.vote_pubkey))
+    }
+    for (const rug of allMevRugsList) {
+      rugCountsByEpoch.get(Number(rug.epoch))?.add(String(rug.vote_pubkey))
+    }
+    
+    const peakRugsInAnyEpoch = rugCountsByEpoch.size > 0 ? Math.max(...Array.from(rugCountsByEpoch.values()).map(s => s.size)) : 0
+    const totalUniqueRuggedValidators = new Set([...allCommissionRugsList.map(r => String(r.vote_pubkey)), ...allMevRugsList.map(r => String(r.vote_pubkey))]).size
+    const avgRugsPerEpoch = totalEpochsTracked > 0 ? (totalUniqueRuggedValidators / totalEpochsTracked) : 0
+
     console.log(`📊 ${data.length} epochs with ${allUniqueValidators.size} unique rugged validators total`)
     console.log(`📊 ${repeatOffenders} validators rugged in multiple epochs (repeat offenders)`)
     console.log(`📊 ${totalCommissionEvents} commission events, ${totalMevEvents} MEV events`)
+    console.log(`📊 GLOBAL: ${totalEpochsTracked} total epochs tracked, peak: ${peakRugsInAnyEpoch}, avg: ${avgRugsPerEpoch.toFixed(1)}`)
 
     return NextResponse.json({ 
       data,
@@ -144,7 +183,11 @@ export async function GET(req: NextRequest) {
         includesMevRugs: true,
         totalCommissionEvents,
         totalMevEvents,
-        validatorEpochCounts: Object.fromEntries(validatorEpochCount) // Map of validator -> epoch count
+        validatorEpochCounts: Object.fromEntries(validatorEpochCount), // Map of validator -> epoch count
+        // Global stats (all time)
+        globalTotalEpochsTracked: totalEpochsTracked,
+        globalPeakRugs: peakRugsInAnyEpoch,
+        globalAvgPerEpoch: Number(avgRugsPerEpoch.toFixed(1)),
       }
     }, {
       headers: {
