@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { sql } from '../../../lib/db-neon'
+import { sql } from '../../../lib/db-direct' // Use direct connection to avoid pooler lag
 
 // Force dynamic rendering (query params)
 export const dynamic = 'force-dynamic'
