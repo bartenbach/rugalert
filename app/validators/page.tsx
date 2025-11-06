@@ -1,5 +1,5 @@
 "use client";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Suspense,
   useCallback,
@@ -53,6 +53,7 @@ type SortDirection = "asc" | "desc";
 
 function ValidatorsPageContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [allValidators, setAllValidators] = useState<Validator[]>([]); // All validators loaded once
   const [displayedValidators, setDisplayedValidators] = useState<Validator[]>(
     []
@@ -76,14 +77,17 @@ function ValidatorsPageContent() {
   //   ?mev_commission_min=0    - Minimum MEV commission
   //   ?mev_commission_max=5    - Maximum MEV commission
   //   ?uptime_min=99           - Minimum uptime percentage (e.g., 99%)
+  //   ?delinquent=true         - Show only delinquent validators
   // Example: /validators?commission=5 (shows all validators with exactly 5% commission)
   // Example: /validators?commission_max=5 (shows all validators with <= 5% commission)
+  // Example: /validators?delinquent=true (shows only delinquent validators)
   const commission = searchParams.get("commission");
   const commissionMin = searchParams.get("commission_min");
   const commissionMax = searchParams.get("commission_max");
   const mevCommissionMin = searchParams.get("mev_commission_min");
   const mevCommissionMax = searchParams.get("mev_commission_max");
   const uptimeMin = searchParams.get("uptime_min");
+  const delinquentFilter = searchParams.get("delinquent");
 
   // Initial load - fetch ALL validators at once
   const loadValidators = async () => {
@@ -172,6 +176,10 @@ function ValidatorsPageContent() {
       filtered = filtered.filter((v) => (v.uptimePercent ?? 0) >= minValue);
     }
 
+    if (delinquentFilter === "true") {
+      filtered = filtered.filter((v) => v.delinquent === true);
+    }
+
     // Apply sorting
     const sorted = [...filtered].sort((a, b) => {
       let aVal: any;
@@ -233,6 +241,7 @@ function ValidatorsPageContent() {
     mevCommissionMin,
     mevCommissionMax,
     uptimeMin,
+    delinquentFilter,
   ]);
 
   // Update displayed validators when displayCount or filteredValidators changes
@@ -309,9 +318,25 @@ function ValidatorsPageContent() {
                   </div>
                 </div>
                 {networkStats.delinquentValidators > 0 && (
-                  <div className="text-xs text-gray-400">
+                  <button
+                    onClick={() => {
+                      if (delinquentFilter === "true") {
+                        // Clear the filter
+                        router.push("/validators");
+                      } else {
+                        // Apply the filter
+                        router.push("/validators?delinquent=true");
+                      }
+                    }}
+                    className={`text-xs transition-colors ${
+                      delinquentFilter === "true" 
+                        ? "text-orange-400 font-semibold" 
+                        : "text-gray-400 hover:text-gray-300"
+                    } cursor-pointer underline decoration-dotted underline-offset-2 hover:decoration-solid`}
+                    title={delinquentFilter === "true" ? "Clear filter" : "Filter to delinquent validators"}
+                  >
                     {networkStats.delinquentValidators.toLocaleString()} delinquent
-                  </div>
+                  </button>
                 )}
               </div>
             </div>
