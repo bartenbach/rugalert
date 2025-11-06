@@ -17,8 +17,11 @@ export default function EpochProgress() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchEpochInfo = async () => {
+  const fetchEpochInfo = async (isInitialLoad = false) => {
     try {
+      if (isInitialLoad) {
+        setIsLoading(true);
+      }
       const response = await fetch("/api/epoch-info", {
         cache: "no-store",
         headers: {
@@ -38,18 +41,20 @@ export default function EpochProgress() {
       console.error("Error fetching epoch info:", err);
       setError(err.message || "Failed to load epoch info");
     } finally {
-      setIsLoading(false);
+      if (isInitialLoad) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchEpochInfo();
-    // Refresh every 10 seconds to stay accurate
-    const interval = setInterval(fetchEpochInfo, 10000);
+    fetchEpochInfo(true); // Initial load shows loading state
+    // Refresh every 10 seconds to stay accurate (without showing loading state)
+    const interval = setInterval(() => fetchEpochInfo(false), 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Update slot index every 400ms to estimate current slot
+  // Update slot index every 2 seconds to estimate current slot (reduced frequency to prevent flashing)
   useEffect(() => {
     if (!epochInfo) return;
 
@@ -63,8 +68,8 @@ export default function EpochProgress() {
       setCurrentSlotIndex(estimatedSlot);
     };
 
-    // Update every 400ms (one slot)
-    const interval = setInterval(updateSlot, 400);
+    // Update every 2 seconds (5 slots) - reduces DOM updates significantly
+    const interval = setInterval(updateSlot, 2000);
     return () => clearInterval(interval);
   }, [epochInfo, baseSlotIndex, fetchTime]);
 
@@ -112,22 +117,22 @@ export default function EpochProgress() {
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-xs font-semibold text-gray-300 whitespace-nowrap">
+        <span className="text-xs font-semibold text-gray-300 whitespace-nowrap font-mono">
           Epoch {epochInfo.epoch}
         </span>
         <div className="relative flex-1 h-1.5 bg-gray-800/50 rounded-full overflow-hidden border border-white/10">
           <div
-            className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-1000 ease-out"
+            className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-2000 ease-linear will-change-transform"
             style={{ width: `${progressPercentage}%` }}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
           </div>
         </div>
-        <span className="text-xs font-medium text-orange-400 whitespace-nowrap">
+        <span className="text-xs font-medium text-orange-400 whitespace-nowrap font-mono tabular-nums">
           {progressPercentage.toFixed(1)}%
         </span>
       </div>
-      <div className="text-[10px] text-gray-500 text-center">
+      <div className="text-[10px] text-gray-500 text-center font-mono tabular-nums">
         {currentSlotIndex.toLocaleString()} /{" "}
         {epochInfo.slotsInEpoch.toLocaleString()} • {timeRemaining}
       </div>
