@@ -244,6 +244,18 @@ function ValidatorsPageContent() {
     delinquentFilter,
   ]);
 
+  // Check if any filters are active
+  const hasActiveFilters = !!(
+    searchQuery ||
+    delinquentFilter ||
+    commission ||
+    commissionMin ||
+    commissionMax ||
+    mevCommissionMin ||
+    mevCommissionMax ||
+    uptimeMin
+  );
+
   // Update displayed validators when displayCount or filteredValidators changes
   useEffect(() => {
     setDisplayedValidators(filteredValidators.slice(0, displayCount));
@@ -595,7 +607,9 @@ function ValidatorsPageContent() {
                 {displayedValidators.map((validator, index) => {
                   // Check if we need to insert Nakamoto coefficient divider
                   // Show AFTER the validator that crosses 33.33% threshold
+                  // Only show if no filters are active (needs full unfiltered list)
                   const showNakamotoDivider =
+                    !hasActiveFilters &&
                     validator.cumulativeStakePercent > 33.33 &&
                     (index === 0 ||
                       displayedValidators[index - 1].cumulativeStakePercent <=
@@ -832,7 +846,9 @@ function ValidatorsPageContent() {
           <>
             {displayedValidators.map((validator, index) => {
               // Show AFTER the validator that crosses 33.33% threshold
+              // Only show if no filters are active (needs full unfiltered list)
               const showNakamotoDivider =
+                !hasActiveFilters &&
                 validator.cumulativeStakePercent > 33.33 &&
                 (index === 0 ||
                   displayedValidators[index - 1].cumulativeStakePercent <=
