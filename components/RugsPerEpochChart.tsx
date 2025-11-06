@@ -50,14 +50,14 @@ export default function RugsPerEpochChart() {
   const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
   const [epochEvents, setEpochEvents] = useState<RugEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [page, setPage] = useState(0); // 0 = most recent 10 epochs, 1 = next 10, etc.
+  const epochsPerPage = 10;
 
   useEffect(() => {
     async function load() {
       try {
-        // Get epochs from URL params (default 10, same as dashboard)
-        const urlParams = new URLSearchParams(window.location.search);
-        const epochs = urlParams.get("epochs") || "10";
-        const res = await fetch(`/api/rugs-per-epoch?epochs=${epochs}`, {
+        setLoading(true);
+        const res = await fetch(`/api/rugs-per-epoch?epochs=${epochsPerPage}&offset=${page * epochsPerPage}`, {
           cache: "no-store"
         });
         const json: ApiResponse = await res.json();
@@ -72,10 +72,10 @@ export default function RugsPerEpochChart() {
     }
     load();
 
-    // Reload when window location changes (epoch filter changes)
-    const interval = setInterval(load, 30000); // Also refresh every 30s
+    // Reload every 30s
+    const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [page]);
 
   async function loadEpochEvents(epoch: number) {
     if (selectedEpoch === epoch) {
@@ -128,9 +128,31 @@ export default function RugsPerEpochChart() {
     <div className="glass rounded-2xl p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-white mb-2">
-            🚨 Rugs per Epoch
-          </h2>
+          <div className="flex items-center gap-4 mb-2">
+            <h2 className="text-2xl font-bold text-white">
+              🚨 Rugs per Epoch
+            </h2>
+            {/* Pagination Controls */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Newer
+              </button>
+              <span className="text-sm text-gray-400">
+                {page === 0 ? 'Most Recent' : `${page * epochsPerPage + 1}-${(page + 1) * epochsPerPage} epochs ago`}
+              </span>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={data.length < epochsPerPage}
+                className="px-3 py-1 rounded bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                Older →
+              </button>
+            </div>
+          </div>
           {/* Legend */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">

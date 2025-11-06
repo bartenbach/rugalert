@@ -7,6 +7,7 @@ export const revalidate = 0
 export async function GET(req: NextRequest) {
   try {
     const epochs = Number(new URL(req.url).searchParams.get('epochs') ?? '10')
+    const offset = Number(new URL(req.url).searchParams.get('offset') ?? '0')
     
     // Get latest epoch to determine range
     const latestSnapshotRow = await sql`SELECT epoch FROM snapshots ORDER BY epoch DESC LIMIT 1`
@@ -21,24 +22,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: [] })
     }
     
-    // epochs=1 means "show current epoch only", so minEpoch = latestEpoch
-    // epochs=2 means "show current + 1 previous", so minEpoch = latestEpoch - 1
-    const minEpoch = Number(latestEpoch) - epochs + 1
+    // Apply offset: offset=0 shows most recent, offset=10 shows 10 epochs back
+    const adjustedLatest = Number(latestEpoch) - offset
+    const minEpoch = adjustedLatest - epochs + 1
     
-    console.log(`📊 Querying rugs: latestEpoch=${latestEpoch}, minEpoch=${minEpoch}, range=${epochs}`)
+    console.log(`📊 Querying rugs: latestEpoch=${latestEpoch}, adjustedLatest=${adjustedLatest}, minEpoch=${minEpoch}, range=${epochs}, offset=${offset}`)
     
-    // Fetch BOTH commission RUGs and MEV RUGs
+    // Fetch BOTH commission RUGs and MEV RUGs within the paginated range
     const commissionRugs = await sql`
       SELECT vote_pubkey, epoch, type, created_at
       FROM events 
-      WHERE type = 'RUG' AND epoch >= ${minEpoch}
+      WHERE type = 'RUG' AND epoch >= ${minEpoch} AND epoch <= ${adjustedLatest}
       ORDER BY created_at DESC
     `
     
     const mevRugs = await sql`
       SELECT vote_pubkey, epoch, type, created_at
       FROM mev_events 
-      WHERE type = 'RUG' AND epoch >= ${minEpoch}
+      WHERE type = 'RUG' AND epoch >= ${minEpoch} AND epoch <= ${adjustedLatest}
       ORDER BY created_at DESC
     `
 
