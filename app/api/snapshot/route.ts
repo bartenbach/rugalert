@@ -1159,7 +1159,6 @@ export async function POST(req: NextRequest) {
           // Send validator-specific emails for MEV disabled (INFO event)
           const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
           const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
-          const chainName = validatorInfoMap.get(v.votePubkey)?.name;
           const validatorName = chainName || v.votePubkey;
           const fromStr = `${prevMevCommission}%`;
           const toStr = 'MEV Disabled';
