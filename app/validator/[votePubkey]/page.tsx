@@ -3,6 +3,7 @@ import CommissionChart from "@/components/CommissionChart";
 import StakeChart from "@/components/StakeChart";
 import StakeDistributionPie from "@/components/StakeDistributionPie";
 import UptimeChart from "@/components/UptimeChart";
+import ValidatorSubscribe from "@/components/ValidatorSubscribe";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -1527,6 +1528,12 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               </div>
             )}
           </div>
+
+          {/* Validator-Specific Alerts Subscription */}
+          <ValidatorSubscribe
+            votePubkey={params.votePubkey}
+            validatorName={meta?.name}
+          />
         </>
       )}
     </div>
