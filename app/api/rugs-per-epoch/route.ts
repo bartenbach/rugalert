@@ -127,6 +127,62 @@ export async function GET(req: NextRequest) {
     // Count how many validators rugged in multiple epochs (actual repeat offenders)
     const repeatOffenders = Array.from(validatorEpochCount.values()).filter(count => count > 1).length
     
+    // GLOBAL REPEAT OFFENDER COUNTS (across ALL epochs, not just this page)
+    // This fixes the bug where the repeat offender badge only showed page-specific counts
+    const globalCommissionRugCounts = await sql`
+      SELECT vote_pubkey, COUNT(DISTINCT epoch) as rug_count
+      FROM events 
+      WHERE type = 'RUG'
+      GROUP BY vote_pubkey
+    `
+    
+    const globalMevRugCounts = await sql`
+      SELECT vote_pubkey, COUNT(DISTINCT epoch) as rug_count
+      FROM mev_events 
+      WHERE type = 'RUG'
+      GROUP BY vote_pubkey
+    `
+    
+    // Combine both - a validator's total rug count is the number of DISTINCT epochs where they rugged
+    // (even if they rugged both commission and MEV in the same epoch, it counts as 1)
+    const globalValidatorRugEpochs = new Map<string, Set<number>>()
+    
+    for (const row of globalCommissionRugCounts) {
+      const votePubkey = String(row.vote_pubkey)
+      if (!globalValidatorRugEpochs.has(votePubkey)) {
+        globalValidatorRugEpochs.set(votePubkey, new Set())
+      }
+      // Need to get the actual epochs for this validator
+    }
+    
+    // Better approach: get ALL rug epochs per validator
+    const allRugEpochsByValidator = await sql`
+      SELECT vote_pubkey, epoch FROM (
+        SELECT vote_pubkey, epoch FROM events WHERE type = 'RUG'
+        UNION
+        SELECT vote_pubkey, epoch FROM mev_events WHERE type = 'RUG'
+      ) AS all_rugs
+      GROUP BY vote_pubkey, epoch
+    `
+    
+    // Build map of validator -> set of epochs they rugged in
+    for (const row of allRugEpochsByValidator) {
+      const votePubkey = String(row.vote_pubkey)
+      const epoch = Number(row.epoch)
+      if (!globalValidatorRugEpochs.has(votePubkey)) {
+        globalValidatorRugEpochs.set(votePubkey, new Set())
+      }
+      globalValidatorRugEpochs.get(votePubkey)!.add(epoch)
+    }
+    
+    // Convert to simple map of validator -> total rug count (number of distinct epochs)
+    const globalValidatorRugCounts = new Map<string, number>()
+    for (const [validator, epochs] of globalValidatorRugEpochs.entries()) {
+      globalValidatorRugCounts.set(validator, epochs.size)
+    }
+    
+    console.log(`📊 Global rug counts calculated for ${globalValidatorRugCounts.size} validators`)
+    
     // Calculate totals for summary
     const totalCommissionEvents = data.reduce((sum, d) => sum + d.commissionEvents, 0)
     const totalMevEvents = data.reduce((sum, d) => sum + d.mevEvents, 0)
@@ -183,7 +239,8 @@ export async function GET(req: NextRequest) {
         includesMevRugs: true,
         totalCommissionEvents,
         totalMevEvents,
-        validatorEpochCounts: Object.fromEntries(validatorEpochCount), // Map of validator -> epoch count
+        validatorEpochCounts: Object.fromEntries(validatorEpochCount), // Map of validator -> epoch count (PAGE-SPECIFIC - deprecated)
+        globalValidatorRugCounts: Object.fromEntries(globalValidatorRugCounts), // Map of validator -> TOTAL rug count across ALL epochs
         // Global stats (all time)
         globalTotalEpochsTracked: totalEpochsTracked,
         globalPeakRugs: peakRugsInAnyEpoch,

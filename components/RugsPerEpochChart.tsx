@@ -22,7 +22,8 @@ interface ApiResponse {
     includesMevRugs: boolean;
     totalCommissionEvents: number;
     totalMevEvents: number;
-    validatorEpochCounts?: Record<string, number>;
+    validatorEpochCounts?: Record<string, number>; // Deprecated: page-specific counts
+    globalValidatorRugCounts?: Record<string, number>; // Global counts across ALL epochs
     // Global stats (all time)
     globalTotalEpochsTracked?: number;
     globalPeakRugs?: number;
@@ -50,6 +51,7 @@ export default function RugsPerEpochChart() {
   const [data, setData] = useState<EpochData[]>([]);
   const [repeatOffenders, setRepeatOffenders] = useState<number>(0);
   const [validatorEpochCounts, setValidatorEpochCounts] = useState<Record<string, number>>({});
+  const [globalValidatorRugCounts, setGlobalValidatorRugCounts] = useState<Record<string, number>>({});
   const [initialLoading, setInitialLoading] = useState(true); // Only true on first load
   const [pageLoading, setPageLoading] = useState(false); // True when changing pages
   const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
@@ -83,6 +85,7 @@ export default function RugsPerEpochChart() {
         setData(json.data || []);
         setRepeatOffenders(json.meta?.repeatOffenders || 0);
         setValidatorEpochCounts(json.meta?.validatorEpochCounts || {});
+        setGlobalValidatorRugCounts(json.meta?.globalValidatorRugCounts || {});
         
         // Set global stats (only from meta, doesn't change with pagination)
         if (json.meta) {
@@ -347,7 +350,9 @@ export default function RugsPerEpochChart() {
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {epochEvents.map((event) => {
-                          const isRepeatOffender = (validatorEpochCounts[event.vote_pubkey] || 0) > 1;
+                          // Use GLOBAL rug count, not page-specific count
+                          const globalRugCount = globalValidatorRugCounts[event.vote_pubkey] || 0;
+                          const isRepeatOffender = globalRugCount > 1;
                           return (
                           <tr
                             key={event.id}
@@ -392,9 +397,9 @@ export default function RugsPerEpochChart() {
                                     {isRepeatOffender && (
                                       <span 
                                         className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-semibold border border-orange-500/30"
-                                        title={`Rugged in ${validatorEpochCounts[event.vote_pubkey]} epochs`}
+                                        title={`Rugged in ${globalRugCount} total epochs (across all time)`}
                                       >
-                                        ⚠️ {validatorEpochCounts[event.vote_pubkey]}x
+                                        ⚠️ {globalRugCount}x
                                       </span>
                                     )}
                                   </div>

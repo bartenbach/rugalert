@@ -220,7 +220,7 @@ export default function ValidatorSubscribe({
                 Get Delinquency Alerts
               </div>
               <div className="text-gray-400 text-xs mt-0.5">
-                Notified when validator goes offline/delinquent
+                Notified when validator becomes delinquent (&gt;128 slots behind)
               </div>
             </label>
           </div>

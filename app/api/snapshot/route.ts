@@ -7,6 +7,7 @@ import { sql } from "../../../lib/db-neon";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
 import { getStakerLabel, type StakeAccountBreakdown } from "../../../lib/stakers";
 import { formatTwitterMevRug, formatTwitterRug, postToTwitter } from "../../../lib/twitter";
+import { generateDelinquencyEmail, generateCommissionChangeEmail } from "../../../lib/email-templates";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for Vercel Pro (max allowed)
@@ -124,13 +125,21 @@ async function sendEmail(subject: string, text: string, eventType: "RUG" | "CAUT
 async function sendValidatorEmail(
   votePubkey: string, 
   validatorName: string, 
-  subject: string, 
-  text: string, 
+  emailData: { subject: string; html: string },
   alertType: "commission" | "delinquency"
 ) {
   try {
     if (!process.env.RESEND_API_KEY || !process.env.ALERTS_FROM) {
       console.log("⚠️ Validator email skipped: Missing RESEND_API_KEY or ALERTS_FROM");
+      return;
+    }
+    
+    // Check if validator_subscriptions table exists (safeguard for new deployments)
+    try {
+      await sql`SELECT 1 FROM validator_subscriptions LIMIT 1`;
+    } catch (tableError) {
+      console.log("⚠️ validator_subscriptions table does not exist yet - skipping validator emails");
+      console.log("   Run: psql $DATABASE_URL -f create_validator_subscriptions.sql");
       return;
     }
     
@@ -182,8 +191,8 @@ async function sendValidatorEmail(
           body: JSON.stringify({ 
             from: process.env.ALERTS_FROM, 
             to: [email],
-            subject, 
-            text: `${text}\n\n---\nYou're receiving this because you subscribed to alerts for ${validatorName}.\nTo manage your subscriptions, visit:\n${process.env.BASE_URL || "https://rugalert.pumpkinspool.com"}/validator/${votePubkey}`
+            subject: emailData.subject, 
+            html: emailData.html
           }),
         });
         
@@ -433,11 +442,15 @@ export async function POST(req: NextRequest) {
             stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
             
             // Track stake distribution by staker (for pie chart)
-            if (!stakeDistribution.has(voter)) {
-              stakeDistribution.set(voter, new Map());
+            // ONLY include ACTIVE stake (not activating, deactivating, or deactivated)
+            const isFullyActive = activationEpoch < epoch && deactivationEpoch > epoch;
+            if (isFullyActive) {
+              if (!stakeDistribution.has(voter)) {
+                stakeDistribution.set(voter, new Map());
+              }
+              const voterDist = stakeDistribution.get(voter)!;
+              voterDist.set(staker, (voterDist.get(staker) || 0) + stake);
             }
-            const voterDist = stakeDistribution.get(voter)!;
-            voterDist.set(staker, (voterDist.get(staker) || 0) + stake);
             
             if (!stakeByVoter.has(voter)) {
               stakeByVoter.set(voter, { 
@@ -971,14 +984,11 @@ export async function POST(req: NextRequest) {
           const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
           await postToTwitter(twitterMsg);
           
-          // Send validator-specific emails
-          await sendValidatorEmail(
-            v.votePubkey,
-            validatorName,
-            `🚨 RUG ALERT: ${validatorName} Raised Commission`,
-            `🚨 COMMISSION RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nThis validator has significantly increased their commission rate.\n\nView full details: ${validatorUrl}`,
-            "commission"
+          // Send validator-specific emails with beautiful HTML template
+          const emailData = generateCommissionChangeEmail(
+            validatorName, v.votePubkey, from, to, delta, epoch, "RUG", "INFLATION"
           );
+          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
         } else if (type === "CAUTION") {
           commissionCautions.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
           const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
@@ -986,14 +996,11 @@ export async function POST(req: NextRequest) {
           const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
           await postToTwitter(twitterMsg);
           
-          // Send validator-specific emails
-          await sendValidatorEmail(
-            v.votePubkey,
-            validatorName,
-            `⚠️ Commission Increase: ${validatorName}`,
-            `⚠️ COMMISSION INCREASE DETECTED\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nThis validator has increased their commission rate.\n\nView full details: ${validatorUrl}`,
-            "commission"
+          // Send validator-specific emails with beautiful HTML template
+          const emailData = generateCommissionChangeEmail(
+            validatorName, v.votePubkey, from, to, delta, epoch, "CAUTION", "INFLATION"
           );
+          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
         } else if (type === "INFO") {
           commissionInfos.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
         }
@@ -1071,14 +1078,11 @@ export async function POST(req: NextRequest) {
                 await postToTwitter(twitterMsg);
               }
               
-              // Send validator-specific emails
-              await sendValidatorEmail(
-                v.votePubkey,
-                validatorName,
-                `🚨 MEV RUG ALERT: ${validatorName} Raised MEV Commission`,
-                `🚨 MEV COMMISSION RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr}\nEpoch: ${epoch}\n\nThis validator has significantly increased their MEV commission rate.\n\nView full details: ${validatorUrl}`,
-                "commission"
+              // Send validator-specific emails with beautiful HTML template
+              const emailData = generateCommissionChangeEmail(
+                validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "RUG", "MEV"
               );
+              await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
             } else if (eventType === "CAUTION") {
               const fromVal = prevMevCommission ?? 0;
               const toVal = currentMevCommission ?? 0;
@@ -1086,14 +1090,11 @@ export async function POST(req: NextRequest) {
               const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
               const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
               
-              // Send validator-specific emails
-              await sendValidatorEmail(
-                v.votePubkey,
-                validatorName,
-                `⚠️ MEV Commission Increase: ${validatorName}`,
-                `⚠️ MEV COMMISSION INCREASE DETECTED\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr}\nEpoch: ${epoch}\n\nThis validator has increased their MEV commission rate.\n\nView full details: ${validatorUrl}`,
-                "commission"
+              // Send validator-specific emails with beautiful HTML template
+              const emailData = generateCommissionChangeEmail(
+                validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "CAUTION", "MEV"
               );
+              await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
               const msg = `⚠️ CAUTION: MEV Commission Change Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr} (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
               await sendDiscord(msg);
               if (prevMevCommission !== null && currentMevCommission !== null) {
@@ -1237,7 +1238,13 @@ export async function POST(req: NextRequest) {
     `;
     
     const previousStateMap = new Map(
-      previousValidatorStates.map((v: any) => [v.vote_pubkey, { delinquent: v.delinquent, name: v.name }])
+      previousValidatorStates.map((v: any) => [
+        v.vote_pubkey, 
+        { 
+          delinquent: v.delinquent, 
+          name: v.name
+        }
+      ])
     );
     
     // Track validators that became delinquent
@@ -1245,6 +1252,9 @@ export async function POST(req: NextRequest) {
     
     for (const validator of validatorsToUpdate) {
       const previousState = previousStateMap.get(validator.votePubkey);
+      
+      // Only alert on transitions from non-delinquent to delinquent
+      // This ensures we only send ONE email per delinquency event
       if (previousState) {
         const wasDelinquent = previousState.delinquent === true;
         const isDelinquent = validator.delinquent === true;
@@ -1257,29 +1267,26 @@ export async function POST(req: NextRequest) {
             name: validatorName
           });
           
-          console.log(`🚨 DELINQUENCY ALERT: ${validatorName} (${validator.votePubkey}) went offline`);
+          console.log(`🚨 DELINQUENCY ALERT: ${validatorName} (${validator.votePubkey}) is now delinquent`);
           
-          // Send validator-specific delinquency emails
-          const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
-          const validatorUrl = `${baseUrl}/validator/${validator.votePubkey}`;
-          
+          // Send validator-specific delinquency emails with beautiful HTML template
+          const emailData = generateDelinquencyEmail(validatorName, validator.votePubkey, epoch);
           await sendValidatorEmail(
             validator.votePubkey,
             validatorName,
-            `🚨 OFFLINE ALERT: ${validatorName} is Delinquent`,
-            `🚨 VALIDATOR DELINQUENCY DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${validator.votePubkey}\nStatus: DELINQUENT (Offline)\nEpoch: ${epoch}\n\nThis validator is currently delinquent and not voting. This may indicate the validator is offline or experiencing issues.\n\nView full details: ${validatorUrl}`,
+            emailData,
             "delinquency"
           );
           
           // Also send Discord notification
-          const msg = `🚨 VALIDATOR OFFLINE!\n\nValidator: ${validatorName}\nVote Pubkey: ${validator.votePubkey}\nStatus: DELINQUENT\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+          const msg = `🚨 VALIDATOR DELINQUENT!\n\nValidator: ${validatorName}\nVote Pubkey: ${validator.votePubkey}\nStatus: DELINQUENT\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
           await sendDiscord(msg);
         }
       }
     }
     
     if (newlyDelinquentValidators.length > 0) {
-      console.log(`🚨 Detected ${newlyDelinquentValidators.length} validators that went offline`);
+      console.log(`🚨 Detected ${newlyDelinquentValidators.length} validators that became delinquent`);
       logProgress(`🚨 Detected ${newlyDelinquentValidators.length} delinquency alerts`);
     } else {
       console.log(`✅ No new delinquency issues detected`);
