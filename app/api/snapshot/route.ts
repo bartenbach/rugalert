@@ -1304,6 +1304,8 @@ export async function POST(req: NextRequest) {
           );
           
           // Also send Discord notification
+          const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
+          const validatorUrl = `${baseUrl}/validator/${validator.votePubkey}`;
           const msg = `🚨 VALIDATOR DELINQUENT!\n\nValidator: ${validatorName}\nVote Pubkey: ${validator.votePubkey}\nStatus: DELINQUENT\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
           await sendDiscord(msg);
         }
