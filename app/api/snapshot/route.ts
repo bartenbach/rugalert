@@ -1003,6 +1003,12 @@ export async function POST(req: NextRequest) {
           await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
         } else if (type === "INFO") {
           commissionInfos.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
+          
+          // Send validator-specific emails for ALL commission changes (including decreases)
+          const emailData = generateCommissionChangeEmail(
+            validatorName, v.votePubkey, from, to, delta, epoch, "INFO", "INFLATION"
+          );
+          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
         }
       }
       
@@ -1101,6 +1107,14 @@ export async function POST(req: NextRequest) {
                 const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
                 await postToTwitter(twitterMsg);
               }
+            } else if (eventType === "INFO") {
+              // Send validator-specific emails for ALL MEV commission changes (including decreases, MEV enabled/disabled)
+              const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
+              const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
+              const emailData = generateCommissionChangeEmail(
+                validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "INFO", "MEV"
+              );
+              await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
             }
           }
         }
@@ -1141,6 +1155,18 @@ export async function POST(req: NextRequest) {
           }
           
           console.log(`  📉 MEV disabled for ${v.votePubkey.substring(0, 8)}... (was ${prevMevCommission}%)`);
+          
+          // Send validator-specific emails for MEV disabled (INFO event)
+          const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
+          const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
+          const chainName = validatorInfoMap.get(v.votePubkey)?.name;
+          const validatorName = chainName || v.votePubkey;
+          const fromStr = `${prevMevCommission}%`;
+          const toStr = 'MEV Disabled';
+          const emailData = generateCommissionChangeEmail(
+            validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "INFO", "MEV"
+          );
+          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
         }
       }
       

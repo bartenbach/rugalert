@@ -212,18 +212,53 @@ export function generateCommissionChangeEmail(
   toCommission: number | string,
   delta: number,
   epoch: number,
-  eventType: "RUG" | "CAUTION",
+  eventType: "RUG" | "CAUTION" | "INFO",
   commissionType: "INFLATION" | "MEV"
 ): { subject: string; html: string } {
   const validatorUrl = `${BASE_URL}/validator/${votePubkey}`;
   const unsubscribeUrl = `${validatorUrl}#unsubscribe`;
   
   const isRug = eventType === "RUG";
-  const alertBadge = isRug ? "RUG DETECTED" : "COMMISSION INCREASE";
-  const alertColor = isRug ? "#dc2626" : "#f59e0b";
-  const commissionLabel = commissionType === "MEV" ? "MEV Commission" : "Inflation Commission";
+  const isCaution = eventType === "CAUTION";
+  const isDecrease = delta < 0;
   
-  const subject = `${isRug ? "🚨" : "⚠️"} ${eventType}: ${validatorName} Raised ${commissionLabel}`;
+  // Determine badge text, color, and emoji
+  let alertBadge = "COMMISSION CHANGE";
+  let alertColor = "#3b82f6"; // blue for INFO/decrease
+  let emoji = "ℹ️";
+  
+  if (isRug) {
+    alertBadge = "RUG DETECTED";
+    alertColor = "#dc2626"; // red
+    emoji = "🚨";
+  } else if (isCaution) {
+    alertBadge = "COMMISSION INCREASE";
+    alertColor = "#f59e0b"; // orange
+    emoji = "⚠️";
+  } else if (isDecrease) {
+    alertBadge = "COMMISSION DECREASE";
+    alertColor = "#10b981"; // green
+    emoji = "✅";
+  }
+  
+  const commissionLabel = commissionType === "MEV" ? "MEV Commission" : "Inflation Commission";
+  const changeVerb = isDecrease ? "Lowered" : "Raised";
+  
+  const subject = `${emoji} ${validatorName} ${changeVerb} ${commissionLabel}`;
+  
+  const deltaDisplay = delta >= 0 ? `+${delta}pp` : `${delta}pp`;
+  const deltaColor = isRug ? "#dc2626" : (isCaution ? "#f59e0b" : (isDecrease ? "#10b981" : "#3b82f6"));
+  
+  let impactMessage = "";
+  if (isRug) {
+    impactMessage = "A large commission increase like this significantly impacts your staking rewards. You may want to consider unstaking or monitoring the situation closely.";
+  } else if (isCaution) {
+    impactMessage = "This commission increase will affect your staking rewards. Monitor the validator's performance and consider your options.";
+  } else if (isDecrease) {
+    impactMessage = "This commission decrease will improve your staking rewards. You're now earning a higher percentage of rewards from this validator.";
+  } else {
+    impactMessage = "This commission change will affect your staking rewards. You may want to monitor the validator's performance.";
+  }
   
   const html = `
 <!DOCTYPE html>
@@ -240,7 +275,7 @@ export function generateCommissionChangeEmail(
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <a href="${BASE_URL}" class="logo">${isRug ? "🚨" : "⚠️"} RUGALERT</a>
+      <a href="${BASE_URL}" class="logo">${emoji} RUGALERT</a>
     </div>
     
     <!-- Content -->
@@ -251,7 +286,7 @@ export function generateCommissionChangeEmail(
       
       <p class="alert-message">
         This is an alert that validator <strong>${validatorName}</strong> 
-        (<code>${votePubkey}</code>) has ${isRug ? "<strong>significantly increased</strong>" : "increased"} 
+        (<code>${votePubkey}</code>) has ${isRug ? "<strong>significantly increased</strong>" : (isDecrease ? "<strong>decreased</strong>" : "changed")} 
         their ${commissionLabel.toLowerCase()}.
       </p>
       
@@ -269,8 +304,8 @@ export function generateCommissionChangeEmail(
           <span class="info-value">
             <span style="color: #6b7280;">${fromCommission}%</span>
             <span style="margin: 0 8px;">→</span>
-            <span style="color: ${alertColor}; font-weight: 700;">${toCommission}%</span>
-            <span style="color: ${alertColor}; margin-left: 8px;">(+${delta}pp)</span>
+            <span style="color: ${deltaColor}; font-weight: 700;">${toCommission}%</span>
+            <span style="color: ${deltaColor}; margin-left: 8px;">(${deltaDisplay})</span>
           </span>
         </div>
         <div class="info-row">
@@ -280,10 +315,7 @@ export function generateCommissionChangeEmail(
       </div>
       
       <p class="alert-message">
-        ${isRug 
-          ? "A large commission increase like this significantly impacts your staking rewards. You may want to consider unstaking or monitoring the situation closely."
-          : "This commission increase will affect your staking rewards. Monitor the validator's performance and consider your options."
-        }
+        ${impactMessage}
       </p>
       
       <center>
