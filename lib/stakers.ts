@@ -11,6 +11,8 @@ export const KNOWN_STAKERS: Record<string, string> = {
   "9eG63CdHjsfhHmobHgLtESGC8GabbmRcaSpHAZrtmhco": "Marinade",
   "6WecYymEARvjG5ZyqkrVQ6YkhPfujNzWpSPwNKXHCbV2": "Jito",
   "6iQKfEyhr3bZMotVkW6beNZz5CPAkiwvgV2CTje9pVSS": "Jito",
+  "Hodkwm8xf43JzRuKNYPGnYJ7V9cXZ7LJGNy96TWQiSGN": "JagPool",
+  "stk9ApL5HeVAwPLr3TLhDXdZS8ptVu7zp6ov8HFDuMi": "BlazeStake",
   "AKJt3m2xJ6ANda9adBGqb5BMrheKJSwxyCfYkLuZNmjn": "aeroSOL",
   "3etKXcW2fzEJR5YXoSKSmP6UZ633g9uiFv5yuqFUf66k": "Socean",
   "EpH4ZKSeViL5qAHA9QANYVHxdmuzbUH2T79f32DmSCaM": "Shinobi Performance Pool",
