@@ -25,6 +25,7 @@ type Validator = {
   skipRate: number | null;
   delinquent: boolean;
   rank: number;
+  rankChange: number | null;
   stakeAccountCount: number;
   jitoEnabled?: boolean;
   mevCommission?: number | null;
@@ -630,9 +631,25 @@ function ValidatorsPageContent() {
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-center">
-                            <span className="font-mono text-sm font-semibold text-gray-500 group-hover:text-gray-300 transition-colors">
-                              {validator.rank}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="font-mono text-sm font-semibold text-gray-500 group-hover:text-gray-300 transition-colors w-8 text-right">
+                                {validator.rank}
+                              </span>
+                              <span className="w-8 flex items-center justify-start">
+                                {validator.rankChange !== null && validator.rankChange !== 0 && (
+                                  <span
+                                    className={`text-[10px] font-bold ${
+                                      validator.rankChange > 0
+                                        ? "text-green-400"
+                                        : "text-red-400"
+                                    }`}
+                                    title={`${validator.rankChange > 0 ? "Up" : "Down"} ${Math.abs(validator.rankChange)} rank${Math.abs(validator.rankChange) !== 1 ? "s" : ""} from last epoch`}
+                                  >
+                                    {validator.rankChange > 0 ? "↑" : "↓"}{Math.abs(validator.rankChange)}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -883,9 +900,24 @@ function ValidatorsPageContent() {
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-mono text-gray-500">
-                            #{validator.rank}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-mono text-gray-500">
+                              #{validator.rank}
+                            </span>
+                            {validator.rankChange !== null && validator.rankChange !== 0 && (
+                              <span
+                                className={`text-[9px] font-bold ${
+                                  validator.rankChange > 0
+                                    ? "text-green-400"
+                                    : "text-red-400"
+                                }`}
+                                title={`${validator.rankChange > 0 ? "Up" : "Down"} ${Math.abs(validator.rankChange)} from last epoch`}
+                              >
+                                {validator.rankChange > 0 ? "↑" : "↓"}
+                                {Math.abs(validator.rankChange)}
+                              </span>
+                            )}
+                          </div>
                           {validator.delinquent && (
                             <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-[9px] font-bold text-red-300">
                               DELINQUENT

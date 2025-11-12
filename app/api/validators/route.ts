@@ -166,6 +166,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Fetch previous epoch ranks for rank change calculation
+    const previousEpoch = currentEpoch - 1;
+    const previousRankMap = new Map<string, number>();
+    if (validatorVotePubkeys.length > 0 && previousEpoch >= 0) {
+      const previousRanks = await sql`
+        SELECT vote_pubkey, rank
+        FROM stake_history
+        WHERE epoch = ${previousEpoch}
+          AND vote_pubkey = ANY(${validatorVotePubkeys})
+          AND rank IS NOT NULL
+      `;
+      
+      previousRanks.forEach((record: any) => {
+        previousRankMap.set(record.vote_pubkey, Number(record.rank));
+      });
+    }
+
     // Merge ALL validators with their commission data
     const validatorsWithStake: any[] = [];
     const processedVotePubkeys = new Set<string>();
@@ -191,6 +208,11 @@ export async function GET(request: NextRequest) {
           uptimeDays = uptimeData.days;
         }
         
+        // Calculate rank change (previous - current = positive means moved up)
+        const previousRank = previousRankMap.get(votePubkey);
+        let rankChange: number | null = null;
+        // We'll calculate current rank after sorting, so we'll come back to this
+        
         validatorsWithStake.push({
           ...validator,
           commission: Number(validator.commission || 0),
@@ -202,6 +224,7 @@ export async function GET(request: NextRequest) {
           mevCommission: mevCommissionMap.get(votePubkey) ?? null,
           uptimePercent,
           uptimeDays,
+          previousRank: previousRank ?? null,
         });
       }
     });
@@ -219,6 +242,8 @@ export async function GET(request: NextRequest) {
           uptimeDays = uptimeData.days;
         }
         
+        const previousRank = previousRankMap.get(votePubkey);
+        
         validatorsWithStake.push({
           votePubkey,
           identityPubkey: null,
@@ -233,6 +258,7 @@ export async function GET(request: NextRequest) {
           stakeAccountCount: 0,
           uptimePercent,
           uptimeDays,
+          previousRank: previousRank ?? null,
         });
       }
     });
@@ -253,7 +279,15 @@ export async function GET(request: NextRequest) {
     // Calculate rank, stake percentage, and cumulative stake percentage for each validator
     let cumulativeStake = 0;
     deduplicatedValidators.forEach((validator, index) => {
-      validator.rank = index + 1; // Rank starts at 1
+      const currentRank = index + 1; // Rank starts at 1
+      validator.rank = currentRank;
+      
+      // Calculate rank change (previous - current = positive means moved up)
+      if (validator.previousRank !== null && validator.previousRank !== undefined) {
+        validator.rankChange = validator.previousRank - currentRank;
+      } else {
+        validator.rankChange = null; // New validator or no previous data
+      }
       
       validator.stakePercent = networkTotalStake > 0 
         ? (validator.activeStake / networkTotalStake) * 100 

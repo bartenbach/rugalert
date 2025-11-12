@@ -1184,6 +1184,23 @@ export async function POST(req: NextRequest) {
     // BATCH CREATE/UPDATE operations
     logProgress(`Batching: ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
     
+    // ========== CALCULATE RANKS FOR STAKE RECORDS ==========
+    // Sort stake records by activeStake DESC and assign ranks
+    if (stakeRecordsToCreate.length > 0) {
+      console.log(`\n🏆 Calculating ranks for ${stakeRecordsToCreate.length} stake records...`);
+      
+      // Sort by activeStake descending
+      stakeRecordsToCreate.sort((a, b) => b.activeStake - a.activeStake);
+      
+      // Assign ranks (1-indexed)
+      stakeRecordsToCreate.forEach((record, index) => {
+        record.rank = index + 1;
+      });
+      
+      console.log(`✅ Assigned ranks 1-${stakeRecordsToCreate.length}`);
+      logProgress(`Calculated ranks for ${stakeRecordsToCreate.length} validators`);
+    }
+    
     // ========== VALIDATOR INFO HISTORY CREATION ==========
     let infoHistoryCreated = 0;
     console.log(`\n📚 ========== VALIDATOR INFO HISTORY CREATION ==========`);
@@ -1347,8 +1364,8 @@ export async function POST(req: NextRequest) {
     // Create stake records
     for (const stake of stakeRecordsToCreate) {
       await sql`
-        INSERT INTO stake_history (key, vote_pubkey, epoch, active_stake)
-        VALUES (${stake.key}, ${stake.votePubkey}, ${stake.epoch}, ${stake.activeStake})
+        INSERT INTO stake_history (key, vote_pubkey, epoch, active_stake, rank)
+        VALUES (${stake.key}, ${stake.votePubkey}, ${stake.epoch}, ${stake.activeStake}, ${stake.rank})
         ON CONFLICT (key) DO NOTHING
       `;
       stakeRecordsCreated++;
