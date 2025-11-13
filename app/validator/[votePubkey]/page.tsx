@@ -796,7 +796,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           })}
                       </span>
                     ) : (
-                      <span className="gradient-text">Unknown Validator</span>
+                      <span className="gradient-text">{params.votePubkey}</span>
                     )}
                   </h1>
                   {validatorInfo?.validator?.delinquent && (

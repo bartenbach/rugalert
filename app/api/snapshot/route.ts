@@ -1184,22 +1184,35 @@ export async function POST(req: NextRequest) {
     // BATCH CREATE/UPDATE operations
     logProgress(`Batching: ${validatorsToUpdate.length} updates, ${stakeRecordsToCreate.length} stake, ${perfRecordsToCreate.length}+${perfRecordsToUpdate.length} perf`);
     
-    // ========== CALCULATE RANKS FOR STAKE RECORDS ==========
-    // Sort stake records by activeStake DESC and assign ranks
-    if (stakeRecordsToCreate.length > 0) {
-      console.log(`\n🏆 Calculating ranks for ${stakeRecordsToCreate.length} stake records...`);
-      
-      // Sort by activeStake descending
-      stakeRecordsToCreate.sort((a, b) => b.activeStake - a.activeStake);
-      
-      // Assign ranks (1-indexed)
-      stakeRecordsToCreate.forEach((record, index) => {
-        record.rank = index + 1;
-      });
-      
-      console.log(`✅ Assigned ranks 1-${stakeRecordsToCreate.length}`);
-      logProgress(`Calculated ranks for ${stakeRecordsToCreate.length} validators`);
-    }
+    // ========== CALCULATE RANKS FOR ALL VALIDATORS IN THIS EPOCH ==========
+    // We need to rank ALL validators with stake in this epoch, not just new records
+    console.log(`\n🏆 Calculating ranks for all validators in epoch ${epoch}...`);
+    
+    // Build complete list of all validators with stake (from validatorsToUpdate/Create)
+    const allValidatorsWithStake = [
+      ...validatorsToCreate,
+      ...validatorsToUpdate
+    ].filter(v => v.activeStake > 0);
+    
+    // Sort by activeStake descending
+    allValidatorsWithStake.sort((a, b) => b.activeStake - a.activeStake);
+    
+    // Create map of vote_pubkey -> rank
+    const rankMap = new Map<string, number>();
+    allValidatorsWithStake.forEach((validator, index) => {
+      rankMap.set(validator.votePubkey, index + 1);
+    });
+    
+    // Apply ranks to new stake records
+    stakeRecordsToCreate.forEach((record) => {
+      const rank = rankMap.get(record.votePubkey);
+      if (rank !== undefined) {
+        record.rank = rank;
+      }
+    });
+    
+    console.log(`✅ Assigned ranks 1-${allValidatorsWithStake.length} to ${stakeRecordsToCreate.length} new stake records`);
+    logProgress(`Calculated ranks for ${allValidatorsWithStake.length} validators total`);
     
     // ========== VALIDATOR INFO HISTORY CREATION ==========
     let infoHistoryCreated = 0;
@@ -1361,16 +1374,38 @@ export async function POST(req: NextRequest) {
     }
     logProgress(`Updated ${validatorsToUpdate.length} validators`);
     
-    // Create stake records
+    // Create/update stake records with ranks
     for (const stake of stakeRecordsToCreate) {
       await sql`
         INSERT INTO stake_history (key, vote_pubkey, epoch, active_stake, rank)
         VALUES (${stake.key}, ${stake.votePubkey}, ${stake.epoch}, ${stake.activeStake}, ${stake.rank})
-        ON CONFLICT (key) DO NOTHING
+        ON CONFLICT (key) DO UPDATE SET 
+          active_stake = EXCLUDED.active_stake,
+          rank = EXCLUDED.rank
       `;
       stakeRecordsCreated++;
     }
-    if (stakeRecordsCreated > 0) logProgress(`Created ${stakeRecordsCreated} stake records`);
+    if (stakeRecordsCreated > 0) logProgress(`Created/updated ${stakeRecordsCreated} stake records with ranks`);
+    
+    // Update ranks for existing stake records that weren't in the create batch
+    // This handles validators that already had a stake_history record for this epoch
+    let ranksUpdated = 0;
+    for (const [votePubkey, rank] of rankMap.entries()) {
+      const stakeKey = `${votePubkey}-${epoch}`;
+      if (!existingStakeKeys.has(stakeKey)) {
+        // This was already inserted above, skip
+        continue;
+      }
+      
+      // Update rank for existing record
+      await sql`
+        UPDATE stake_history 
+        SET rank = ${rank}
+        WHERE key = ${stakeKey}
+      `;
+      ranksUpdated++;
+    }
+    if (ranksUpdated > 0) logProgress(`Updated ranks for ${ranksUpdated} existing stake records`);
     
     // Create performance records
     for (const perf of perfRecordsToCreate) {
