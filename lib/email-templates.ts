@@ -152,7 +152,7 @@ export function generateDelinquencyEmail(
       
       <div class="info-box">
         <div class="info-row">
-          <span class="info-label">Validator:</span>
+          <span class="info-label">Validator: </span>
           <span class="info-value">${validatorName}</span>
         </div>
         <div class="info-row">
@@ -292,7 +292,7 @@ export function generateCommissionChangeEmail(
       
       <div class="info-box">
         <div class="info-row">
-          <span class="info-label">Validator:</span>
+          <span class="info-label">Validator: </span>
           <span class="info-value">${validatorName}</span>
         </div>
         <div class="info-row">

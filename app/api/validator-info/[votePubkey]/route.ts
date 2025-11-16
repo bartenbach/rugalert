@@ -153,6 +153,14 @@ export async function GET(
       ? Number(validator.commission)
       : (rpcCommission !== null ? Number(rpcCommission) : null);
 
+    // Get BAM status from database (set by snapshot job)
+    // Fallback to description check if column doesn't exist yet (for backward compatibility)
+    const isBamEnabled = validator.bam_enabled !== undefined && validator.bam_enabled !== null
+      ? Boolean(validator.bam_enabled)
+      : (validator.description 
+          ? (validator.description.toLowerCase().includes('bam') || validator.description.toLowerCase().includes('block auction'))
+          : false);
+
     const response = NextResponse.json({
       validator: {
         votePubkey: validator.vote_pubkey,
@@ -160,10 +168,12 @@ export async function GET(
         name: validator.name,
         iconUrl: validator.icon_url,
         website: validator.website,
+        description: validator.description,
         version: validator.version,
         commission: finalCommission,
         delinquent: isDelinquent, // Use real-time RPC data
         jitoEnabled,
+        bamEnabled: isBamEnabled,
         firstSeenEpoch: Number(validator.first_seen_epoch || 0),
         stakeAccountCount: Number(validator.stake_account_count || 0),
       },

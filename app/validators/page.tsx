@@ -1016,11 +1016,6 @@ function ValidatorsPageContent() {
                             >
                               {validator.uptimePercent.toFixed(2)}%
                             </span>
-                            {validator.uptimeDays && (
-                              <span className="text-[10px] text-gray-500">
-                                ({validator.uptimeDays}d)
-                              </span>
-                            )}
                           </div>
                         ) : (
                           <span className="text-gray-600 text-xs">—</span>

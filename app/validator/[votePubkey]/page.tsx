@@ -82,10 +82,12 @@ type ValidatorInfo = {
     name?: string;
     iconUrl?: string;
     website?: string;
+    description?: string;
     version?: string;
     commission?: number | null;
     delinquent?: boolean;
     jitoEnabled?: boolean;
+    bamEnabled?: boolean;
     firstSeenEpoch?: number;
     stakeAccountCount?: number;
   };

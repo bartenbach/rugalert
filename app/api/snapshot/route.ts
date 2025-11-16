@@ -770,6 +770,12 @@ export async function POST(req: NextRequest) {
           version: version || null,
         };
         
+        // Detect BAM (Block Auction Mechanism) from description
+        const isBamEnabled = description 
+          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block auction'))
+          : false;
+        patch.bamEnabled = isBamEnabled;
+        
         validatorsToUpdate.push(patch);
       } else {
         // Create new validator
@@ -792,7 +798,13 @@ export async function POST(req: NextRequest) {
           website: website || null,
           description: description || null,
           version: version || null,
-        });
+        };
+        
+        // Detect BAM (Block Auction Mechanism) from description
+        const isBamEnabled = description 
+          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block auction'))
+          : false;
+        validatorsToCreate[validatorsToCreate.length - 1].bamEnabled = isBamEnabled;
       }
 
       // ---- VALIDATOR INFO HISTORY TRACKING ----
@@ -1257,7 +1269,7 @@ export async function POST(req: NextRequest) {
         INSERT INTO validators (
           vote_pubkey, identity_pubkey, name, icon_url, website, description, version,
           commission, active_stake, activating_stake, deactivating_stake,
-          activating_accounts, deactivating_accounts, delinquent, jito_enabled,
+          activating_accounts, deactivating_accounts, delinquent, jito_enabled, bam_enabled,
           stake_account_count, stake_distribution, first_seen_epoch
         ) VALUES (
           ${validator.votePubkey},
@@ -1275,6 +1287,7 @@ export async function POST(req: NextRequest) {
           ${validator.deactivatingAccounts},
           ${validator.delinquent},
           ${validator.jitoEnabled},
+          ${validator.bamEnabled || false},
           ${validator.stakeAccountCount},
           ${validator.stakeDistribution},
           ${validator.firstSeenEpoch}
@@ -1367,6 +1380,7 @@ export async function POST(req: NextRequest) {
           deactivating_accounts = ${validator.deactivatingAccounts},
           delinquent = ${validator.delinquent},
           jito_enabled = ${validator.jitoEnabled},
+          bam_enabled = ${validator.bamEnabled || false},
           stake_account_count = ${validator.stakeAccountCount},
           stake_distribution = ${validator.stakeDistribution}
         WHERE vote_pubkey = ${validator.votePubkey}
