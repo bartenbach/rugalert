@@ -778,6 +778,11 @@ export async function POST(req: NextRequest) {
         
         validatorsToUpdate.push(patch);
       } else {
+        // Detect BAM (Block Auction Mechanism) from description
+        const isBamEnabled = description 
+          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block auction'))
+          : false;
+        
         // Create new validator
         validatorsToCreate.push({
           votePubkey: v.votePubkey,
@@ -790,6 +795,7 @@ export async function POST(req: NextRequest) {
           activatingAccounts: activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]",
           deactivatingAccounts: deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]",
           jitoEnabled: isJitoEnabled,
+          bamEnabled: isBamEnabled,
           stakeAccountCount: accountCount,
           stakeDistribution: JSON.stringify(distributionArray),
           firstSeenEpoch: epoch,
@@ -798,13 +804,7 @@ export async function POST(req: NextRequest) {
           website: website || null,
           description: description || null,
           version: version || null,
-        };
-        
-        // Detect BAM (Block Auction Mechanism) from description
-        const isBamEnabled = description 
-          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block auction'))
-          : false;
-        validatorsToCreate[validatorsToCreate.length - 1].bamEnabled = isBamEnabled;
+        });
       }
 
       // ---- VALIDATOR INFO HISTORY TRACKING ----
