@@ -222,12 +222,26 @@ export function generateCommissionChangeEmail(
   const isCaution = eventType === "CAUTION";
   const isDecrease = delta < 0;
   
+  // Check if MEV is being disabled (special case)
+  const isMevDisabled = commissionType === "MEV" && toCommission === "MEV Disabled";
+  const isMevEnabled = commissionType === "MEV" && fromCommission === "MEV Disabled";
+  
   // Determine badge text, color, and emoji
   let alertBadge = "COMMISSION CHANGE";
   let alertColor = "#3b82f6"; // blue for INFO/decrease
   let emoji = "ℹ️";
   
-  if (isRug) {
+  if (isMevDisabled) {
+    // MEV disabled - this is bad for stakers (losing MEV rewards)
+    alertBadge = "MEV DISABLED";
+    alertColor = "#f59e0b"; // orange/warning color
+    emoji = "⚠️";
+  } else if (isMevEnabled) {
+    // MEV enabled - informational
+    alertBadge = "MEV ENABLED";
+    alertColor = "#3b82f6"; // blue
+    emoji = "ℹ️";
+  } else if (isRug) {
     alertBadge = "RUG DETECTED";
     alertColor = "#dc2626"; // red
     emoji = "🚨";
@@ -242,15 +256,28 @@ export function generateCommissionChangeEmail(
   }
   
   const commissionLabel = commissionType === "MEV" ? "MEV Commission" : "Inflation Commission";
-  const changeVerb = isDecrease ? "Lowered" : "Raised";
   
-  const subject = `${emoji} ${validatorName} ${changeVerb} ${commissionLabel}`;
+  // Determine subject line
+  let subject = "";
+  if (isMevDisabled) {
+    subject = `${emoji} ${validatorName} Disabled MEV Rewards`;
+  } else if (isMevEnabled) {
+    subject = `${emoji} ${validatorName} Enabled MEV Rewards`;
+  } else {
+    const changeVerb = isDecrease ? "Lowered" : "Raised";
+    subject = `${emoji} ${validatorName} ${changeVerb} ${commissionLabel}`;
+  }
   
   const deltaDisplay = delta >= 0 ? `+${delta}pp` : `${delta}pp`;
-  const deltaColor = isRug ? "#dc2626" : (isCaution ? "#f59e0b" : (isDecrease ? "#10b981" : "#3b82f6"));
+  const deltaColor = isMevDisabled ? "#f59e0b" : (isRug ? "#dc2626" : (isCaution ? "#f59e0b" : (isDecrease ? "#10b981" : "#3b82f6")));
   
+  // Determine impact message
   let impactMessage = "";
-  if (isRug) {
+  if (isMevDisabled) {
+    impactMessage = "This validator is no longer producing MEV (Maximum Extractable Value) rewards. Stakers will no longer receive MEV rewards from this validator, which reduces overall staking returns. This is an informational alert - the validator is not taking more commission, but you are losing access to MEV rewards.";
+  } else if (isMevEnabled) {
+    impactMessage = "This validator has enabled MEV (Maximum Extractable Value) rewards. Stakers may now receive additional MEV rewards from priority fees and bundles, depending on the validator's MEV commission rate.";
+  } else if (isRug) {
     impactMessage = "A large commission increase like this significantly impacts your staking rewards. You may want to consider unstaking or monitoring the situation closely.";
   } else if (isCaution) {
     impactMessage = "This commission increase will affect your staking rewards. Monitor the validator's performance and consider your options.";
@@ -259,6 +286,14 @@ export function generateCommissionChangeEmail(
   } else {
     impactMessage = "This commission change will affect your staking rewards. You may want to monitor the validator's performance.";
   }
+  
+  // Format commission display (don't show % after "MEV Disabled")
+  const fromDisplay = typeof fromCommission === "string" && fromCommission.includes("MEV Disabled") 
+    ? fromCommission 
+    : `${fromCommission}%`;
+  const toDisplay = typeof toCommission === "string" && toCommission.includes("MEV Disabled")
+    ? toCommission
+    : `${toCommission}%`;
   
   const html = `
 <!DOCTYPE html>
@@ -282,12 +317,15 @@ export function generateCommissionChangeEmail(
     <div class="content">
       <div class="alert-badge">${alertBadge}</div>
       
-      <h1 class="alert-title">${commissionLabel} Change Detected</h1>
+      <h1 class="alert-title">${isMevDisabled ? "MEV Rewards Disabled" : isMevEnabled ? "MEV Rewards Enabled" : `${commissionLabel} Change Detected`}</h1>
       
       <p class="alert-message">
-        This is an alert that validator <strong>${validatorName}</strong> 
-        (<code>${votePubkey}</code>) has ${isRug ? "<strong>significantly increased</strong>" : (isDecrease ? "<strong>decreased</strong>" : "changed")} 
-        their ${commissionLabel.toLowerCase()}.
+        ${isMevDisabled 
+          ? `This is an alert that validator <strong>${validatorName}</strong> (<code>${votePubkey}</code>) is <strong>no longer producing MEV rewards</strong>.`
+          : isMevEnabled
+          ? `This is an alert that validator <strong>${validatorName}</strong> (<code>${votePubkey}</code>) has <strong>enabled MEV rewards</strong>.`
+          : `This is an alert that validator <strong>${validatorName}</strong> (<code>${votePubkey}</code>) has ${isRug ? "<strong>significantly increased</strong>" : (isDecrease ? "<strong>decreased</strong>" : "changed")} their ${commissionLabel.toLowerCase()}.`
+        }
       </p>
       
       <div class="info-box">
@@ -302,10 +340,10 @@ export function generateCommissionChangeEmail(
         <div class="info-row">
           <span class="info-label">${commissionLabel}:</span>
           <span class="info-value">
-            <span style="color: #6b7280;">${fromCommission}%</span>
+            <span style="color: #6b7280;">${fromDisplay}</span>
             <span style="margin: 0 8px;">→</span>
-            <span style="color: ${deltaColor}; font-weight: 700;">${toCommission}%</span>
-            <span style="color: ${deltaColor}; margin-left: 8px;">(${deltaDisplay})</span>
+            <span style="color: ${deltaColor}; font-weight: 700;">${toDisplay}</span>
+            ${!isMevDisabled && !isMevEnabled ? `<span style="color: ${deltaColor}; margin-left: 8px;">(${deltaDisplay})</span>` : ''}
           </span>
         </div>
         <div class="info-row">
