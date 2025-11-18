@@ -46,15 +46,14 @@ export default function RootLayout({
           <div className="mx-auto max-w-7xl px-3 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
             <a
               href="/"
-              className="flex items-center gap-2 sm:gap-3 group flex-shrink-0"
+              className="flex items-center gap-2 sm:gap-3 flex-shrink-0"
             >
               <div className="relative">
                 <img
                   src="/rugalert-logo.png"
                   alt="RugAlert Logo"
-                  className="w-12 h-12 sm:w-20 sm:h-20 object-contain transition-transform duration-300 group-hover:scale-110"
+                  className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
                 />
-                <div className="absolute inset-0 bg-orange-500/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
               </div>
               <div>
                 <span className="text-lg sm:text-2xl font-bold gradient-text block">
