@@ -717,11 +717,15 @@ export async function POST(req: NextRequest) {
       const isDelinquent = delinquentSet.has(v.votePubkey);
       
       // Check if validator is Jito-enabled
+      // Only update if we have positive confirmation from Jito API
+      // If not in API response, preserve existing database value to avoid false negatives
       const jitoInfo = jitoValidators.get(v.votePubkey);
-      const isJitoEnabled = jitoInfo?.isJitoEnabled || false;
+      const existing = existingValidators.get(v.votePubkey);
+      const isJitoEnabled = jitoInfo 
+        ? jitoInfo.isJitoEnabled 
+        : (existing?.jito_enabled ?? false); // Preserve existing value if not in API response
       
       // Prepare validator upsert (batch later)
-      const existing = existingValidators.get(v.votePubkey);
       const accountCount = stakeAccountCounts.get(v.votePubkey) || 0;
       
       // Get activating/deactivating stake from pre-fetched data
@@ -1025,7 +1029,8 @@ export async function POST(req: NextRequest) {
       }
       
       // ---- MEV COMMISSION TRACKING ----
-      if (isJitoEnabled && jitoInfo) {
+      // Only process MEV if we have positive confirmation from Jito API
+      if (jitoInfo && jitoInfo.isJitoEnabled) {
         const mevKey = `${v.votePubkey}-${epoch}`;
         
         // Create snapshot if it doesn't exist
@@ -1130,8 +1135,10 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-      } else {
-        // NOT running Jito now - check if they WERE running it before (MEV disabled event)
+      } else if (jitoInfo && !jitoInfo.isJitoEnabled) {
+        // Have positive confirmation they're NOT running Jito now - check if they WERE running it before (MEV disabled event)
+        // Only trigger if we have positive confirmation from API (jitoInfo exists but isJitoEnabled is false)
+        // Don't trigger if jitoInfo doesn't exist (might be API lag/outage)
         const latestMev = latestMevByValidator.get(v.votePubkey);
         if (latestMev && latestMev.mev_commission !== null && latestMev.mev_commission !== undefined && Number(latestMev.mev_commission) > 0) {
           // They previously had MEV commission > 0, now disabled

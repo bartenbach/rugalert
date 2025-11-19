@@ -2,6 +2,7 @@ import { getFreshSql } from '@/lib/db-direct'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0 // Disable ALL caching including Next.js route cache
 
 export async function GET(
   req: NextRequest,
