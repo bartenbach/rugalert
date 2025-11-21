@@ -20,18 +20,15 @@ export async function GET(
       );
     }
 
-    // Calculate date range (last 365 days) - use UTC to match database
+    // Fetch ALL available uptime records (no date limit - compete with 3+ years of data)
+    // Use UTC to match database
     const now = new Date();
     const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const oneYearAgo = new Date(todayUTC);
-    oneYearAgo.setUTCDate(oneYearAgo.getUTCDate() - 365);
-
     const endDate = todayUTC.toISOString().split('T')[0];
-    const startDate = oneYearAgo.toISOString().split('T')[0];
 
-    console.log(`📅 Fetching uptime for ${votePubkey.substring(0, 8)}... from ${startDate} to ${endDate}`);
+    console.log(`📅 Fetching ALL uptime records for ${votePubkey.substring(0, 8)}... (no date limit)`);
 
-    // Fetch daily uptime records from postgres
+    // Fetch all daily uptime records from postgres (no date limit)
     const records = await sql`
       SELECT 
         date,
@@ -39,10 +36,16 @@ export async function GET(
         delinquent_checks as "delinquentChecks"
       FROM daily_uptime
       WHERE vote_pubkey = ${votePubkey}
-        AND date >= ${startDate}
         AND date <= ${endDate}
       ORDER BY date ASC
     `;
+    
+    // Calculate startDate from the oldest record (for response metadata)
+    const startDate = records.length > 0 
+      ? (typeof records[0].date === 'string' 
+          ? records[0].date 
+          : new Date(records[0].date).toISOString().split('T')[0])
+      : endDate;
 
     // Calculate uptimePercent from raw checks (source of truth)
     const dailyRecords = records.map(record => {

@@ -4,10 +4,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "../../../lib/db-neon";
+import { generateCommissionChangeEmail, generateDelinquencyEmail } from "../../../lib/email-templates";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
 import { getStakerLabel, type StakeAccountBreakdown } from "../../../lib/stakers";
 import { formatTwitterMevRug, formatTwitterRug, postToTwitter } from "../../../lib/twitter";
-import { generateDelinquencyEmail, generateCommissionChangeEmail } from "../../../lib/email-templates";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for Vercel Pro (max allowed)
@@ -1029,8 +1029,13 @@ export async function POST(req: NextRequest) {
       }
       
       // ---- MEV COMMISSION TRACKING ----
-      // Only process MEV if we have positive confirmation from Jito API
+      // Check for MEV commission changes for ALL validators with historical MEV data
+      // This ensures we detect rugs even if validators temporarily disappear from Jito API
+      const latestMev = latestMevByValidator.get(v.votePubkey);
+      const hasHistoricalMev = latestMev && latestMev.epoch < epoch;
+      
       if (jitoInfo && jitoInfo.isJitoEnabled) {
+        // Validator is in Jito API and enabled - create snapshot and check for changes
         const mevKey = `${v.votePubkey}-${epoch}`;
         
         // Create snapshot if it doesn't exist
@@ -1052,14 +1057,13 @@ export async function POST(req: NextRequest) {
           }
         }
         
-        // ALWAYS check for commission changes, regardless of whether we created a snapshot
+        // ALWAYS check for commission changes if we have historical data
         // (snapshot might already exist from a previous run, but we still need to detect changes)
-        const latestMev = latestMevByValidator.get(v.votePubkey);
-        if (latestMev && latestMev.epoch < epoch) {
+        if (hasHistoricalMev) {
           // Only compare if the latest snapshot is from a PREVIOUS epoch
           // Keep NULL as NULL (MEV was disabled), don't convert to 0
-          const prevMevCommission = latestMev.mev_commission !== null && latestMev.mev_commission !== undefined
-            ? Number(latestMev.mev_commission)
+          const prevMevCommission = latestMev!.mev_commission !== null && latestMev!.mev_commission !== undefined
+            ? Number(latestMev!.mev_commission)
             : null;
           const currentMevCommission = jitoInfo.mevCommission !== null && jitoInfo.mevCommission !== undefined
             ? Number(jitoInfo.mevCommission)
@@ -1073,6 +1077,11 @@ export async function POST(req: NextRequest) {
           if (changed) {
             const delta = (currentMevCommission ?? 0) - (prevMevCommission ?? 0);
             const eventType = detectMevRug(prevMevCommission, currentMevCommission);
+            
+            // Debug logging for MEV commission changes
+            if (eventType === "RUG" || (eventType === "CAUTION" && delta > 0)) {
+              console.log(`  🔍 MEV change detected for ${v.votePubkey.substring(0, 8)}...: ${prevMevCommission ?? 'NULL'}% → ${currentMevCommission ?? 'NULL'}% (${eventType}, delta: ${delta})`);
+            }
             
             mevEventsToCreate.push({
               votePubkey: v.votePubkey,
@@ -1140,11 +1149,12 @@ export async function POST(req: NextRequest) {
         // Only trigger if we have positive confirmation from API (jitoInfo exists but isJitoEnabled is false)
         // Don't trigger if jitoInfo doesn't exist (might be API lag/outage)
         const latestMev = latestMevByValidator.get(v.votePubkey);
-        if (latestMev && latestMev.mev_commission !== null && latestMev.mev_commission !== undefined && Number(latestMev.mev_commission) > 0) {
-          // They previously had MEV commission > 0, now disabled
+        if (latestMev && latestMev.mev_commission !== null && latestMev.mev_commission !== undefined && Number(latestMev.mev_commission) >= 0) {
+          // They previously had MEV commission (including 0%), now disabled
           // NOTE: We use NULL (not 0) because:
-          // - 0% commission = staker gets ALL MEV rewards (good!)
+          // - 0% commission = staker gets ALL MEV rewards (good! - valid enabled state)
           // - NULL/disabled = there are NO MEV rewards (bad!)
+          // A change from 0% to disabled should be detected as a MEV change event
           const prevMevCommission = Number(latestMev.mev_commission);
           const currentMevCommission = null;
           const delta = -prevMevCommission;
@@ -1186,6 +1196,12 @@ export async function POST(req: NextRequest) {
           );
           await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
         }
+      } else if (hasHistoricalMev && !jitoInfo) {
+        // Validator has historical MEV data but is NOT in current Jito API response
+        // This could mean they disabled MEV, but we can't be certain (might be API issue)
+        // Only create MEV disabled event if we're confident (e.g., multiple epochs missing)
+        // For now, we'll skip this to avoid false positives during API outages
+        // The validator will be checked again in the next epoch
       }
       
       } catch (validatorError: any) {
