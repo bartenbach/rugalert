@@ -10,6 +10,22 @@ export async function GET(
   try {
     const { votePubkey } = params;
 
+    // Get current epoch from RPC
+    const rpcUrl = process.env.RPC_URL!;
+    const epochRes = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getEpochInfo',
+        params: [],
+      }),
+      cache: 'no-store',
+    });
+    const epochJson = await epochRes.json();
+    const currentEpoch = Number(epochJson.result?.epoch || 0);
+
     // Fetch stake history records from postgres
     const stakeRecords = await sql`
       SELECT epoch, active_stake
@@ -27,6 +43,26 @@ export async function GET(
       epoch: Number(r.epoch),
       activeStake: Number(r.active_stake || 0) / LAMPORTS_PER_SOL,
     }));
+
+    // Check if current epoch is already in history
+    const hasCurrentEpoch = history.some(h => h.epoch === currentEpoch);
+    
+    // If current epoch is missing, fetch it from validators table
+    if (!hasCurrentEpoch && currentEpoch > 0) {
+      const validatorRecord = await sql`
+        SELECT active_stake
+        FROM validators
+        WHERE vote_pubkey = ${votePubkey}
+        LIMIT 1
+      `;
+      
+      if (validatorRecord[0] && validatorRecord[0].active_stake) {
+        history.push({
+          epoch: currentEpoch,
+          activeStake: Number(validatorRecord[0].active_stake || 0) / LAMPORTS_PER_SOL,
+        });
+      }
+    }
 
     return NextResponse.json({
       history,

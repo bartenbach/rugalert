@@ -917,6 +917,16 @@ export async function POST(req: NextRequest) {
         ? (voteCredits / maxVoteCredits) * 100
         : 0;
         
+      // Calculate skipped slots: store leader schedule slots for reference
+      // Note: We can't easily determine which specific slots were skipped without checking each slot individually
+      // For now, we'll store the leader schedule slots array so users can explore them
+      let skippedSlots: number[] | null = null;
+      if (scheduleSlots && Array.isArray(scheduleSlots) && scheduleSlots.length > 0) {
+        // Store the leader schedule slots - these are the slots the validator was scheduled for
+        // Users can click through to explore which ones were actually produced vs skipped
+        skippedSlots = scheduleSlots.map(s => Number(s));
+      }
+
       const perfFields = {
         key: perfKey,
         votePubkey: v.votePubkey,
@@ -924,6 +934,7 @@ export async function POST(req: NextRequest) {
         skipRate: Math.max(0, Math.min(100, skipRate)),
         leaderSlots,
         blocksProduced,
+        skippedSlots,
         ...(voteCredits !== undefined ? { 
           voteCredits,
           voteCreditsPercentage: Math.round(voteCreditsPercentage * 100) / 100,
@@ -1447,7 +1458,7 @@ export async function POST(req: NextRequest) {
     // Create performance records
     for (const perf of perfRecordsToCreate) {
       await sql`
-        INSERT INTO performance_history (key, vote_pubkey, epoch, skip_rate, leader_slots, blocks_produced, vote_credits, vote_credits_percentage, max_possible_credits)
+        INSERT INTO performance_history (key, vote_pubkey, epoch, skip_rate, leader_slots, blocks_produced, skipped_slots, vote_credits, vote_credits_percentage, max_possible_credits)
         VALUES (
           ${perf.key},
           ${perf.votePubkey},
@@ -1455,6 +1466,7 @@ export async function POST(req: NextRequest) {
           ${perf.skipRate},
           ${perf.leaderSlots},
           ${perf.blocksProduced},
+          ${perf.skippedSlots || null},
           ${perf.voteCredits || null},
           ${perf.voteCreditsPercentage || null},
           ${perf.maxPossibleCredits || null}
@@ -1471,6 +1483,7 @@ export async function POST(req: NextRequest) {
           skip_rate = ${perf.skipRate},
           leader_slots = ${perf.leaderSlots},
           blocks_produced = ${perf.blocksProduced},
+          skipped_slots = ${perf.skippedSlots || null},
           vote_credits = ${perf.voteCredits || null},
           vote_credits_percentage = ${perf.voteCreditsPercentage || null},
           max_possible_credits = ${perf.maxPossibleCredits || null}

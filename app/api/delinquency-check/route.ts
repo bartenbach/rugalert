@@ -16,7 +16,7 @@ async function rpc(method: string, params: any[] = []) {
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const maxDuration = 60; // 60 seconds for Vercel Pro
+export const maxDuration = 300; // 5 minutes for Vercel Pro (increased from 60s to handle all validators)
 
 /**
  * DAILY UPTIME TRACKING:
@@ -29,19 +29,40 @@ export async function GET(req: NextRequest) {
     console.log(`\n🩺 === DELINQUENCY CHECK START ===`);
     const startTime = Date.now();
 
-    // Verify authorization (either from Vercel Cron or manual trigger with Bearer token)
+    // Verify authorization (Vercel cron sends user-agent, manual triggers use Bearer token)
     const authHeader = req.headers.get("authorization");
-    const hasValidAuth = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    const userAgent = req.headers.get("user-agent");
+    const isVercelCron = userAgent?.includes("vercel-cron");
+    const hasBearerAuth = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    const hasValidAuth = isVercelCron || hasBearerAuth;
     
     if (!hasValidAuth) {
-      console.error(`❌ Unauthorized request`);
+      console.error(`❌ Unauthorized request - userAgent: ${userAgent}, authHeader: ${authHeader ? 'present' : 'missing'}`);
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    
+    console.log(`✅ Authorized: ${isVercelCron ? 'Vercel Cron' : 'Bearer Token'}`);
 
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const checkTimestamp = new Date().toISOString();
 
-    // Get current delinquent validators from RPC
-    const voteAccounts = await rpc("getVoteAccounts", []);
+    // Get current delinquent validators from RPC with timeout handling
+    console.log(`📡 Fetching vote accounts from RPC...`);
+    let voteAccounts;
+    try {
+      voteAccounts = await Promise.race([
+        rpc("getVoteAccounts", []),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("RPC timeout after 30s")), 30000)
+        )
+      ]) as any;
+    } catch (rpcError: any) {
+      console.error(`❌ RPC call failed:`, rpcError.message);
+      return NextResponse.json(
+        { error: `RPC call failed: ${rpcError.message}` },
+        { status: 500 }
+      );
+    }
     const activeValidators = voteAccounts.current || [];
     const delinquentValidators = voteAccounts.delinquent || [];
 
@@ -58,44 +79,63 @@ export async function GET(req: NextRequest) {
     console.log(`📅 Processing date: ${today}`);
 
     // Upsert daily_uptime records using Postgres ON CONFLICT
+    // OPTIMIZATION: Process validators in parallel batches for better performance
     let updated = 0;
     let created = 0;
 
-    for (const votePubkey of allVotePubkeys) {
-      const isDelinquent = delinquentSet.has(votePubkey);
-      const key = `${votePubkey}-${today}`;
-      
-      try {
-        const result = await sql`
-          INSERT INTO daily_uptime (key, vote_pubkey, date, uptime_checks, delinquent_checks, uptime_percent)
-          VALUES (
-            ${key},
-            ${votePubkey},
-            ${today},
-            1,
-            ${isDelinquent ? 1 : 0},
-            ${isDelinquent ? 0 : 100}
-          )
-          ON CONFLICT (key) DO UPDATE SET
-            uptime_checks = daily_uptime.uptime_checks + 1,
-            delinquent_checks = daily_uptime.delinquent_checks + ${isDelinquent ? 1 : 0},
-            uptime_percent = ROUND(
-              ((daily_uptime.uptime_checks + 1 - (daily_uptime.delinquent_checks + ${isDelinquent ? 1 : 0})) 
-              / (daily_uptime.uptime_checks + 1)::numeric) * 100, 
-              2
-            )
-          RETURNING (xmax = 0) AS inserted
-        `;
+    if (allVotePubkeys.length === 0) {
+      console.log(`⚠️  No validators found in RPC response`);
+      return NextResponse.json({ error: "No validators found" }, { status: 500 });
+    }
+
+    console.log(`📊 Processing ${allVotePubkeys.length} validators...`);
+    
+    // Process validators in parallel batches to avoid timeout
+    const BATCH_SIZE = 100; // Smaller batches for better reliability
+    const batches = [];
+    for (let i = 0; i < allVotePubkeys.length; i += BATCH_SIZE) {
+      batches.push(allVotePubkeys.slice(i, i + BATCH_SIZE));
+    }
+
+    for (const batch of batches) {
+      const promises = batch.map(async (votePubkey) => {
+        const isDelinquent = delinquentSet.has(votePubkey);
+        const key = `${votePubkey}-${today}`;
         
-        // xmax = 0 means INSERT, xmax != 0 means UPDATE
-        if (result[0]?.inserted) {
-          created++;
-        } else {
-          updated++;
+        try {
+          const result = await sql`
+            INSERT INTO daily_uptime (key, vote_pubkey, date, uptime_checks, delinquent_checks, uptime_percent)
+            VALUES (
+              ${key},
+              ${votePubkey},
+              ${today},
+              1,
+              ${isDelinquent ? 1 : 0},
+              ${isDelinquent ? 0 : 100}
+            )
+            ON CONFLICT (key) DO UPDATE SET
+              uptime_checks = daily_uptime.uptime_checks + 1,
+              delinquent_checks = daily_uptime.delinquent_checks + ${isDelinquent ? 1 : 0},
+              uptime_percent = ROUND(
+                ((daily_uptime.uptime_checks + 1 - (daily_uptime.delinquent_checks + ${isDelinquent ? 1 : 0})) 
+                / (daily_uptime.uptime_checks + 1)::numeric) * 100, 
+                2
+              )
+            RETURNING (xmax = 0) AS inserted
+          `;
+          
+          return result[0]?.inserted ? 'created' : 'updated';
+        } catch (err) {
+          console.error(`Error upserting ${votePubkey}:`, err);
+          return 'error';
         }
-      } catch (err) {
-        console.error(`Error upserting ${votePubkey}:`, err);
-      }
+      });
+
+      const results = await Promise.all(promises);
+      results.forEach(result => {
+        if (result === 'created') created++;
+        else if (result === 'updated') updated++;
+      });
     }
 
     console.log(`📝 Updated ${updated} records, created ${created} records`);
@@ -119,7 +159,15 @@ export async function GET(req: NextRequest) {
     }
 
     const elapsed = Date.now() - startTime;
+    const elapsedSeconds = (elapsed / 1000).toFixed(2);
     console.log(`✅ Updated ${updated} records, created ${created} records, updated ${validatorsUpdated} validator statuses`);
+    console.log(`⏱️  Total processing time: ${elapsedSeconds}s`);
+    
+    // Warn if processing took too long (could cause missed checks)
+    if (elapsed > 50000) {
+      console.warn(`⚠️  WARNING: Processing took ${elapsedSeconds}s - may cause missed checks if cron runs every minute!`);
+    }
+    
     console.log(`🩺 === DELINQUENCY CHECK COMPLETE (${elapsed}ms) ===\n`);
 
     return NextResponse.json({

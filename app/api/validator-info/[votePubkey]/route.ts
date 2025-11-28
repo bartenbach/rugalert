@@ -109,10 +109,18 @@ export async function GET(
       epoch: currentEpoch,
     };
 
+    // Parse skipped slots array (stored as PostgreSQL array)
+    const parseSkippedSlots = (slots: any): number[] | null => {
+      if (!slots) return null;
+      if (Array.isArray(slots)) return slots.map(s => Number(s));
+      return null;
+    };
+
     const perfData = perfRecords[0] ? {
       skipRate: Number(perfRecords[0].skip_rate || 0),
       leaderSlots: Number(perfRecords[0].leader_slots || 0),
       blocksProduced: Number(perfRecords[0].blocks_produced || 0),
+      skippedSlots: parseSkippedSlots(perfRecords[0].skipped_slots),
       voteCredits: Number(perfRecords[0].vote_credits || 0),
       epoch: Number(perfRecords[0].epoch),
       // Use the pre-calculated percentage from snapshot job (relative to best performer)

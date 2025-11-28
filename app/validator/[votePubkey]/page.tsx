@@ -95,6 +95,7 @@ type ValidatorInfo = {
     skipRate: number;
     leaderSlots: number;
     blocksProduced: number;
+    skippedSlots: number[] | null;
     voteCredits: number;
     voteCreditsPercentage: number;
     maxPossibleCredits: number;
@@ -1057,6 +1058,19 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                   elapsedLeaderSlots - produced
                                 );
 
+                                // Get skipped slots from performance data
+                                const skippedSlots = validatorInfo.performance.skippedSlots;
+                                const hasSkippedSlots = skippedSlots && skippedSlots.length > 0 && skipped > 0;
+                                
+                                // Limit displayed slots to avoid overwhelming the UI
+                                const MAX_DISPLAY_SLOTS = 20;
+                                const displaySlots = hasSkippedSlots 
+                                  ? skippedSlots.slice(0, MAX_DISPLAY_SLOTS)
+                                  : [];
+                                const remainingSlots = hasSkippedSlots && skippedSlots.length > MAX_DISPLAY_SLOTS
+                                  ? skippedSlots.length - MAX_DISPLAY_SLOTS
+                                  : 0;
+
                                 return (
                                   <div className="flex flex-col gap-0.5">
                                     <span className="text-gray-400 text-xs">
@@ -1068,15 +1082,56 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                         {produced.toLocaleString()} produced
                                       </span>
                                       {" · "}
-                                      <span
-                                        className={
-                                          skipped === 0
-                                            ? "text-green-400"
-                                            : "text-red-400"
-                                        }
-                                      >
-                                        {skipped.toLocaleString()} skipped
-                                      </span>
+                                      {skipped > 0 && hasSkippedSlots ? (
+                                        <span className="group relative inline-block">
+                                          <span className="text-red-400 cursor-help underline decoration-dotted">
+                                            {skipped.toLocaleString()} skipped
+                                          </span>
+                                          {/* Tooltip with skipped slots */}
+                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 w-64">
+                                            <div className="bg-[#0a0a0a] rounded-xl p-3 border-2 border-red-500/30 whitespace-normal shadow-2xl backdrop-blur-xl">
+                                              <p className="text-white font-bold text-sm mb-2">
+                                                Scheduled Leader Slots
+                                              </p>
+                                              <p className="text-gray-400 text-xs mb-2">
+                                                {skipped.toLocaleString()} of {skippedSlots.length.toLocaleString()} scheduled slots were skipped. Click any slot to view details on Solscan.
+                                              </p>
+                                              <div className="flex flex-wrap gap-1.5 mb-2">
+                                                {displaySlots.map((slot) => (
+                                                  <a
+                                                    key={slot}
+                                                    href={`https://solscan.io/block/${slot}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-red-400 hover:text-red-300 text-xs font-mono px-1.5 py-0.5 bg-red-500/10 border border-red-500/30 rounded hover:border-red-500/50 transition-colors"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                    {slot.toLocaleString()}
+                                                  </a>
+                                                ))}
+                                                {remainingSlots > 0 && (
+                                                  <span className="text-gray-400 text-xs px-1.5 py-0.5">
+                                                    +{remainingSlots.toLocaleString()} more
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <p className="text-gray-400 text-xs">
+                                                Click a slot to view on Solscan
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </span>
+                                      ) : (
+                                        <span
+                                          className={
+                                            skipped === 0
+                                              ? "text-green-400"
+                                              : "text-red-400"
+                                          }
+                                        >
+                                          {skipped.toLocaleString()} skipped
+                                        </span>
+                                      )}
                                     </span>
                                   </div>
                                 );
