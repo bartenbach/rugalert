@@ -287,12 +287,16 @@ export function generateCommissionChangeEmail(
     impactMessage = "This commission change will affect your staking rewards. You may want to monitor the validator's performance.";
   }
   
-  // Format commission display (don't show % after "MEV Disabled")
-  const fromDisplay = typeof fromCommission === "string" && fromCommission.includes("MEV Disabled") 
-    ? fromCommission 
+  // Format commission display (don't show % after "MEV Disabled" or if already has %)
+  const fromDisplay = typeof fromCommission === "string" 
+    ? (fromCommission.includes("MEV Disabled") || fromCommission.endsWith("%"))
+      ? fromCommission 
+      : `${fromCommission}%`
     : `${fromCommission}%`;
-  const toDisplay = typeof toCommission === "string" && toCommission.includes("MEV Disabled")
-    ? toCommission
+  const toDisplay = typeof toCommission === "string"
+    ? (toCommission.includes("MEV Disabled") || toCommission.endsWith("%"))
+      ? toCommission
+      : `${toCommission}%`
     : `${toCommission}%`;
   
   const html = `

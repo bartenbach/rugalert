@@ -860,7 +860,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         <span className="text-gray-500">MEV Commission:</span>
                         <span
                           className={`font-semibold cursor-help ${
-                            validatorInfo.mev.mevCommission <= 5
+                            validatorInfo.mev.mevCommission === null
+                              ? "text-gray-400"
+                              : validatorInfo.mev.mevCommission <= 5
                               ? "text-green-400"
                               : validatorInfo.mev.mevCommission <= 10
                               ? "text-yellow-400"
@@ -868,7 +870,9 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           }`}
                           title="MEV Commission: The percentage this validator charges on Maximum Extractable Value (MEV) rewards from priority fees and bundles"
                         >
-                          {validatorInfo.mev.mevCommission}%
+                          {validatorInfo.mev.mevCommission === null
+                            ? "Not set"
+                            : `${validatorInfo.mev.mevCommission}%`}
                         </span>
                       </>
                     ) : (
@@ -1037,144 +1041,230 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   </p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10">
-                  {validatorInfo.performance && (
-                    <>
-                      <CircularGauge
-                        value={
-                          validatorInfo.performance.leaderSlots > 0
-                            ? 100 - validatorInfo.performance.skipRate
-                            : 0
-                        }
-                        label="Block Production"
-                        sublabel={
-                          validatorInfo.performance.leaderSlots ? (
-                            <>
-                              {(() => {
-                                const totalLeaderSlots =
-                                  validatorInfo.performance.leaderSlots;
-                                const produced =
-                                  validatorInfo.performance.blocksProduced;
-                                const skipRate =
-                                  validatorInfo.performance.skipRate;
+                  {/* Block Production gauge */}
+                  {validatorInfo.performance ? (
+                    <CircularGauge
+                      value={
+                        validatorInfo.performance.leaderSlots > 0
+                          ? 100 - validatorInfo.performance.skipRate
+                          : 0
+                      }
+                      label="Block Production"
+                      sublabel={
+                        validatorInfo.performance.leaderSlots ? (
+                          <>
+                            {(() => {
+                              const totalLeaderSlots =
+                                validatorInfo.performance.leaderSlots;
+                              const produced =
+                                validatorInfo.performance.blocksProduced;
+                              const skipRate =
+                                validatorInfo.performance.skipRate;
 
-                                // Calculate elapsed leader slots and skipped from skip rate
-                                // skipRate = (skipped / elapsed) * 100
-                                // We know: skipRate, produced
-                                // elapsed = produced / (1 - skipRate / 100)
-                                // skipped = elapsed - produced
-                                const elapsedLeaderSlots =
-                                  skipRate < 100
-                                    ? Math.round(
-                                        produced / (1 - skipRate / 100)
-                                      )
-                                    : produced;
-                                const skipped = Math.max(
-                                  0,
-                                  elapsedLeaderSlots - produced
-                                );
+                              // Calculate elapsed leader slots and skipped from skip rate
+                              // skipRate = (skipped / elapsed) * 100
+                              // We know: skipRate, produced
+                              // elapsed = produced / (1 - skipRate / 100)
+                              // skipped = elapsed - produced
+                              const elapsedLeaderSlots =
+                                skipRate < 100
+                                  ? Math.round(
+                                      produced / (1 - skipRate / 100)
+                                    )
+                                  : produced;
+                              const skipped = Math.max(
+                                0,
+                                elapsedLeaderSlots - produced
+                              );
 
-                                // Get skipped slots from performance data
-                                const skippedSlots = validatorInfo.performance.skippedSlots;
-                                const hasSkippedSlots = skippedSlots && skippedSlots.length > 0 && skipped > 0;
-                                
-                                // Limit displayed slots to avoid overwhelming the UI
-                                const MAX_DISPLAY_SLOTS = 20;
-                                const displaySlots = hasSkippedSlots 
-                                  ? skippedSlots.slice(0, MAX_DISPLAY_SLOTS)
-                                  : [];
-                                const remainingSlots = hasSkippedSlots && skippedSlots.length > MAX_DISPLAY_SLOTS
-                                  ? skippedSlots.length - MAX_DISPLAY_SLOTS
-                                  : 0;
+                              // Get skipped slots from performance data
+                              const skippedSlots = validatorInfo.performance.skippedSlots;
+                              const hasSkippedSlots = skippedSlots && skippedSlots.length > 0 && skipped > 0;
+                              
+                              // Limit displayed slots to avoid overwhelming the UI
+                              const MAX_DISPLAY_SLOTS = 20;
+                              const displaySlots = hasSkippedSlots 
+                                ? skippedSlots.slice(0, MAX_DISPLAY_SLOTS)
+                                : [];
+                              const remainingSlots = hasSkippedSlots && skippedSlots.length > MAX_DISPLAY_SLOTS
+                                ? skippedSlots.length - MAX_DISPLAY_SLOTS
+                                : 0;
 
-                                return (
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-gray-400 text-xs">
-                                      {totalLeaderSlots.toLocaleString()} leader
-                                      slots
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-gray-400 text-xs">
+                                    {totalLeaderSlots.toLocaleString()} leader
+                                    slots
+                                  </span>
+                                  <span>
+                                    <span className="text-green-400 font-medium">
+                                      {produced.toLocaleString()} produced
                                     </span>
-                                    <span>
-                                      <span className="text-green-400 font-medium">
-                                        {produced.toLocaleString()} produced
-                                      </span>
-                                      {" · "}
-                                      {skipped > 0 && hasSkippedSlots ? (
-                                        <span className="group relative inline-block">
-                                          <span className="text-red-400 cursor-help underline decoration-dotted">
-                                            {skipped.toLocaleString()} skipped
-                                          </span>
-                                          {/* Tooltip with skipped slots */}
-                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 w-64">
-                                            <div className="bg-[#0a0a0a] rounded-xl p-3 border-2 border-red-500/30 whitespace-normal shadow-2xl backdrop-blur-xl">
-                                              <p className="text-white font-bold text-sm mb-2">
-                                                Scheduled Leader Slots
-                                              </p>
-                                              <p className="text-gray-400 text-xs mb-2">
-                                                {skipped.toLocaleString()} of {skippedSlots.length.toLocaleString()} scheduled slots were skipped. Click any slot to view details on Solscan.
-                                              </p>
-                                              <div className="flex flex-wrap gap-1.5 mb-2">
-                                                {displaySlots.map((slot) => (
-                                                  <a
-                                                    key={slot}
-                                                    href={`https://solscan.io/block/${slot}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="text-red-400 hover:text-red-300 text-xs font-mono px-1.5 py-0.5 bg-red-500/10 border border-red-500/30 rounded hover:border-red-500/50 transition-colors"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                  >
-                                                    {slot.toLocaleString()}
-                                                  </a>
-                                                ))}
-                                                {remainingSlots > 0 && (
-                                                  <span className="text-gray-400 text-xs px-1.5 py-0.5">
-                                                    +{remainingSlots.toLocaleString()} more
-                                                  </span>
-                                                )}
-                                              </div>
-                                              <p className="text-gray-400 text-xs">
-                                                Click a slot to view on Solscan
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </span>
-                                      ) : (
-                                        <span
-                                          className={
-                                            skipped === 0
-                                              ? "text-green-400"
-                                              : "text-red-400"
-                                          }
-                                        >
+                                    {" · "}
+                                    {skipped > 0 && hasSkippedSlots ? (
+                                      <span className="group relative inline-block">
+                                        <span className="text-red-400 cursor-help underline decoration-dotted">
                                           {skipped.toLocaleString()} skipped
                                         </span>
-                                      )}
-                                    </span>
-                                  </div>
-                                );
-                              })()}
-                            </>
-                          ) : (
-                            "No data"
-                          )
-                        }
-                        thresholds={{ good: 95, warning: 85 }}
-                      />
-                      <CircularGauge
-                        value={validatorInfo.performance.voteCreditsPercentage}
-                        label="Vote Performance"
-                        sublabel={(() => {
-                          const credits = validatorInfo.performance.voteCredits;
-                          const formatted =
-                            credits >= 1000000
-                              ? `${(credits / 1000000).toFixed(1)}M`
-                              : credits >= 1000
-                              ? `${(credits / 1000).toFixed(1)}K`
-                              : credits.toLocaleString();
-                          return `${formatted} credits`;
-                        })()}
-                        thresholds={{ good: 90, warning: 75 }}
-                      />
-                    </>
+                                        {/* Tooltip with skipped slots */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 w-64">
+                                          <div className="bg-[#0a0a0a] rounded-xl p-3 border-2 border-red-500/30 whitespace-normal shadow-2xl backdrop-blur-xl">
+                                            <p className="text-white font-bold text-sm mb-2">
+                                              Scheduled Leader Slots
+                                            </p>
+                                            <p className="text-gray-400 text-xs mb-2">
+                                              {skipped.toLocaleString()} of {skippedSlots.length.toLocaleString()} scheduled slots were skipped. Click any slot to view details on Solscan.
+                                            </p>
+                                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                              {displaySlots.map((slot) => (
+                                                <a
+                                                  key={slot}
+                                                  href={`https://solscan.io/block/${slot}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="text-red-400 hover:text-red-300 text-xs font-mono px-1.5 py-0.5 bg-red-500/10 border border-red-500/30 rounded hover:border-red-500/50 transition-colors"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  {slot.toLocaleString()}
+                                                </a>
+                                              ))}
+                                              {remainingSlots > 0 && (
+                                                <span className="text-gray-400 text-xs px-1.5 py-0.5">
+                                                  +{remainingSlots.toLocaleString()} more
+                                                </span>
+                                              )}
+                                            </div>
+                                            <p className="text-gray-400 text-xs">
+                                              Click a slot to view on Solscan
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={
+                                          skipped === 0
+                                            ? "text-green-400"
+                                            : "text-red-400"
+                                        }
+                                      >
+                                        {skipped.toLocaleString()} skipped
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </>
+                        ) : (
+                          "No data"
+                        )
+                      }
+                      thresholds={{ good: 95, warning: 85 }}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 group">
+                      <div className="text-xs text-gray-400 text-center font-medium transition-colors group-hover:text-gray-300">
+                        Block Production
+                      </div>
+                      <div className="relative transition-transform group-hover:scale-105" style={{ width: 120, height: 120 }}>
+                        <svg
+                          className="transform -rotate-90 transition-all duration-300"
+                          width={120}
+                          height={120}
+                        >
+                          <circle
+                            cx={60}
+                            cy={60}
+                            r={50}
+                            fill="none"
+                            stroke="rgba(255,255,255,0.05)"
+                            strokeWidth="6"
+                          />
+                          <circle
+                            cx={60}
+                            cy={60}
+                            r={50}
+                            fill="none"
+                            stroke="rgba(156,163,175,0.3)"
+                            strokeWidth="6"
+                            strokeDasharray="314"
+                            strokeDashoffset="314"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-2xl font-bold text-gray-500 transition-all duration-300">
+                            —
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 text-center transition-colors group-hover:text-gray-400">
+                        Waiting for data from new epoch
+                      </div>
+                    </div>
                   )}
+
+                  {/* Vote Performance gauge */}
+                  {validatorInfo.performance ? (
+                    <CircularGauge
+                      value={validatorInfo.performance.voteCreditsPercentage}
+                      label="Vote Performance"
+                      sublabel={(() => {
+                        const credits = validatorInfo.performance.voteCredits;
+                        const formatted =
+                          credits >= 1000000
+                            ? `${(credits / 1000000).toFixed(1)}M`
+                            : credits >= 1000
+                            ? `${(credits / 1000).toFixed(1)}K`
+                            : credits.toLocaleString();
+                        return `${formatted} credits`;
+                      })()}
+                      thresholds={{ good: 90, warning: 75 }}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 group">
+                      <div className="text-xs text-gray-400 text-center font-medium transition-colors group-hover:text-gray-300">
+                        Vote Performance
+                      </div>
+                      <div className="relative transition-transform group-hover:scale-105" style={{ width: 120, height: 120 }}>
+                        <svg
+                          className="transform -rotate-90 transition-all duration-300"
+                          width={120}
+                          height={120}
+                        >
+                          <circle
+                            cx={60}
+                            cy={60}
+                            r={50}
+                            fill="none"
+                            stroke="rgba(255,255,255,0.05)"
+                            strokeWidth="6"
+                          />
+                          <circle
+                            cx={60}
+                            cy={60}
+                            r={50}
+                            fill="none"
+                            stroke="rgba(156,163,175,0.3)"
+                            strokeWidth="6"
+                            strokeDasharray="314"
+                            strokeDashoffset="314"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-2xl font-bold text-gray-500 transition-all duration-300">
+                            —
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 text-center transition-colors group-hover:text-gray-400">
+                        Waiting for data from new epoch
+                      </div>
+                    </div>
+                  )}
+
                   {/* Uptime gauge - uses real data from uptime tracking */}
                   {uptimePercentage !== null ? (
                     <CircularGauge

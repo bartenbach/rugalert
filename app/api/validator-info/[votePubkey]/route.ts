@@ -136,6 +136,7 @@ export async function GET(
     }
 
     // Fetch latest MEV data if validator is Jito-enabled
+    // Check both jito_enabled flag AND latest MEV snapshot to determine if MEV is actually enabled
     const jitoEnabled = Boolean(validator.jito_enabled);
     let mevData = null;
     
@@ -148,9 +149,22 @@ export async function GET(
       `;
 
       if (mevRecords[0]) {
+        // Preserve NULL values - NULL commission can mean:
+        // 1. MEV is disabled (running_jito = false) - handled by jito_enabled flag
+        // 2. MEV is enabled but commission not set (running_jito = true, mev_commission_bps = null)
+        // Since jito_enabled is true here, NULL means commission not set, not disabled
+        const mevCommission = mevRecords[0].mev_commission !== null && mevRecords[0].mev_commission !== undefined
+          ? Number(mevRecords[0].mev_commission)
+          : null;
+        const priorityFeeCommission = mevRecords[0].priority_fee_commission !== null && mevRecords[0].priority_fee_commission !== undefined
+          ? Number(mevRecords[0].priority_fee_commission)
+          : null;
+        
+        // Return MEV data if Jito is enabled, even if commission is NULL
+        // NULL commission with Jito enabled means "commission not set" not "MEV disabled"
         mevData = {
-          mevCommission: Number(mevRecords[0].mev_commission || 0),
-          priorityFeeCommission: Number(mevRecords[0].priority_fee_commission || 0),
+          mevCommission,
+          priorityFeeCommission,
           epoch: Number(mevRecords[0].epoch),
         };
       }

@@ -126,11 +126,16 @@ async function sendValidatorEmail(
   votePubkey: string, 
   validatorName: string, 
   emailData: { subject: string; html: string },
-  alertType: "commission" | "delinquency"
+  alertType: "commission" | "delinquency",
+  validatorsWithSubscribers?: Set<string>
 ) {
   try {
     if (!process.env.RESEND_API_KEY || !process.env.ALERTS_FROM) {
-      console.log("⚠️ Validator email skipped: Missing RESEND_API_KEY or ALERTS_FROM");
+      return; // Silently skip if email not configured
+    }
+    
+    // Early exit if we know this validator has no subscribers (avoids database query)
+    if (validatorsWithSubscribers && !validatorsWithSubscribers.has(votePubkey)) {
       return;
     }
     
@@ -138,9 +143,7 @@ async function sendValidatorEmail(
     try {
       await sql`SELECT 1 FROM validator_subscriptions LIMIT 1`;
     } catch (tableError) {
-      console.log("⚠️ validator_subscriptions table does not exist yet - skipping validator emails");
-      console.log("   Run: psql $DATABASE_URL -f create_validator_subscriptions.sql");
-      return;
+      return; // Silently skip if table doesn't exist
     }
     
     // Query validator-specific subscriptions
@@ -151,8 +154,8 @@ async function sendValidatorEmail(
         AND delivery_method = 'email'
     `;
     
+    // Silently return if no subscribers (this is expected for most validators)
     if (subs.length === 0) {
-      console.log(`📧 No subscribers for validator ${votePubkey}`);
       return;
     }
     
@@ -575,6 +578,36 @@ export async function POST(req: NextRequest) {
       latestMevByValidator.set(r.vote_pubkey, r);
     });
     
+    // Fetch existing MEV events for this epoch (to prevent duplicate emails)
+    const existingMevEvents = new Set<string>();
+    const mevEvents = await sql`
+      SELECT vote_pubkey, from_mev_commission, to_mev_commission
+      FROM mev_events
+      WHERE epoch = ${epoch}
+    `;
+    mevEvents.forEach((r: any) => {
+      // Create a unique key for this event
+      const key = `${r.vote_pubkey}-${r.from_mev_commission ?? 'NULL'}-${r.to_mev_commission ?? 'NULL'}`;
+      existingMevEvents.add(key);
+    });
+    
+    // Pre-fetch validators with subscribers to avoid querying for every validator
+    const validatorsWithSubscribers = new Set<string>();
+    try {
+      const subs = await sql`
+        SELECT DISTINCT vote_pubkey
+        FROM validator_subscriptions
+        WHERE delivery_method = 'email'
+          AND (commission_alerts = true OR delinquency_alerts = true)
+      `;
+      subs.forEach((r: any) => {
+        validatorsWithSubscribers.add(r.vote_pubkey);
+      });
+      logProgress(`Pre-fetched ${validatorsWithSubscribers.size} validators with email subscribers`);
+    } catch (error) {
+      console.log("⚠️ Could not pre-fetch validator subscribers, will check individually");
+    }
+    
     // Fetch latest commission snapshot per validator (for change detection)
     logProgress(`Pre-fetching latest commission snapshots...`);
     const latestCommissionByValidator = new Map<string, { commission: number, epoch: number, slot: number }>();
@@ -592,7 +625,7 @@ export async function POST(req: NextRequest) {
       });
     });
     
-    logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingSnapshotKeys.size} commission snapshots, ${existingMevKeys.size} MEV, ${latestCommissionByValidator.size} commission`);
+    logProgress(`Pre-fetch complete: ${existingValidators.size} validators, ${existingStakeKeys.size} stake, ${existingPerfKeys.size} perf, ${existingSnapshotKeys.size} commission snapshots, ${existingMevKeys.size} MEV snapshots, ${existingMevEvents.size} MEV events, ${latestCommissionByValidator.size} commission`);
     
     // Batch arrays for bulk creation
     const validatorsToCreate: any[] = [];
@@ -1015,7 +1048,7 @@ export async function POST(req: NextRequest) {
           const emailData = generateCommissionChangeEmail(
             validatorName, v.votePubkey, from, to, delta, epoch, "RUG", "INFLATION"
           );
-          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
+          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
         } else if (type === "CAUTION") {
           commissionCautions.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
           const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
@@ -1027,7 +1060,7 @@ export async function POST(req: NextRequest) {
           const emailData = generateCommissionChangeEmail(
             validatorName, v.votePubkey, from, to, delta, epoch, "CAUTION", "INFLATION"
           );
-          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
+          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
         } else if (type === "INFO") {
           commissionInfos.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
           
@@ -1035,7 +1068,7 @@ export async function POST(req: NextRequest) {
           const emailData = generateCommissionChangeEmail(
             validatorName, v.votePubkey, from, to, delta, epoch, "INFO", "INFLATION"
           );
-          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
+          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
         }
       }
       
@@ -1081,11 +1114,14 @@ export async function POST(req: NextRequest) {
             : null;
           
           // Compare with proper NULL handling
+          // IMPORTANT: When running_jito is true, NULL commission means "no commission set" not "MEV disabled"
+          // Only treat as "MEV Disabled" when running_jito becomes false (handled in else if block below)
           const changed = (prevMevCommission === null && currentMevCommission !== null) ||
-                         (prevMevCommission !== null && currentMevCommission === null) ||
                          (prevMevCommission !== null && currentMevCommission !== null && prevMevCommission !== currentMevCommission);
           
-          if (changed) {
+          // Don't create events for changes from number → NULL when still running Jito
+          // This is just commission being unset, not MEV being disabled
+          if (changed && !(prevMevCommission !== null && currentMevCommission === null)) {
             const delta = (currentMevCommission ?? 0) - (prevMevCommission ?? 0);
             const eventType = detectMevRug(prevMevCommission, currentMevCommission);
             
@@ -1107,6 +1143,10 @@ export async function POST(req: NextRequest) {
             const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
             const validatorName = chainName || v.votePubkey;
             
+            // Check if this event already exists to prevent duplicate emails
+            const eventKey = `${v.votePubkey}-${prevMevCommission ?? 'NULL'}-${currentMevCommission ?? 'NULL'}`;
+            const eventAlreadyExists = existingMevEvents.has(eventKey);
+            
             if (eventType === "RUG") {
               // RUG means both values are numbers (not NULL)
               const fromVal = prevMevCommission ?? 0;
@@ -1121,11 +1161,16 @@ export async function POST(req: NextRequest) {
                 await postToTwitter(twitterMsg);
               }
               
-              // Send validator-specific emails with beautiful HTML template
-              const emailData = generateCommissionChangeEmail(
-                validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "RUG", "MEV"
-              );
-              await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
+              // Send validator-specific emails with beautiful HTML template (only if event doesn't already exist)
+              if (!eventAlreadyExists) {
+                const emailData = generateCommissionChangeEmail(
+                  validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "RUG", "MEV"
+                );
+                await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
+                existingMevEvents.add(eventKey);
+              } else {
+                console.log(`  ⏭️  Skipping duplicate MEV RUG email for ${v.votePubkey.substring(0, 8)}... (event already exists)`);
+              }
             } else if (eventType === "CAUTION") {
               const fromVal = prevMevCommission ?? 0;
               const toVal = currentMevCommission ?? 0;
@@ -1133,11 +1178,16 @@ export async function POST(req: NextRequest) {
               const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
               const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
               
-              // Send validator-specific emails with beautiful HTML template
-              const emailData = generateCommissionChangeEmail(
-                validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "CAUTION", "MEV"
-              );
-              await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
+              // Send validator-specific emails with beautiful HTML template (only if event doesn't already exist)
+              if (!eventAlreadyExists) {
+                const emailData = generateCommissionChangeEmail(
+                  validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "CAUTION", "MEV"
+                );
+                await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
+                existingMevEvents.add(eventKey);
+              } else {
+                console.log(`  ⏭️  Skipping duplicate MEV CAUTION email for ${v.votePubkey.substring(0, 8)}... (event already exists)`);
+              }
               const msg = `⚠️ CAUTION: MEV Commission Change Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr} (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
               await sendDiscord(msg);
               if (prevMevCommission !== null && currentMevCommission !== null) {
@@ -1146,12 +1196,18 @@ export async function POST(req: NextRequest) {
               }
             } else if (eventType === "INFO") {
               // Send validator-specific emails for ALL MEV commission changes (including decreases, MEV enabled/disabled)
-              const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
-              const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
-              const emailData = generateCommissionChangeEmail(
-                validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "INFO", "MEV"
-              );
-              await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
+              // Only if event doesn't already exist
+              if (!eventAlreadyExists) {
+                const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
+                const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
+                const emailData = generateCommissionChangeEmail(
+                  validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "INFO", "MEV"
+                );
+                await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
+                existingMevEvents.add(eventKey);
+              } else {
+                console.log(`  ⏭️  Skipping duplicate MEV INFO email for ${v.votePubkey.substring(0, 8)}... (event already exists)`);
+              }
             }
           }
         }
@@ -1196,16 +1252,25 @@ export async function POST(req: NextRequest) {
           
           console.log(`  📉 MEV disabled for ${v.votePubkey.substring(0, 8)}... (was ${prevMevCommission}%)`);
           
-          // Send validator-specific emails for MEV disabled (INFO event)
-          const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
-          const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
-          const validatorName = chainName || v.votePubkey;
-          const fromStr = `${prevMevCommission}%`;
-          const toStr = 'MEV Disabled';
-          const emailData = generateCommissionChangeEmail(
-            validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "INFO", "MEV"
-          );
-          await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission");
+          // Check if this event already exists to prevent duplicate emails
+          const eventKey = `${v.votePubkey}-${prevMevCommission}-NULL`;
+          if (!existingMevEvents.has(eventKey)) {
+            // Send validator-specific emails for MEV disabled (INFO event)
+            const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
+            const validatorUrl = `${baseUrl}/validator/${v.votePubkey}`;
+            const validatorName = chainName || v.votePubkey;
+            const fromStr = `${prevMevCommission}%`;
+            const toStr = 'MEV Disabled';
+            const emailData = generateCommissionChangeEmail(
+              validatorName, v.votePubkey, fromStr, toStr, delta, epoch, "INFO", "MEV"
+            );
+            await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
+            
+            // Mark this event as sent to prevent duplicates within the same run
+            existingMevEvents.add(eventKey);
+          } else {
+            console.log(`  ⏭️  Skipping duplicate MEV disabled email for ${v.votePubkey.substring(0, 8)}... (event already exists)`);
+          }
         }
       } else if (hasHistoricalMev && !jitoInfo) {
         // Validator has historical MEV data but is NOT in current Jito API response
@@ -1377,7 +1442,8 @@ export async function POST(req: NextRequest) {
             validator.votePubkey,
             validatorName,
             emailData,
-            "delinquency"
+            "delinquency",
+            validatorsWithSubscribers
           );
           
           // Also send Discord notification
