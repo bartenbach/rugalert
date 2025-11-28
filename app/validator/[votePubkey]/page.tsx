@@ -708,11 +708,20 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         }}
                       >
                         {result.iconUrl ? (
-                          <img
-                            src={result.iconUrl}
-                            alt={result.name}
-                            className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
-                          />
+                          <>
+                            <img
+                              src={result.iconUrl}
+                              alt={result.name}
+                              className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                              }}
+                            />
+                            <div className="hidden w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
+                              <span className="text-lg text-gray-500">?</span>
+                            </div>
+                          </>
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
                             <span className="text-lg text-gray-500">?</span>
@@ -754,13 +763,19 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               {/* Icon */}
               <div className="flex-shrink-0">
                 {meta?.avatarUrl ? (
-                  <img
-                    src={meta.avatarUrl}
-                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-[1200ms] ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:border-orange-400/60"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
+                  <>
+                    <img
+                      src={meta.avatarUrl}
+                      className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-[1200ms] ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:border-orange-400/60"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                        e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                      }}
+                    />
+                    <div className="hidden w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-[1200ms] ease-in-out hover:border-orange-400/60 hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
+                      ?
+                    </div>
+                  </>
                 ) : (
                   <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-[1200ms] ease-in-out hover:border-orange-400/60 hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
                     ?
@@ -1513,11 +1528,20 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       >
                         <div className="flex items-start gap-3 mb-2">
                           {record.iconUrl ? (
-                            <img
-                              src={record.iconUrl}
-                              alt={record.name || "Icon"}
-                              className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0"
-                            />
+                            <>
+                              <img
+                                src={record.iconUrl}
+                                alt={record.name || "Icon"}
+                                className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                                }}
+                              />
+                              <div className="hidden w-10 h-10 rounded-lg border border-white/20 bg-white/5 flex-shrink-0 flex items-center justify-center text-gray-500 text-lg">
+                                ?
+                              </div>
+                            </>
                           ) : (
                             <div className="w-10 h-10 rounded-lg border border-white/20 bg-white/5 flex-shrink-0 flex items-center justify-center text-gray-500 text-lg">
                               ?
