@@ -1,6 +1,6 @@
 import { Connection, clusterApiUrl } from "@solana/web3.js";
-import { sql } from "../../../lib/db-neon";
 import { NextRequest, NextResponse } from "next/server";
+import { sql } from "../../../lib/db-neon";
 
 // Force dynamic rendering (query params)
 export const dynamic = 'force-dynamic';
@@ -65,7 +65,8 @@ export async function GET(request: NextRequest) {
         jito_enabled, 
         active_stake, 
         activating_stake, 
-        deactivating_stake
+        deactivating_stake,
+        delinquent_since
       FROM validators
     `;
     
@@ -98,6 +99,7 @@ export async function GET(request: NextRequest) {
         activeStake: lamportsToSolFromDb(record.active_stake),
         activatingStake: lamportsToSolFromDb(record.activating_stake),
         deactivatingStake: lamportsToSolFromDb(record.deactivating_stake),
+        delinquentSince: record.delinquent_since ? new Date(record.delinquent_since).toISOString() : null,
       });
     });
 
@@ -213,6 +215,14 @@ export async function GET(request: NextRequest) {
         let rankChange: number | null = null;
         // We'll calculate current rank after sorting, so we'll come back to this
         
+        // Calculate delinquency duration if delinquent
+        const isDelinquent = delinquentSet.has(votePubkey);
+        let delinquentDurationMs: number | null = null;
+        if (isDelinquent && validator.delinquentSince) {
+          const delinquentSince = new Date(validator.delinquentSince);
+          delinquentDurationMs = Date.now() - delinquentSince.getTime();
+        }
+        
         validatorsWithStake.push({
           ...validator,
           commission: Number(validator.commission || 0),
@@ -220,7 +230,8 @@ export async function GET(request: NextRequest) {
           activatingStake: Number(validator.activatingStake || 0),
           deactivatingStake: Number(validator.deactivatingStake || 0),
           // Override delinquent status with real-time RPC data
-          delinquent: delinquentSet.has(votePubkey),
+          delinquent: isDelinquent,
+          delinquentDurationMs,
           mevCommission: mevCommissionMap.get(votePubkey) ?? null,
           uptimePercent,
           uptimeDays,
@@ -244,6 +255,8 @@ export async function GET(request: NextRequest) {
         
         const previousRank = previousRankMap.get(votePubkey);
         
+        const isDelinquent = delinquentSet.has(votePubkey);
+        // For validators not in our DB, we don't have delinquent_since, so duration will be null
         validatorsWithStake.push({
           votePubkey,
           identityPubkey: null,
@@ -254,7 +267,8 @@ export async function GET(request: NextRequest) {
           activeStake: rpcStake,
           activatingStake: 0,
           deactivatingStake: 0,
-          delinquent: delinquentSet.has(votePubkey),
+          delinquent: isDelinquent,
+          delinquentDurationMs: null, // No history for validators not in DB
           stakeAccountCount: 0,
           uptimePercent,
           uptimeDays,

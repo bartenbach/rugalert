@@ -55,8 +55,8 @@ export default function CommissionChart({
         >
           <defs>
             <linearGradient id="inflationGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#ff6b35" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#ff6b35" stopOpacity={0} />
+              <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.2} />
+              <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="mevGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2} />
@@ -97,7 +97,7 @@ export default function CommissionChart({
             type="monotone"
             dataKey="commission"
             name="Inflation Commission"
-            stroke="#ff6b35"
+            stroke="#06b6d4"
             strokeWidth={3}
             fill="url(#inflationGradient)"
             animationDuration={1000}
@@ -109,12 +109,12 @@ export default function CommissionChart({
             type="monotone"
             dataKey="commission"
             name="Inflation Commission"
-            stroke="#ff6b35"
+            stroke="#06b6d4"
             strokeWidth={3}
-            dot={{ fill: "#ff6b35", strokeWidth: 2, r: 4, stroke: "#1a1a1a" }}
+            dot={{ fill: "#06b6d4", strokeWidth: 2, r: 4, stroke: "#1a1a1a" }}
             activeDot={{
               r: 6,
-              fill: "#e85a28",
+              fill: "#0891b2",
               stroke: "#1a1a1a",
               strokeWidth: 2,
             }}

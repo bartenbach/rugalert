@@ -197,10 +197,10 @@ function CircularGauge({
       bg: "bg-yellow-500/5",
     },
     orange: {
-      stroke: "stroke-orange-500",
-      text: "text-orange-400",
-      glow: "drop-shadow-[0_0_8px_rgba(249,115,22,0.5)]",
-      bg: "bg-orange-500/5",
+      stroke: "stroke-cyan-500",
+      text: "text-cyan-400",
+      glow: "drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]",
+      bg: "bg-cyan-500/5",
     },
     red: {
       stroke: "stroke-red-500",
@@ -362,7 +362,7 @@ function StakeBreakdown({
                   href={`https://solscan.io/account/${account.staker}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 truncate hover:text-orange-400 transition-colors"
+                  className="flex-1 truncate hover:text-cyan-400 transition-colors"
                   title={account.staker}
                 >
                   {displayName}
@@ -396,7 +396,7 @@ function LinkifyText({ text }: { text: string }) {
               href={part}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-orange-400 hover:text-orange-300 hover:underline"
+              className="text-cyan-400 hover:text-cyan-300 hover:underline"
             >
               {part}
             </a>
@@ -605,7 +605,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               window.location.href = "/validators";
             }
           }}
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-orange-400 transition-colors font-medium flex-shrink-0 text-sm sm:text-base"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors font-medium flex-shrink-0 text-sm sm:text-base"
         >
           <span>←</span>
           <span className="hidden sm:inline">Back to Validators</span>
@@ -627,11 +627,11 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                 }
               }}
               placeholder="Search validators by name or pubkey..."
-              className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-orange-500/20"
+              className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-cyan-500/20"
             />
             {searching ? (
               <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : (
               <svg
@@ -682,7 +682,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     onClick={() => setShowSearchResults(false)}
                   />
                   <div
-                    className="fixed rounded-xl border-2 border-orange-500 overflow-hidden max-h-96 overflow-y-auto shadow-2xl"
+                    className="fixed rounded-xl border-2 border-cyan-500 overflow-hidden max-h-96 overflow-y-auto shadow-2xl"
                     style={{
                       zIndex: 999999,
                       backgroundColor: "#0a0a0a",
@@ -691,8 +691,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       width: `${dropdownPosition.width}px`,
                     }}
                   >
-                    <div className="p-3 border-b border-orange-500/50 bg-gradient-to-r from-orange-500/30 to-orange-600/30">
-                      <span className="text-sm text-orange-300 font-bold px-2">
+                    <div className="p-3 border-b border-cyan-500/50 bg-gradient-to-r from-cyan-500/30 to-cyan-600/30">
+                      <span className="text-sm text-cyan-300 font-bold px-2">
                         🔍 Validators matching "{searchQuery}"
                       </span>
                     </div>
@@ -700,7 +700,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       <a
                         key={result.votePubkey}
                         href={`/validator/${result.votePubkey}`}
-                        className="flex items-center gap-3 p-4 hover:bg-orange-500/30 transition-all border-b border-white/10 last:border-0 group"
+                        className="flex items-center gap-3 p-4 hover:bg-cyan-500/30 transition-all border-b border-white/10 last:border-0 group"
                         style={{ backgroundColor: "#1a1a1a" }}
                         onClick={() => {
                           setShowSearchResults(false);
@@ -712,30 +712,30 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                             <img
                               src={result.iconUrl}
                               alt={result.name}
-                              className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0"
+                              className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-cyan-500/70 transition-colors flex-shrink-0"
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";
                                 e.currentTarget.nextElementSibling?.classList.remove("hidden");
                               }}
                             />
-                            <div className="hidden w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
+                            <div className="hidden w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center border-2 border-white/20 group-hover:border-cyan-500/70 transition-colors flex-shrink-0">
                               <span className="text-lg text-gray-500">?</span>
                             </div>
                           </>
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center border-2 border-white/20 group-hover:border-orange-500/70 transition-colors flex-shrink-0">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center border-2 border-white/20 group-hover:border-cyan-500/70 transition-colors flex-shrink-0">
                             <span className="text-lg text-gray-500">?</span>
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="text-white text-base font-bold truncate group-hover:text-orange-300 transition-colors">
+                          <div className="text-white text-base font-bold truncate group-hover:text-cyan-300 transition-colors">
                             {result.name}
                           </div>
                           <div className="text-xs text-gray-300 font-mono truncate bg-black/30 px-2 py-0.5 rounded mt-1 inline-block">
                             {result.votePubkey}
                           </div>
                         </div>
-                        <span className="text-gray-400 group-hover:text-orange-400 transition-colors text-xl flex-shrink-0">
+                        <span className="text-gray-400 group-hover:text-cyan-400 transition-colors text-xl flex-shrink-0">
                           →
                         </span>
                       </a>
@@ -751,7 +751,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-gray-400">Loading validator data...</span>
           </div>
         </div>
@@ -766,18 +766,18 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <>
                     <img
                       src={meta.avatarUrl}
-                      className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-[1200ms] ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] hover:border-orange-400/60"
+                      className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-[1200ms] ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:border-cyan-400/60"
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
                         e.currentTarget.nextElementSibling?.classList.remove("hidden");
                       }}
                     />
-                    <div className="hidden w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-[1200ms] ease-in-out hover:border-orange-400/60 hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
+                    <div className="hidden w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-[1200ms] ease-in-out hover:border-cyan-400/60 hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
                       ?
                     </div>
                   </>
                 ) : (
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-[1200ms] ease-in-out hover:border-orange-400/60 hover:shadow-[0_0_30px_rgba(249,115,22,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl border-2 border-white/10 bg-white/5 transition-all duration-[1200ms] ease-in-out hover:border-cyan-400/60 hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] flex items-center justify-center text-gray-500 text-xl sm:text-3xl md:text-4xl">
                     ?
                   </div>
                 )}
@@ -899,7 +899,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         href={meta.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-orange-400 hover:text-orange-300 font-semibold hover:underline truncate"
+                        className="text-cyan-400 hover:text-cyan-300 font-semibold hover:underline truncate"
                       >
                         {meta.website
                           .replace(/^https?:\/\//, "")
@@ -973,7 +973,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                       className={`flex items-center gap-2 text-[10px] sm:text-xs font-mono rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 border transition-all ${
                         copiedIdentity
                           ? "bg-green-500/20 border-green-500 text-green-400"
-                          : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400 text-gray-400"
+                          : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-cyan-400 text-gray-400"
                       }`}
                     >
                       <span className="text-gray-500 flex-shrink-0 text-[10px] sm:text-xs">
@@ -1003,7 +1003,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     className={`flex items-center gap-2 text-[10px] sm:text-xs font-mono rounded-lg px-2 sm:px-3 py-1 sm:py-1.5 border transition-all ${
                       copiedVote
                         ? "bg-green-500/20 border-green-500 text-green-400"
-                        : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-400 text-gray-400"
+                        : "bg-white/5 hover:bg-white/10 border-white/10 hover:border-cyan-400 text-gray-400"
                     }`}
                   >
                     <span className="text-gray-500 flex-shrink-0 text-[10px] sm:text-xs">
@@ -1509,7 +1509,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                       <span className={`text-[10px] font-semibold ${
                                         event.commission_type === 'MEV' 
                                           ? 'text-purple-400' 
-                                          : 'text-orange-400'
+                                          : 'text-cyan-400'
                                       }`}>
                                         {event.commission_type === 'MEV' ? 'MEV Commission' : 'Inflation Commission'}
                                       </span>
@@ -1546,7 +1546,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                           <div className="mt-4 text-center">
                             <button
                               onClick={() => setEventsToShow(prev => Math.min(prev + 10, events.length))}
-                              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-orange-400 rounded-lg text-sm text-gray-300 hover:text-white transition-all"
+                              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-cyan-400 rounded-lg text-sm text-gray-300 hover:text-white transition-all"
                             >
                               Show More ({Math.min(10, events.length - eventsToShow)} more)
                             </button>
@@ -1661,7 +1661,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                   CURRENT
                                 </span>
                               ) : changes.length > 0 ? (
-                                <span className="text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded">
+                                <span className="text-xs text-cyan-400 bg-cyan-500/20 px-2 py-1 rounded">
                                   Changed: {changes.join(", ")}
                                 </span>
                               ) : null}
@@ -1672,7 +1672,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                 href={record.website}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-xs text-orange-400 hover:text-orange-300 mt-1 block truncate"
+                                className="text-xs text-cyan-400 hover:text-cyan-300 mt-1 block truncate"
                               >
                                 🔗{" "}
                                 {record.website

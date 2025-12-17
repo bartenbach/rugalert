@@ -57,7 +57,7 @@ function UnsubscribeForm() {
           </p>
           <a
             href="/"
-            className="inline-block px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-xl transition-all duration-200"
+            className="inline-block px-6 py-3 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-semibold rounded-xl transition-all duration-200"
           >
             Return to Homepage
           </a>
@@ -88,7 +88,7 @@ function UnsubscribeForm() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your@email.com"
               required
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
               disabled={loading}
             />
           </div>
@@ -110,7 +110,7 @@ function UnsubscribeForm() {
           <div className="text-center">
             <a
               href="/"
-              className="text-sm text-gray-400 hover:text-orange-400 transition-colors"
+              className="text-sm text-gray-400 hover:text-cyan-400 transition-colors"
             >
               ← Back to homepage
             </a>

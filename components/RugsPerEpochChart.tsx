@@ -176,7 +176,7 @@ export default function RugsPerEpochChart() {
             </div>
           </div>
           <div>
-            <div className="text-3xl font-bold text-orange-400">
+            <div className="text-3xl font-bold text-cyan-400">
               {globalStats.avgPerEpoch}
             </div>
             <div className="text-xs text-gray-400 uppercase tracking-widest font-bold">
@@ -210,7 +210,7 @@ export default function RugsPerEpochChart() {
             <span className="text-xs text-gray-400">MEV Commission</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-gradient-to-r from-orange-500 to-orange-600"></div>
+            <div className="w-3 h-3 rounded bg-gradient-to-r from-cyan-500 to-cyan-600"></div>
             <span className="text-xs text-gray-400">Both</span>
           </div>
         </div>
@@ -231,8 +231,8 @@ export default function RugsPerEpochChart() {
                 <div
                   className={`w-20 text-right text-sm font-mono transition-colors ${
                     selectedEpoch === item.epoch
-                      ? "text-orange-400 font-bold"
-                      : "text-gray-400 group-hover:text-orange-400"
+                      ? "text-cyan-400 font-bold"
+                      : "text-gray-400 group-hover:text-cyan-400"
                   }`}
                 >
                   {item.epoch}
@@ -243,7 +243,7 @@ export default function RugsPerEpochChart() {
                   <div
                     className={`h-10 bg-white/5 rounded-lg overflow-hidden transition-all ${
                       selectedEpoch === item.epoch
-                        ? "ring-2 ring-orange-500/50"
+                        ? "ring-2 ring-cyan-500/50"
                         : ""
                     }`}
                   >
@@ -284,7 +284,7 @@ export default function RugsPerEpochChart() {
                       {/* Both (validators who rugged BOTH commission and MEV in this epoch) */}
                       {item.bothTypes > 0 && (
                         <div
-                          className="bg-gradient-to-r from-orange-500/80 to-orange-600/80 transition-all duration-300 group-hover:from-orange-400 group-hover:to-orange-500 flex items-center justify-center"
+                          className="bg-gradient-to-r from-cyan-500/80 to-cyan-600/80 transition-all duration-300 group-hover:from-cyan-400 group-hover:to-cyan-500 flex items-center justify-center"
                           style={{
                             width: `${(item.bothTypes / maxCount) * 100}%`,
                             minWidth: "2rem",
@@ -305,7 +305,7 @@ export default function RugsPerEpochChart() {
                   <span
                     className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
                       selectedEpoch === item.epoch
-                        ? "bg-orange-500/20 text-orange-300 border border-orange-500/30"
+                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
                         : "bg-red-500/20 text-red-300 border border-red-500/30 group-hover:bg-red-500/30"
                     }`}
                   >
@@ -321,7 +321,7 @@ export default function RugsPerEpochChart() {
                 {loadingEvents ? (
                   <div className="p-6 text-center">
                     <div className="inline-flex items-center gap-3">
-                      <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-gray-400">Loading details...</span>
                     </div>
                   </div>
@@ -357,14 +357,14 @@ export default function RugsPerEpochChart() {
                           <tr
                             key={event.id}
                             className={`hover:bg-white/5 transition-colors ${
-                              isRepeatOffender ? 'bg-orange-500/5' : ''
+                              isRepeatOffender ? 'bg-cyan-500/5' : ''
                             }`}
                           >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <a
                                   href={`/validator/${event.vote_pubkey}`}
-                                  className="flex items-center gap-2 hover:text-orange-400 transition-colors"
+                                  className="flex items-center gap-2 hover:text-cyan-400 transition-colors"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   {event.icon_url ? (
@@ -383,7 +383,7 @@ export default function RugsPerEpochChart() {
                                     />
                                   ) : null}
                                   <div
-                                    className={`w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500/20 to-orange-500/30 border border-white/10 flex items-center justify-center ${
+                                    className={`w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-cyan-500/30 border border-white/10 flex items-center justify-center ${
                                       event.icon_url ? "hidden" : ""
                                     }`}
                                   >
@@ -396,7 +396,7 @@ export default function RugsPerEpochChart() {
                                     </span>
                                     {isRepeatOffender && (
                                       <span 
-                                        className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-semibold border border-orange-500/30"
+                                        className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-semibold border border-cyan-500/30"
                                         title={`Rugged in ${globalRugCount} total epochs (across all time)`}
                                       >
                                         ⚠️ {globalRugCount}x
@@ -454,7 +454,7 @@ export default function RugsPerEpochChart() {
         <div className="mt-6 pt-6 border-t border-white/10 flex items-center justify-center gap-3 relative">
           {pageLoading && (
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-              <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
           <button

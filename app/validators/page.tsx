@@ -1,6 +1,6 @@
 "use client";
-import { useSearchParams, useRouter } from "next/navigation";
-import {
+import { useRouter, useSearchParams } from "next/navigation";
+import React, {
   Suspense,
   useCallback,
   useEffect,
@@ -24,6 +24,7 @@ type Validator = {
   version: string | null;
   skipRate: number | null;
   delinquent: boolean;
+  delinquentDurationMs?: number | null;
   rank: number;
   rankChange: number | null;
   stakeAccountCount: number;
@@ -69,6 +70,29 @@ function ValidatorsPageContent() {
 
   const observerTarget = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 200;
+
+  // Helper function to format delinquency duration
+  const formatDelinquencyDuration = (
+    durationMs: number | null | undefined
+  ): string | null => {
+    if (!durationMs || durationMs < 0) return null;
+
+    const seconds = Math.floor(durationMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    const remainingHours = hours % 24;
+    const remainingMinutes = minutes % 60;
+
+    const parts: string[] = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (remainingHours > 0) parts.push(`${remainingHours}h`);
+    if (remainingMinutes > 0 || parts.length === 0)
+      parts.push(`${remainingMinutes}m`);
+
+    return parts.join(" ");
+  };
 
   // Read filter params from URL
   // Supported URL parameters:
@@ -311,22 +335,28 @@ function ValidatorsPageContent() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Network Stats Header */}
+    <div
+      className="space-y-6 relative"
+      style={{ zIndex: 10, isolation: "isolate" }}
+    >
+      {/* Network Stats Header - Orb style */}
       {networkStats && (
-        <div className="glass rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-6 shadow-2xl shadow-black/20">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="border-b border-[#403A3B] pb-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* Validators */}
-            <div className="space-y-3">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+            <div className="space-y-2">
+              <div className="text-[10px] text-[#B0B0B0] uppercase tracking-widest font-semibold">
                 Network
               </div>
               <div className="space-y-1">
                 <div className="flex items-baseline gap-2">
-                  <div className="text-3xl font-bold text-white">
+                  <div
+                    className="text-3xl font-bold text-cyan-400"
+                    style={{ fontFamily: "ui-monospace, monospace" }}
+                  >
                     {networkStats.activeValidators.toLocaleString()}
                   </div>
-                  <div className="text-sm text-gray-400">
+                  <div className="text-sm text-[#B0B0B0]">
                     / {networkStats.totalValidators.toLocaleString()} validators
                   </div>
                 </div>
@@ -334,58 +364,77 @@ function ValidatorsPageContent() {
                   <button
                     onClick={() => {
                       if (delinquentFilter === "true") {
-                        // Clear the filter
                         router.push("/validators");
                       } else {
-                        // Apply the filter
                         router.push("/validators?delinquent=true");
                       }
                     }}
                     className={`text-xs transition-colors ${
-                      delinquentFilter === "true" 
-                        ? "text-orange-400 font-semibold" 
-                        : "text-gray-400 hover:text-gray-300"
+                      delinquentFilter === "true"
+                        ? "text-cyan-400 font-semibold"
+                        : "text-[#B0B0B0] hover:text-cyan-400"
                     } cursor-pointer underline decoration-dotted underline-offset-2 hover:decoration-solid`}
-                    title={delinquentFilter === "true" ? "Clear filter" : "Filter to delinquent validators"}
+                    title={
+                      delinquentFilter === "true"
+                        ? "Clear filter"
+                        : "Filter to delinquent validators"
+                    }
                   >
-                    {networkStats.delinquentValidators.toLocaleString()} delinquent
+                    {networkStats.delinquentValidators.toLocaleString()}{" "}
+                    delinquent
                   </button>
                 )}
               </div>
             </div>
 
             {/* Stake */}
-            <div className="space-y-3">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+            <div className="space-y-2">
+              <div className="text-[10px] text-[#B0B0B0] uppercase tracking-widest font-semibold">
                 Stake
               </div>
               <div className="space-y-1">
                 <div className="flex items-baseline gap-2">
-                  <div className="text-3xl font-bold text-green-400">
+                  <div
+                    className="text-3xl font-bold text-cyan-400"
+                    style={{ fontFamily: "ui-monospace, monospace" }}
+                  >
                     {(networkStats.activeStake / 1_000_000).toFixed(1)}M
                   </div>
-                  <div className="text-sm text-gray-400">
+                  <div className="text-sm text-[#B0B0B0]">
                     / {(networkStats.totalStake / 1_000_000).toFixed(1)}M SOL
                   </div>
                 </div>
                 {networkStats.delinquentStake > 0 && (
-                  <div className="text-xs text-gray-400">
-                    {(networkStats.delinquentStake / 1_000_000).toFixed(2)}M delinquent ({((networkStats.delinquentStake / networkStats.totalStake) * 100).toFixed(1)}%)
+                  <div className="text-xs text-[#B0B0B0]">
+                    {(networkStats.delinquentStake / 1_000_000).toFixed(2)}M
+                    delinquent (
+                    {(
+                      (networkStats.delinquentStake / networkStats.totalStake) *
+                      100
+                    ).toFixed(1)}
+                    %)
                   </div>
                 )}
               </div>
             </div>
 
             {/* Nakamoto Coefficient */}
-            <div className="space-y-3">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+            <div className="space-y-2">
+              <div className="text-[10px] text-[#B0B0B0] uppercase tracking-widest font-semibold">
                 Nakamoto Coefficient
               </div>
               <div className="space-y-1">
-                <div className="text-3xl font-bold text-cyan-400">
-                  {hasActiveFilters ? '—' : (displayedValidators.find(v => v.cumulativeStakePercent > 33.33)?.rank || '—')}
+                <div
+                  className="text-3xl font-bold text-cyan-400"
+                  style={{ fontFamily: "ui-monospace, monospace" }}
+                >
+                  {hasActiveFilters
+                    ? "—"
+                    : displayedValidators.find(
+                        (v) => v.cumulativeStakePercent > 33.33
+                      )?.rank || "—"}
                 </div>
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-[#B0B0B0]">
                   Top validators to control 33% of stake
                 </div>
               </div>
@@ -402,7 +451,7 @@ function ValidatorsPageContent() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search validators by name or pubkey..."
-            className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 focus:bg-white/10 transition-all shadow-lg shadow-black/20 focus:shadow-orange-500/20"
+            className="w-full px-4 py-3 pl-11 bg-[#2A2526] border border-[#403A3B] rounded-lg text-[#EAEAEA] placeholder-[#B0B0B0] focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500/50 focus:bg-[#2A2526] transition-all"
           />
           <svg
             className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500"
@@ -453,11 +502,11 @@ function ValidatorsPageContent() {
           mevCommissionMax ||
           uptimeMin) && (
           <div className="mt-4 max-w-2xl mx-auto">
-            <div className="glass rounded-xl p-3 border border-orange-500/30 bg-orange-500/5">
+            <div className="bg-[#2A2526] rounded-lg p-3 border border-[#403A3B]">
               <div className="flex items-start gap-2">
-                <div className="text-orange-400 text-lg mt-0.5">🔍</div>
+                <div className="text-cyan-400 text-lg mt-0.5">🔍</div>
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-orange-400 mb-1">
+                  <div className="text-sm font-semibold text-cyan-400 mb-1">
                     Active Filters
                   </div>
                   <div className="text-xs text-gray-300 space-y-1">
@@ -487,362 +536,483 @@ function ValidatorsPageContent() {
         )}
       </div>
 
-      {/* Validators Table - Desktop */}
-      <div className="hidden md:block glass rounded-2xl shadow-2xl shadow-black/30">
-        <table className="w-full">
-          <thead className="sticky top-20 z-40 shadow-lg backdrop-blur-xl">
-            <tr className="bg-[#0a0a0a]/95 border-b-2 border-white/10">
-              <th
-                className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-16 bg-[#0a0a0a]/95 first:rounded-tl-2xl cursor-pointer hover:text-orange-400 transition-colors select-none"
+      {/* Validators Table - Desktop - Orb style */}
+      <div className="hidden md:block relative z-10">
+        {/* Sticky header - outside table container */}
+        <div
+          className="sticky top-[80px] z-40 bg-[#1F1A1B] border border-[#403A3B] border-b-0 rounded-t-lg overflow-x-auto"
+          style={{ isolation: "isolate" }}
+        >
+          <div className="grid grid-cols-[80px_1fr_176px_128px_112px_112px_112px] min-w-full">
+            <div className="px-4 py-3.5 text-left text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center gap-1"
                 onClick={() => handleSort("rank")}
               >
-                <div className="flex items-center gap-1">
-                  Rank
-                  {sortKey === "rank" && (
-                    <span className="text-orange-400">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                Rank
+                {sortKey === "rank" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3.5 text-left text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center gap-1"
                 onClick={() => handleSort("name")}
               >
-                <div className="flex items-center gap-1">
-                  Validator
-                  {sortKey === "name" && (
-                    <span className="text-orange-400">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-4 py-3.5 text-right text-xs font-bold text-gray-400 uppercase tracking-wider w-44 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                Validator
+                {sortKey === "name" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3.5 text-right text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center justify-end gap-1"
                 onClick={() => handleSort("activeStake")}
               >
-                <div className="flex items-center justify-end gap-1">
-                  Active Stake
-                  {sortKey === "activeStake" && (
-                    <span className="text-orange-400">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-4 py-3.5 text-left text-xs font-bold text-gray-400 uppercase tracking-wider w-32 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                Active Stake
+                {sortKey === "activeStake" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3.5 text-left text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center gap-1"
                 onClick={() => handleSort("cumulativeStakePercent")}
               >
-                <div className="flex items-center gap-1">
-                  Cumulative
-                  {sortKey === "cumulativeStakePercent" && (
-                    <span className="text-orange-400">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
+                Cumulative
+                {sortKey === "cumulativeStakePercent" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3.5 text-center text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center justify-center gap-1"
                 onClick={() => handleSort("commission")}
               >
-                <div className="flex items-center justify-center gap-1">
-                  Commission
-                  {sortKey === "commission" && (
-                    <span className="text-orange-400">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 cursor-pointer hover:text-orange-400 transition-colors select-none"
-                title="MEV Commission on priority fees and bundles"
+                Commission
+                {sortKey === "commission" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3.5 text-center text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center justify-center gap-1"
                 onClick={() => handleSort("mevCommission")}
+                title="MEV Commission on priority fees and bundles"
               >
-                <div className="flex items-center justify-center gap-1">
-                  MEV
-                  {sortKey === "mevCommission" && (
-                    <span className="text-orange-400">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </div>
-              </th>
-              <th
-                className="px-4 py-3.5 text-center text-xs font-bold text-gray-400 uppercase tracking-wider w-28 bg-[#0a0a0a]/95 last:rounded-tr-2xl cursor-pointer hover:text-orange-400 transition-colors select-none"
+                MEV
+                {sortKey === "mevCommission" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3.5 text-center text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center justify-center gap-1"
                 onClick={() => handleSort("uptimePercent")}
               >
-                <div className="flex items-center justify-center gap-1">
-                  Uptime
-                  {sortKey === "uptimePercent" && (
-                    <span className="text-orange-400">
-                      {sortDirection === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
-                  <div className="flex items-center justify-center gap-3">
-                    <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-gray-400">Loading validators...</span>
-                  </div>
-                </td>
-              </tr>
-            ) : displayedValidators.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
-                  <div className="text-4xl mb-2">🔍</div>
-                  <p className="text-gray-400">No validators found</p>
-                </td>
-              </tr>
-            ) : (
-              <>
-                {displayedValidators.map((validator, index) => {
-                  // Check if we need to insert Nakamoto coefficient divider
-                  // Show AFTER the validator that crosses 33.33% threshold
-                  // Only show if no filters are active (needs full unfiltered list)
-                  const showNakamotoDivider =
-                    !hasActiveFilters &&
-                    validator.cumulativeStakePercent > 33.33 &&
-                    (index === 0 ||
-                      displayedValidators[index - 1].cumulativeStakePercent <=
-                        33.33);
-
-                  return (
-                    <>
-                      <tr
-                        key={validator.votePubkey}
-                        onClick={() =>
-                          (window.location.href = `/validator/${validator.votePubkey}`)
-                        }
-                        className={`transition-all duration-150 cursor-pointer group border-b border-white/5 border-l-2 ${
-                          validator.delinquent
-                            ? "bg-red-500/5 hover:bg-red-500/10 border-l-red-500"
-                            : "border-l-transparent hover:bg-white/[0.03] hover:border-l-orange-500/50"
-                        }`}
-                      >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center">
-                            <div className="flex items-center gap-1">
-                              <span className="font-mono text-sm font-semibold text-gray-500 group-hover:text-gray-300 transition-colors w-8 text-right">
-                                {validator.rank}
-                              </span>
-                              <span className="w-8 flex items-center justify-start">
-                                {validator.rankChange !== null && validator.rankChange !== 0 && (
-                                  <span
-                                    className={`text-[10px] font-bold ${
-                                      validator.rankChange > 0
-                                        ? "text-green-400"
-                                        : "text-red-400"
-                                    }`}
-                                    title={`${validator.rankChange > 0 ? "Up" : "Down"} ${Math.abs(validator.rankChange)} rank${Math.abs(validator.rankChange) !== 1 ? "s" : ""} from last epoch`}
-                                  >
-                                    {validator.rankChange > 0 ? "↑" : "↓"}{Math.abs(validator.rankChange)}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            {validator.iconUrl ? (
-                              <>
-                                <img
-                                  src={validator.iconUrl}
-                                  alt={validator.name || "Validator"}
-                                  loading="lazy"
-                                  className="w-10 h-10 rounded-xl object-cover border-2 border-white/10 group-hover:border-orange-400/50 transition-all"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                    e.currentTarget.nextElementSibling?.classList.remove(
-                                      "hidden"
-                                    );
-                                  }}
-                                />
-                                <div className="hidden w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center text-gray-500 text-lg">
-                                  ?
-                                </div>
-                              </>
-                            ) : (
-                              <div className="w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-orange-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center text-gray-500 text-lg">
-                                ?
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <div className="font-semibold text-sm text-white group-hover:text-orange-400 transition-colors truncate">
-                                  {validator.name || validator.votePubkey}
-                                </div>
-                                {validator.delinquent && (
-                                  <span className="px-2 py-0.5 bg-red-500/20 border border-red-500/50 rounded-md text-[10px] font-bold text-red-300 whitespace-nowrap">
-                                    DELINQUENT
-                                  </span>
-                                )}
-                              </div>
-                              {validator.version && (
-                                <div className="text-[10px] text-gray-500 font-mono mt-0.5">
-                                  v{validator.version}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 w-44 text-right">
-                          <div>
-                            <div className="text-white font-semibold text-sm whitespace-nowrap group-hover:text-orange-400 transition-colors">
-                              ◎{" "}
-                              {validator.activeStake.toLocaleString(undefined, {
-                                maximumFractionDigits: 0,
-                              })}
-                            </div>
-                            <div className="text-[10px] text-gray-500 flex items-center justify-end gap-1 mt-0.5">
-                              <span className="font-mono">
-                                {validator.stakePercent.toFixed(2)}%
-                              </span>
-                              {validator.stakeAccountCount > 0 && (
-                                <>
-                                  <span className="text-gray-600">•</span>
-                                  <span>
-                                    {validator.stakeAccountCount.toLocaleString()}{" "}
-                                    {validator.stakeAccountCount === 1
-                                      ? "acct"
-                                      : "accts"}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner">
-                              <div
-                                className="h-full bg-gradient-to-r from-orange-500 via-orange-400 to-orange-300 transition-all duration-300"
-                                style={{
-                                  width: `${Math.min(
-                                    validator.cumulativeStakePercent,
-                                    100
-                                  )}%`,
-                                }}
-                              ></div>
-                            </div>
-                            <span className="text-xs text-gray-400 font-mono w-10 text-right font-semibold">
-                              {validator.cumulativeStakePercent.toFixed(1)}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span
-                            className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                              validator.commission <= 5
-                                ? "bg-green-500/15 text-green-300 border border-green-500/30"
-                                : validator.commission <= 10
-                                ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                                : "bg-red-500/15 text-red-300 border border-red-500/30"
-                            }`}
-                          >
-                            {validator.commission}%
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {validator.jitoEnabled &&
-                          validator.mevCommission !== null &&
-                          validator.mevCommission !== undefined ? (
-                            <span
-                              className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                validator.mevCommission <= 5
-                                  ? "bg-green-500/15 text-green-300 border border-green-500/30"
-                                  : validator.mevCommission <= 10
-                                  ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                                  : "bg-red-500/15 text-red-300 border border-red-500/30"
-                              }`}
-                              title="MEV Commission"
-                            >
-                              {validator.mevCommission}%
-                            </span>
-                          ) : (
-                            <span className="text-gray-600 text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {validator.uptimePercent !== null &&
-                          validator.uptimePercent !== undefined ? (
-                            <span
-                              className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                                validator.uptimePercent >= 99.9
-                                  ? "bg-green-500/15 text-green-300 border border-green-500/30"
-                                  : validator.uptimePercent >= 99.0
-                                  ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                                  : "bg-red-500/15 text-red-300 border border-red-500/30"
-                              }`}
-                              title={
-                                validator.uptimeDays
-                                  ? `${validator.uptimeDays} days tracked`
-                                  : "Uptime percentage"
-                              }
-                            >
-                              {validator.uptimePercent.toFixed(2)}%
-                            </span>
-                          ) : (
-                            <span className="text-gray-600 text-xs">—</span>
-                          )}
-                        </td>
-                      </tr>
-                      {showNakamotoDivider && (
-                        <tr key={`nakamoto-${validator.votePubkey}`}>
-                          <td colSpan={7} className="px-0 py-0">
-                            <div className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50">
-                              <div className="px-4 py-2 flex items-center justify-center gap-2">
-                                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
-                                <div className="text-center">
-                                  <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider">
-                                    ⚠️ Nakamoto Coefficient Threshold
-                                  </div>
-                                  <div className="text-[10px] text-cyan-300/80 mt-0.5">
-                                    Cumulative stake above forms a superminority
-                                    - Threat of halt or censorship
-                                  </div>
-                                  <div className="text-[10px] text-cyan-400/60 mt-0.5 font-semibold">
-                                    Please consider staking below this line to
-                                    help decentralize the network
-                                  </div>
-                                </div>
-                                <div className="flex-1 h-px bg-gradient-to-r from-cyan-400 via-cyan-400 to-transparent"></div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })}
-
-                {/* Scroll sentinel for infinite scroll */}
-                {displayCount < filteredValidators.length && (
+                Uptime
+                {sortKey === "uptimePercent" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          className="border border-[#403A3B] border-t-0 rounded-b-lg overflow-hidden relative"
+          style={{ zIndex: 10, backgroundColor: "transparent" }}
+        >
+          <div className="overflow-x-auto relative" style={{ zIndex: 10 }}>
+            <table
+              className="w-full relative"
+              style={{
+                zIndex: 10,
+                backgroundColor: "#1F1A1B",
+                tableLayout: "fixed",
+              }}
+            >
+              <colgroup>
+                <col style={{ width: "80px" }} />
+                <col style={{ width: "auto" }} />
+                <col style={{ width: "176px" }} />
+                <col style={{ width: "128px" }} />
+                <col style={{ width: "112px" }} />
+                <col style={{ width: "112px" }} />
+                <col style={{ width: "112px" }} />
+              </colgroup>
+              <tbody
+                className="relative"
+                style={{ zIndex: 10, backgroundColor: "#1F1A1B" }}
+              >
+                {loading && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center">
+                    <td colSpan={7} className="px-6 py-12 text-center">
                       <div className="flex items-center justify-center gap-3">
-                        <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-gray-400 text-sm">
-                          Loading more validators...
+                        <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-gray-400">
+                          Loading validators...
                         </span>
                       </div>
                     </td>
                   </tr>
                 )}
-              </>
-            )}
-          </tbody>
-        </table>
+                {!loading && displayedValidators.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center">
+                      <div className="text-4xl mb-2">🔍</div>
+                      <p className="text-gray-400">No validators found</p>
+                    </td>
+                  </tr>
+                )}
+                {!loading && displayedValidators.length > 0 && (
+                  <>
+                    {displayedValidators.map((validator, index) => {
+                      // Check if we need to insert Nakamoto coefficient divider
+                      // Show AFTER the validator that crosses 33.33% threshold
+                      // Only show if no filters are active (needs full unfiltered list)
+                      const showNakamotoDivider =
+                        !hasActiveFilters &&
+                        validator.cumulativeStakePercent > 33.33 &&
+                        (index === 0 ||
+                          displayedValidators[index - 1]
+                            .cumulativeStakePercent <= 33.33);
+
+                      return (
+                        <React.Fragment key={validator.votePubkey}>
+                          <tr
+                            onClick={() =>
+                              (window.location.href = `/validator/${validator.votePubkey}`)
+                            }
+                            className={`transition-all duration-150 cursor-pointer group border-b border-[#403A3B] relative ${
+                              validator.delinquent
+                                ? "bg-[rgb(239,68,68)]/5 hover:bg-[rgb(239,68,68)]/10"
+                                : "bg-[#1F1A1B] hover:bg-cyan-500/5 hover:shadow-sm hover:shadow-cyan-500/10"
+                            }`}
+                            style={{ zIndex: 10 }}
+                          >
+                            <td
+                              className="px-4 py-3 relative w-[80px]"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              <div className="flex items-center justify-center">
+                                <div className="flex items-center gap-1">
+                                  <span
+                                    className="font-mono text-sm font-semibold text-[#B0B0B0] group-hover:text-[#EAEAEA] transition-colors w-8 text-right"
+                                    style={{
+                                      fontFamily: "ui-monospace, monospace",
+                                    }}
+                                  >
+                                    {validator.rank}
+                                  </span>
+                                  <span className="w-8 flex items-center justify-start">
+                                    {validator.rankChange !== null &&
+                                      validator.rankChange !== 0 && (
+                                        <span
+                                          className={`text-[10px] font-bold ${
+                                            validator.rankChange > 0
+                                              ? "text-green-400"
+                                              : "text-red-400"
+                                          }`}
+                                          title={`${
+                                            validator.rankChange > 0
+                                              ? "Up"
+                                              : "Down"
+                                          } ${Math.abs(
+                                            validator.rankChange
+                                          )} rank${
+                                            Math.abs(validator.rankChange) !== 1
+                                              ? "s"
+                                              : ""
+                                          } from last epoch`}
+                                        >
+                                          {validator.rankChange > 0 ? "↑" : "↓"}
+                                          {Math.abs(validator.rankChange)}
+                                        </span>
+                                      )}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                            <td
+                              className="px-4 py-3 relative"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              <div className="flex items-center gap-3">
+                                {validator.iconUrl ? (
+                                  <>
+                                    <img
+                                      src={validator.iconUrl}
+                                      alt={validator.name || "Validator"}
+                                      loading="lazy"
+                                      className="w-10 h-10 rounded-xl object-cover border-2 border-[#403A3B] group-hover:border-cyan-400/60 group-hover:shadow-lg group-hover:shadow-cyan-500/30 transition-all"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                        e.currentTarget.nextElementSibling?.classList.remove(
+                                          "hidden"
+                                        );
+                                      }}
+                                    />
+                                    <div className="hidden w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-cyan-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center text-gray-500 text-lg">
+                                      ?
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="w-10 h-10 rounded-xl border-2 border-white/10 group-hover:border-cyan-400/50 transition-colors bg-gradient-to-br from-white/5 to-white/0 flex items-center justify-center text-gray-500 text-lg">
+                                    ?
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="font-semibold text-sm text-[#EAEAEA] group-hover:text-cyan-300 transition-colors truncate">
+                                      {validator.name || validator.votePubkey}
+                                    </div>
+                                    {validator.delinquent && (
+                                      <>
+                                        <span className="relative inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold text-white whitespace-nowrap overflow-hidden">
+                                          {/* Vibrant red background with stronger glow - matching Orb's punchy red */}
+                                          <span
+                                            className="absolute inset-0 bg-gradient-to-br from-red-500/40 via-red-600/35 to-red-700/40 backdrop-blur-[2px] border border-red-400/70 rounded-lg"
+                                            style={{
+                                              boxShadow:
+                                                "0 0 20px rgba(239, 68, 68, 0.6), 0 0 40px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2)",
+                                              animation:
+                                                "delinquent-glow 3s ease-in-out infinite",
+                                            }}
+                                          ></span>
+                                          {/* Shimmer effect - more visible */}
+                                          <span
+                                            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-lg"
+                                            style={{
+                                              animation:
+                                                "delinquent-shimmer 2.5s ease-in-out infinite",
+                                              opacity: 0.6,
+                                            }}
+                                          ></span>
+                                          {/* Outer glow layer */}
+                                          <span className="absolute -inset-1 bg-red-500/30 rounded-lg blur-md animate-pulse-slow"></span>
+                                          {/* Text with strong glow - crisp white like Orb */}
+                                          <span className="relative z-10 drop-shadow-[0_0_6px_rgba(239,68,68,1),0_0_12px_rgba(239,68,68,0.6)] tracking-wider font-extrabold">
+                                            DELINQUENT
+                                          </span>
+                                        </span>
+                                        {validator.delinquentDurationMs !==
+                                          null &&
+                                          validator.delinquentDurationMs !==
+                                            undefined && (
+                                            <span className="text-[10px] text-red-400/90 font-mono whitespace-nowrap drop-shadow-[0_0_2px_rgba(239,68,68,0.5)]">
+                                              Offline For:{" "}
+                                              {formatDelinquencyDuration(
+                                                validator.delinquentDurationMs
+                                              ) || "—"}
+                                            </span>
+                                          )}
+                                      </>
+                                    )}
+                                  </div>
+                                  {validator.version && (
+                                    <div className="text-[10px] text-gray-500 font-mono mt-0.5">
+                                      v{validator.version}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td
+                              className="px-4 py-3 relative w-44 text-right"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              <div>
+                                <div
+                                  className="text-[#EAEAEA] font-semibold text-sm whitespace-nowrap group-hover:text-cyan-300 transition-colors"
+                                  style={{
+                                    fontFamily: "ui-monospace, monospace",
+                                  }}
+                                >
+                                  ◎{" "}
+                                  {validator.activeStake.toLocaleString(
+                                    undefined,
+                                    {
+                                      maximumFractionDigits: 0,
+                                    }
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-gray-500 flex items-center justify-end gap-1 mt-0.5">
+                                  <span className="font-mono">
+                                    {validator.stakePercent.toFixed(2)}%
+                                  </span>
+                                  {validator.stakeAccountCount > 0 && (
+                                    <>
+                                      <span className="text-gray-600">•</span>
+                                      <span>
+                                        {validator.stakeAccountCount.toLocaleString()}{" "}
+                                        {validator.stakeAccountCount === 1
+                                          ? "acct"
+                                          : "accts"}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td
+                              className="px-4 py-3 relative w-[128px]"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden shadow-inner">
+                                  <div
+                                    className="h-full bg-cyan-500 transition-all duration-300"
+                                    style={{
+                                      width: `${Math.min(
+                                        validator.cumulativeStakePercent,
+                                        100
+                                      )}%`,
+                                    }}
+                                  ></div>
+                                </div>
+                                <span
+                                  className="text-xs text-[#B0B0B0] font-mono w-10 text-right font-semibold"
+                                  style={{
+                                    fontFamily: "ui-monospace, monospace",
+                                  }}
+                                >
+                                  {validator.cumulativeStakePercent.toFixed(1)}%
+                                </span>
+                              </div>
+                            </td>
+                            <td
+                              className="px-4 py-3 text-center w-[112px] relative"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              <span
+                                className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                  validator.commission <= 5
+                                    ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                    : validator.commission <= 10
+                                    ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                    : "bg-red-500/15 text-red-300 border border-red-500/30"
+                                }`}
+                              >
+                                {validator.commission}%
+                              </span>
+                            </td>
+                            <td
+                              className="px-4 py-3 text-center w-[112px] relative"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              {validator.jitoEnabled &&
+                              validator.mevCommission !== null &&
+                              validator.mevCommission !== undefined ? (
+                                <span
+                                  className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                    validator.mevCommission <= 5
+                                      ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                      : validator.mevCommission <= 10
+                                      ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                      : "bg-red-500/15 text-red-300 border border-red-500/30"
+                                  }`}
+                                  title="MEV Commission"
+                                >
+                                  {validator.mevCommission}%
+                                </span>
+                              ) : (
+                                <span className="text-gray-600 text-xs">—</span>
+                              )}
+                            </td>
+                            <td
+                              className="px-4 py-3 text-center w-[112px] relative"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              {validator.uptimePercent !== null &&
+                              validator.uptimePercent !== undefined ? (
+                                <span
+                                  className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                                    validator.uptimePercent >= 99.9
+                                      ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                      : validator.uptimePercent >= 99.0
+                                      ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
+                                      : "bg-red-500/15 text-red-300 border border-red-500/30"
+                                  }`}
+                                  title={
+                                    validator.uptimeDays
+                                      ? `${validator.uptimeDays} days tracked`
+                                      : "Uptime percentage"
+                                  }
+                                >
+                                  {validator.uptimePercent.toFixed(2)}%
+                                </span>
+                              ) : (
+                                <span className="text-gray-600 text-xs">—</span>
+                              )}
+                            </td>
+                          </tr>
+                          {showNakamotoDivider && (
+                            <tr key={`nakamoto-${validator.votePubkey}`}>
+                              <td colSpan={7} className="px-0 py-0">
+                                <div className="relative border-y border-[#403A3B] bg-[#2A2526]">
+                                  <div className="px-4 py-2 flex items-center justify-center gap-2">
+                                    <div className="flex-1 h-px bg-[#403A3B]"></div>
+                                    <div className="text-center">
+                                      <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider">
+                                        ⚠️ Nakamoto Coefficient Threshold
+                                      </div>
+                                      <div className="text-[10px] text-[#B0B0B0] mt-0.5">
+                                        Cumulative stake above forms a
+                                        superminority - Threat of halt or
+                                        censorship
+                                      </div>
+                                      <div className="text-[10px] text-cyan-400/80 mt-0.5 font-semibold">
+                                        Please consider staking below this line
+                                        to help decentralize the network
+                                      </div>
+                                    </div>
+                                    <div className="flex-1 h-px bg-[#403A3B]"></div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                    {displayCount < filteredValidators.length && (
+                      <tr key="scroll-sentinel">
+                        <td colSpan={7} className="px-6 py-8 text-center">
+                          <div className="flex items-center justify-center gap-3">
+                            <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span className="text-gray-400 text-sm">
+                              Loading more validators...
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Validators Cards - Mobile */}
@@ -850,7 +1020,7 @@ function ValidatorsPageContent() {
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="flex items-center gap-3">
-              <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
               <span className="text-gray-400">Loading validators...</span>
             </div>
           </div>
@@ -872,16 +1042,16 @@ function ValidatorsPageContent() {
                     33.33);
 
               return (
-                <>
+                <React.Fragment key={validator.votePubkey}>
                   <div
                     key={validator.votePubkey}
                     onClick={() =>
                       (window.location.href = `/validator/${validator.votePubkey}`)
                     }
-                    className={`glass rounded-xl p-4 border cursor-pointer transition-all ${
+                    className={`bg-[#2A2526] rounded-lg p-4 border cursor-pointer transition-all ${
                       validator.delinquent
-                        ? "border-red-500/50 bg-red-500/5"
-                        : "border-white/10 hover:border-orange-500/50"
+                        ? "border-[rgb(239,68,68)]/50 bg-[rgb(239,68,68)]/5"
+                        : "border-[#403A3B] hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/20"
                     }`}
                   >
                     {/* Header */}
@@ -899,29 +1069,70 @@ function ValidatorsPageContent() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <div className="flex items-center gap-1">
                             <span className="text-xs font-mono text-gray-500">
                               #{validator.rank}
                             </span>
-                            {validator.rankChange !== null && validator.rankChange !== 0 && (
-                              <span
-                                className={`text-[9px] font-bold ${
-                                  validator.rankChange > 0
-                                    ? "text-green-400"
-                                    : "text-red-400"
-                                }`}
-                                title={`${validator.rankChange > 0 ? "Up" : "Down"} ${Math.abs(validator.rankChange)} from last epoch`}
-                              >
-                                {validator.rankChange > 0 ? "↑" : "↓"}
-                                {Math.abs(validator.rankChange)}
-                              </span>
-                            )}
+                            {validator.rankChange !== null &&
+                              validator.rankChange !== 0 && (
+                                <span
+                                  className={`text-[9px] font-bold ${
+                                    validator.rankChange > 0
+                                      ? "text-green-400"
+                                      : "text-red-400"
+                                  }`}
+                                  title={`${
+                                    validator.rankChange > 0 ? "Up" : "Down"
+                                  } ${Math.abs(
+                                    validator.rankChange
+                                  )} from last epoch`}
+                                >
+                                  {validator.rankChange > 0 ? "↑" : "↓"}
+                                  {Math.abs(validator.rankChange)}
+                                </span>
+                              )}
                           </div>
                           {validator.delinquent && (
-                            <span className="px-1.5 py-0.5 bg-red-500/20 border border-red-500/50 rounded text-[9px] font-bold text-red-300">
-                              DELINQUENT
-                            </span>
+                            <>
+                              <span className="relative inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold text-white whitespace-nowrap overflow-hidden">
+                                {/* Vibrant red background with stronger glow - matching Orb's punchy red */}
+                                <span
+                                  className="absolute inset-0 bg-gradient-to-br from-red-500/40 via-red-600/35 to-red-700/40 backdrop-blur-[2px] border border-red-400/70 rounded-md"
+                                  style={{
+                                    boxShadow:
+                                      "0 0 16px rgba(239, 68, 68, 0.6), 0 0 32px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2)",
+                                    animation:
+                                      "delinquent-glow 3s ease-in-out infinite",
+                                  }}
+                                ></span>
+                                {/* Shimmer effect - more visible */}
+                                <span
+                                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-md"
+                                  style={{
+                                    animation:
+                                      "delinquent-shimmer 2.5s ease-in-out infinite",
+                                    opacity: 0.6,
+                                  }}
+                                ></span>
+                                {/* Outer glow layer */}
+                                <span className="absolute -inset-1 bg-red-500/30 rounded-md blur-md animate-pulse-slow"></span>
+                                {/* Text with strong glow - crisp white like Orb */}
+                                <span className="relative z-10 drop-shadow-[0_0_5px_rgba(239,68,68,1),0_0_10px_rgba(239,68,68,0.6)] tracking-wider font-extrabold">
+                                  DELINQUENT
+                                </span>
+                              </span>
+                              {validator.delinquentDurationMs !== null &&
+                                validator.delinquentDurationMs !==
+                                  undefined && (
+                                  <span className="text-[9px] text-red-400/90 font-mono drop-shadow-[0_0_2px_rgba(239,68,68,0.5)]">
+                                    Offline For:{" "}
+                                    {formatDelinquencyDuration(
+                                      validator.delinquentDurationMs
+                                    ) || "—"}
+                                  </span>
+                                )}
+                            </>
                           )}
                         </div>
                         <div className="font-semibold text-sm text-white truncate">
@@ -956,7 +1167,7 @@ function ValidatorsPageContent() {
                         </div>
                         <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1">
                           <div
-                            className="h-full bg-gradient-to-r from-orange-500 to-orange-400"
+                            className="h-full bg-cyan-500"
                             style={{
                               width: `${Math.min(
                                 validator.cumulativeStakePercent,
@@ -1026,24 +1237,24 @@ function ValidatorsPageContent() {
                   {showNakamotoDivider && (
                     <div
                       key={`nakamoto-mobile-${validator.votePubkey}`}
-                      className="relative bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20 border-y-2 border-cyan-400/50 rounded-xl p-3"
+                      className="relative border-y border-[#403A3B] bg-[#2A2526] rounded-lg p-3"
                     >
                       <div className="text-center">
                         <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-1">
                           ⚠️ Nakamoto Coefficient
                         </div>
-                        <div className="text-[10px] text-cyan-300/80">
+                        <div className="text-[10px] text-[#B0B0B0]">
                           Cumulative stake above forms a superminority
                         </div>
                       </div>
                     </div>
                   )}
-                </>
+                </React.Fragment>
               );
             })}
             {displayCount < filteredValidators.length && (
               <div className="flex items-center justify-center gap-3 py-6">
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                 <span className="text-gray-400 text-sm">
                   Loading more validators...
                 </span>
@@ -1083,4 +1294,3 @@ export default function ValidatorsPage() {
     </Suspense>
   );
 }
-

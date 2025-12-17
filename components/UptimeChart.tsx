@@ -51,7 +51,7 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
   const getUptimeColor = (uptimePercent: number) => {
     if (uptimePercent === 100) return "bg-green-500";
     if (uptimePercent >= 95) return "bg-yellow-400";
-    if (uptimePercent >= 90) return "bg-orange-500";
+    if (uptimePercent >= 90) return "bg-cyan-500";
     return "bg-red-500";
   };
 
@@ -81,7 +81,7 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
       <div className="glass rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
         <h3 className="text-xl font-bold text-white mb-4">Uptime</h3>
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
         </div>
       </div>
     );
@@ -189,7 +189,7 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
           <span>95-99%</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm bg-orange-500"></div>
+          <div className="w-3 h-3 rounded-sm bg-cyan-500"></div>
           <span>90-95%</span>
         </div>
         <div className="flex items-center gap-2">

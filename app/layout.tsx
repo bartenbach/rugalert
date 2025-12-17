@@ -1,5 +1,6 @@
 "use client";
 import EpochProgress from "@/components/EpochProgress";
+import SnowAnimation from "@/components/SnowAnimation";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { usePathname } from "next/navigation";
@@ -32,17 +33,25 @@ export default function RootLayout({
         <link rel="shortcut icon" href="/favicon.svg" />
         <link rel="apple-touch-icon" href="/rugalert-logo.png" />
       </head>
-      <body className="antialiased min-h-screen">
+      <body
+        className="antialiased min-h-screen relative"
+        style={{ isolation: "isolate" }}
+      >
         <Analytics />
         <SpeedInsights />
-        {/* Subtle dark background with orange glow */}
-        <div className="fixed inset-0 -z-10 overflow-hidden bg-[#1a1a1a]">
-          <div className="absolute top-20 right-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-40 left-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl"></div>
+        {/* Dark background */}
+        <div className="fixed inset-0 -z-20 overflow-hidden bg-[#1F1A1B]"></div>
+
+        {/* Subtle snow animation - separate container behind everything */}
+        <div
+          className="fixed inset-0 pointer-events-none overflow-hidden"
+          style={{ zIndex: -19 }}
+        >
+          <SnowAnimation />
         </div>
 
-        {/* Dark header with orange accent */}
-        <header className="sticky top-0 z-50 w-full glass border-b border-white/10 backdrop-blur-xl">
+        {/* Dark header with Orb-style minimal design */}
+        <header className="sticky top-0 z-50 w-full bg-[#1F1A1B]/95 backdrop-blur-xl border-b border-[#403A3B]">
           <div className="mx-auto max-w-7xl px-3 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
             <a
               href="/"
@@ -52,14 +61,17 @@ export default function RootLayout({
                 <img
                   src="/rugalert-logo.png"
                   alt="RugAlert Logo"
-                  className="w-12 h-12 sm:w-20 sm:h-20 object-contain"
+                  className="relative w-12 h-12 sm:w-20 sm:h-20 object-contain"
+                  style={{
+                    filter: "hue-rotate(150deg) saturate(1.3) brightness(1.15)",
+                  }}
                 />
               </div>
               <div>
-                <span className="text-lg sm:text-2xl font-bold gradient-text block">
+                <span className="text-lg sm:text-2xl font-bold text-[#EAEAEA] block uppercase tracking-tight">
                   RugAlert
                 </span>
-                <span className="text-xs text-gray-400 hidden sm:block">
+                <span className="text-xs text-[#B0B0B0] hidden sm:block uppercase tracking-wider">
                   Commission Guardian
                 </span>
               </div>
@@ -73,10 +85,10 @@ export default function RootLayout({
             <nav className="flex items-center gap-1 sm:gap-2">
               <a
                 href="/"
-                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 uppercase tracking-wider ${
                   isActive("/") && pathname === "/"
-                    ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
-                    : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
+                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50"
+                    : "text-[#B0B0B0] hover:bg-[#2A2526] hover:text-cyan-400"
                 }`}
               >
                 <span className="hidden sm:inline">Dashboard</span>
@@ -84,10 +96,10 @@ export default function RootLayout({
               </a>
               <a
                 href="/validators"
-                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 uppercase tracking-wider ${
                   isActive("/validators")
-                    ? "bg-orange-500/30 text-orange-400 border border-orange-500/50"
-                    : "text-gray-300 hover:bg-orange-500/20 hover:text-orange-400"
+                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50"
+                    : "text-[#B0B0B0] hover:bg-[#2A2526] hover:text-cyan-400"
                 }`}
               >
                 <span className="hidden sm:inline">Validators</span>
@@ -98,20 +110,23 @@ export default function RootLayout({
         </header>
 
         {/* Page container with padding */}
-        <main className="mx-auto max-w-7xl px-3 sm:px-6 py-6 sm:py-12">
+        <main
+          className="mx-auto max-w-7xl px-3 sm:px-6 py-6 sm:py-12 relative"
+          style={{ zIndex: 10, isolation: "isolate" }}
+        >
           {children}
         </main>
 
-        {/* Dark footer */}
+        {/* Orb-style minimal footer */}
         <footer className="mx-auto max-w-7xl px-6 py-12 mt-20">
-          <div className="glass rounded-2xl p-8 text-center">
-            <div className="gradient-text font-semibold text-lg mb-2">
+          <div className="border-t border-[#403A3B] pt-8 text-center">
+            <div className="text-[#EAEAEA] font-semibold text-lg mb-2 uppercase tracking-tight">
               RugAlert
             </div>
-            <p className="text-gray-400 text-sm">
+            <p className="text-[#B0B0B0] text-sm">
               © {new Date().getFullYear()} — Protecting the Solana ecosystem
             </p>
-            <div className="mt-4 flex items-center justify-center gap-4 text-xs text-gray-500">
+            <div className="mt-4 flex items-center justify-center gap-4 text-xs text-[#B0B0B0]">
               <span>Built with ❤️ by Pumpkin's Pool</span>
             </div>
           </div>

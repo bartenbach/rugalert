@@ -492,7 +492,7 @@ export default function Page() {
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex items-center justify-center gap-3">
-                      <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-gray-400">Loading events...</span>
                     </div>
                   </td>
@@ -537,7 +537,7 @@ export default function Page() {
                             <img
                               src={it.icon_url}
                               alt=""
-                              className="w-10 h-10 rounded-xl object-cover border border-white/10 hover:border-orange-400 transition-colors"
+                              className="w-10 h-10 rounded-xl object-cover border border-white/10 hover:border-cyan-400 transition-colors"
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";
                                 e.currentTarget.nextElementSibling?.classList.remove(
@@ -547,7 +547,7 @@ export default function Page() {
                             />
                           ) : null}
                           <div
-                            className={`w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-500/30 border border-white/10 hover:border-orange-400 flex items-center justify-center transition-colors ${
+                            className={`w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/30 border border-white/10 hover:border-cyan-400 flex items-center justify-center transition-colors ${
                               it.icon_url ? "hidden" : ""
                             }`}
                           >
@@ -558,7 +558,7 @@ export default function Page() {
                           <div className="flex items-center gap-2">
                             <a
                               href={`/validator/${it.vote_pubkey}`}
-                              className="font-semibold text-white hover:text-orange-400 transition-colors"
+                              className="font-semibold text-white hover:text-cyan-400 transition-colors"
                             >
                               {it.name || it.vote_pubkey}
                             </a>
@@ -578,11 +578,11 @@ export default function Page() {
                                 icon?.classList.remove("text-green-400");
                               }, 1000);
                             }}
-                            className="text-xs text-gray-500 font-mono hover:text-orange-400 transition-colors cursor-pointer text-left flex items-center gap-1.5 group/copy"
+                            className="text-xs text-gray-500 font-mono hover:text-cyan-400 transition-colors cursor-pointer text-left flex items-center gap-1.5 group/copy"
                             title="Click to copy"
                           >
                             <span className="break-all">{it.vote_pubkey}</span>
-                            <span className="copy-icon text-gray-600 group-hover/copy:text-orange-400 transition-colors flex-shrink-0">
+                            <span className="copy-icon text-gray-600 group-hover/copy:text-cyan-400 transition-colors flex-shrink-0">
                               📋
                             </span>
                           </button>
@@ -624,7 +624,7 @@ export default function Page() {
                         <span className={`text-[10px] font-semibold ${
                           it.event_source === 'MEV' 
                             ? 'text-purple-400' 
-                            : 'text-orange-400'
+                            : 'text-cyan-400'
                         }`}>
                           {it.event_source === 'MEV' ? 'MEV Commission' : 'Inflation Commission'}
                         </span>
@@ -638,7 +638,7 @@ export default function Page() {
                             : it.type === "CAUTION"
                             ? "text-yellow-400"
                             : it.delta > 0
-                            ? "text-orange-400"
+                            ? "text-cyan-400"
                             : it.delta < 0
                             ? "text-green-400"
                             : "text-gray-400"
@@ -719,7 +719,7 @@ export default function Page() {
                         onClick={() => setCurrentPage(page)}
                         className={`w-10 h-10 rounded-lg border transition-all ${
                           currentPage === page
-                            ? "bg-orange-500 text-white border-orange-500 font-bold"
+                            ? "bg-cyan-500 text-white border-cyan-500 font-bold"
                             : "bg-white/5 text-white border-white/10 hover:bg-white/10"
                         }`}
                       >

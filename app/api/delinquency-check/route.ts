@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db-neon";
+import { NextRequest, NextResponse } from "next/server";
 
 // ---- JSON-RPC helper ----
 async function rpc(method: string, params: any[] = []) {
@@ -144,18 +144,66 @@ export async function GET(req: NextRequest) {
     console.log(`📝 Updating validator delinquent statuses...`);
     let validatorsUpdated = 0;
     
-    // Set all to not delinquent first
-    await sql`UPDATE validators SET delinquent = false`;
+    // Fetch current delinquent status before updating to detect transitions
+    const currentDelinquentStatus = await sql`
+      SELECT vote_pubkey, delinquent, delinquent_since
+      FROM validators
+      WHERE vote_pubkey = ANY(${allVotePubkeys})
+    `;
     
-    // Then set delinquent ones to true
+    const previousDelinquentMap = new Map(
+      currentDelinquentStatus.map((v: any) => [
+        v.vote_pubkey,
+        { delinquent: v.delinquent, delinquentSince: v.delinquent_since }
+      ])
+    );
+    
+    // Update validators in a single query to handle transitions properly
+    // This preserves delinquent_since for validators that remain delinquent
+    const now = new Date().toISOString();
+    
+    // First, set validators that are no longer delinquent (clear delinquent_since)
+    await sql`
+      UPDATE validators 
+      SET delinquent = false, delinquent_since = NULL
+      WHERE delinquent = true 
+        AND vote_pubkey != ALL(${Array.from(delinquentSet)})
+    `;
+    
+    // Then, update validators that are delinquent
+    // Set delinquent_since only when transitioning from non-delinquent to delinquent
     if (delinquentSet.size > 0) {
       const delinquentArray = Array.from(delinquentSet);
+      
+      // Update validators that are now delinquent
+      // Set delinquent_since only if it wasn't already set (newly delinquent)
       await sql`
         UPDATE validators 
-        SET delinquent = true 
+        SET 
+          delinquent = true,
+          delinquent_since = CASE 
+            WHEN delinquent_since IS NULL THEN ${now}::timestamptz
+            ELSE delinquent_since
+          END
         WHERE vote_pubkey = ANY(${delinquentArray})
       `;
       validatorsUpdated = delinquentSet.size;
+      
+      // Count newly delinquent validators for logging
+      let newlyDelinquent = 0;
+      delinquentArray.forEach((votePubkey) => {
+        const previous = previousDelinquentMap.get(votePubkey);
+        if (!previous || !previous.delinquent) {
+          newlyDelinquent++;
+        }
+      });
+      
+      if (newlyDelinquent > 0) {
+        console.log(`🆕 ${newlyDelinquent} validators newly became delinquent`);
+      }
+    } else {
+      // No delinquent validators, clear all
+      await sql`UPDATE validators SET delinquent = false, delinquent_since = NULL WHERE delinquent = true`;
     }
 
     const elapsed = Date.now() - startTime;

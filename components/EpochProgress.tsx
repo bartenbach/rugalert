@@ -90,8 +90,7 @@ export default function EpochProgress() {
     return null; // Silently fail - don't show error in UI
   }
 
-  const progressPercentage =
-    (currentSlotIndex / epochInfo.slotsInEpoch) * 100;
+  const progressPercentage = (currentSlotIndex / epochInfo.slotsInEpoch) * 100;
   const remainingSlots = epochInfo.slotsInEpoch - currentSlotIndex;
 
   // Estimate time remaining (assuming ~400ms per slot)
@@ -117,22 +116,22 @@ export default function EpochProgress() {
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-xs font-semibold text-gray-300 whitespace-nowrap font-mono">
+        <span className="text-xs font-semibold text-[#B0B0B0] whitespace-nowrap font-mono uppercase">
           Epoch {epochInfo.epoch}
         </span>
-        <div className="relative flex-1 h-1.5 bg-gray-800/50 rounded-full overflow-hidden border border-white/10">
+        <div className="relative flex-1 h-1.5 bg-[#2A2526] rounded-full overflow-hidden border border-[#403A3B]">
           <div
-            className="absolute top-0 left-0 h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-2000 ease-linear will-change-transform"
+            className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-500 to-cyan-400 transition-all duration-2000 ease-linear will-change-transform shadow-lg shadow-cyan-500/30"
             style={{ width: `${progressPercentage}%` }}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
           </div>
         </div>
-        <span className="text-xs font-medium text-orange-400 whitespace-nowrap font-mono tabular-nums">
+        <span className="text-xs font-medium text-cyan-400 whitespace-nowrap font-mono tabular-nums">
           {progressPercentage.toFixed(1)}%
         </span>
       </div>
-      <div className="text-[10px] text-gray-500 text-center font-mono tabular-nums">
+      <div className="text-[10px] text-[#B0B0B0] text-center font-mono tabular-nums">
         {currentSlotIndex.toLocaleString()} /{" "}
         {epochInfo.slotsInEpoch.toLocaleString()} • {timeRemaining}
       </div>

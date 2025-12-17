@@ -12,7 +12,7 @@ interface StakeDistributionPieProps {
 }
 
 const COLORS = [
-  "#f97316", // orange
+  "#06b6d4", // cyan
   "#3b82f6", // blue
   "#10b981", // green
   "#8b5cf6", // purple
@@ -86,7 +86,7 @@ export default function StakeDistributionPie({
           <p className="text-gray-300 text-xs">
             ◎ {data.value.toLocaleString()} SOL
           </p>
-          <p className="text-orange-400 font-bold text-xs">
+          <p className="text-cyan-400 font-bold text-xs">
             {data.percentage}%
           </p>
         </div>
@@ -191,7 +191,7 @@ export default function StakeDistributionPie({
                 href={`https://solscan.io/account/${entry.fullAddress}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-300 hover:text-orange-400 transition-colors truncate max-w-[140px] sm:max-w-[180px]"
+                className="text-gray-300 hover:text-cyan-400 transition-colors truncate max-w-[140px] sm:max-w-[180px]"
                 title={`${entry.name} - Click to view on Solscan`}
               >
                 {entry.name}

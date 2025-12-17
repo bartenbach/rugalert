@@ -20,7 +20,7 @@ const emailStyles = `
     background-color: #ffffff;
   }
   .header {
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
     padding: 30px 20px;
     text-align: center;
   }
@@ -58,7 +58,7 @@ const emailStyles = `
   }
   .info-box {
     background-color: #f9fafb;
-    border-left: 4px solid #f97316;
+    border-left: 4px solid #06b6d4;
     padding: 20px;
     margin: 20px 0;
     border-radius: 4px;
@@ -83,7 +83,7 @@ const emailStyles = `
   .button {
     display: inline-block;
     padding: 14px 28px;
-    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
     color: #ffffff;
     text-decoration: none;
     border-radius: 8px;
@@ -106,7 +106,7 @@ const emailStyles = `
     margin: 10px 0;
   }
   .footer-link {
-    color: #f97316;
+    color: #06b6d4;
     text-decoration: none;
   }
   .footer-link:hover {
@@ -234,7 +234,7 @@ export function generateCommissionChangeEmail(
   if (isMevDisabled) {
     // MEV disabled - this is bad for stakers (losing MEV rewards)
     alertBadge = "MEV DISABLED";
-    alertColor = "#f59e0b"; // orange/warning color
+    alertColor = "#06b6d4"; // orange/warning color
     emoji = "⚠️";
   } else if (isMevEnabled) {
     // MEV enabled - informational
@@ -247,7 +247,7 @@ export function generateCommissionChangeEmail(
     emoji = "🚨";
   } else if (isCaution) {
     alertBadge = "COMMISSION INCREASE";
-    alertColor = "#f59e0b"; // orange
+    alertColor = "#06b6d4"; // orange
     emoji = "⚠️";
   } else if (isDecrease) {
     alertBadge = "COMMISSION DECREASE";
@@ -269,7 +269,7 @@ export function generateCommissionChangeEmail(
   }
   
   const deltaDisplay = delta >= 0 ? `+${delta}pp` : `${delta}pp`;
-  const deltaColor = isMevDisabled ? "#f59e0b" : (isRug ? "#dc2626" : (isCaution ? "#f59e0b" : (isDecrease ? "#10b981" : "#3b82f6")));
+  const deltaColor = isMevDisabled ? "#06b6d4" : (isRug ? "#dc2626" : (isCaution ? "#06b6d4" : (isDecrease ? "#10b981" : "#3b82f6")));
   
   // Determine impact message
   let impactMessage = "";
