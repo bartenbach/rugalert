@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 interface Snowflake {
   id: number;
@@ -12,35 +12,27 @@ interface Snowflake {
 }
 
 export default function SnowAnimation() {
-  const [snowflakes, setSnowflakes] = useState<Snowflake[]>([]);
+  // Generate snowflakes immediately on mount
+  const generateSnowflakes = (): Snowflake[] => {
+    const count = 40; // Number of snowflakes (reduced for subtlety)
+    const flakes: Snowflake[] = [];
 
-  useEffect(() => {
-    // Generate snowflakes
-    const generateSnowflakes = () => {
-      const count = 40; // Number of snowflakes (reduced for subtlety)
-      const flakes: Snowflake[] = [];
+    for (let i = 0; i < count; i++) {
+      flakes.push({
+        id: i,
+        left: Math.random() * 100, // Random horizontal position
+        animationDuration: 6 + Math.random() * 10, // 6-16 seconds (faster than before)
+        animationDelay: Math.random() * 1, // Small random delay (0-1s) for staggered start
+        size: 4 + Math.random() * 6, // 4-10px (subtle size)
+        opacity: 0.3 + Math.random() * 0.4, // 0.3-0.7 opacity (subtle)
+        rotation: Math.random() * 360, // Random starting rotation
+      });
+    }
 
-      for (let i = 0; i < count; i++) {
-        flakes.push({
-          id: i,
-          left: Math.random() * 100, // Random horizontal position
-          animationDuration: 8 + Math.random() * 15, // 8-23 seconds
-          animationDelay: Math.random() * 5, // Random delay
-          size: 4 + Math.random() * 6, // 4-10px (subtle size)
-          opacity: 0.3 + Math.random() * 0.4, // 0.3-0.7 opacity (subtle)
-          rotation: Math.random() * 360, // Random starting rotation
-        });
-      }
+    return flakes;
+  };
 
-      setSnowflakes(flakes);
-    };
-
-    generateSnowflakes();
-  }, []);
-
-  if (snowflakes.length === 0) {
-    return null;
-  }
+  const [snowflakes] = useState<Snowflake[]>(generateSnowflakes);
 
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -55,7 +47,7 @@ export default function SnowAnimation() {
               height: `${flake.size}px`,
               opacity: flake.opacity,
               animation: `snowfall ${flake.animationDuration}s linear infinite`,
-              animationDelay: `${flake.animationDelay}s`,
+              animationDelay: `${flake.animationDelay}s`, // Negative delays start mid-animation
             }}
           >
             {/* Snowflake shape using CSS */}

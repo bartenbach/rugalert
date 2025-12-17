@@ -168,20 +168,26 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch previous epoch ranks for rank change calculation
+    // Fetch previous epoch ranks and stake for rank change and stake delta calculation
     const previousEpoch = currentEpoch - 1;
     const previousRankMap = new Map<string, number>();
+    const previousStakeMap = new Map<string, number>();
     if (validatorVotePubkeys.length > 0 && previousEpoch >= 0) {
-      const previousRanks = await sql`
-        SELECT vote_pubkey, rank
+      const previousData = await sql`
+        SELECT vote_pubkey, rank, active_stake
         FROM stake_history
         WHERE epoch = ${previousEpoch}
           AND vote_pubkey = ANY(${validatorVotePubkeys})
-          AND rank IS NOT NULL
       `;
       
-      previousRanks.forEach((record: any) => {
-        previousRankMap.set(record.vote_pubkey, Number(record.rank));
+      previousData.forEach((record: any) => {
+        if (record.rank !== null && record.rank !== undefined) {
+          previousRankMap.set(record.vote_pubkey, Number(record.rank));
+        }
+        if (record.active_stake !== null && record.active_stake !== undefined) {
+          const lamports = typeof record.active_stake === 'bigint' ? Number(record.active_stake) : Number(record.active_stake);
+          previousStakeMap.set(record.vote_pubkey, lamports / LAMPORTS_PER_SOL);
+        }
       });
     }
 
@@ -215,6 +221,10 @@ export async function GET(request: NextRequest) {
         let rankChange: number | null = null;
         // We'll calculate current rank after sorting, so we'll come back to this
         
+        // Calculate stake delta (current - previous epoch)
+        const previousStake = previousStakeMap.get(votePubkey);
+        const stakeDelta = previousStake !== undefined ? activeStake - previousStake : null;
+        
         // Calculate delinquency duration if delinquent
         const isDelinquent = delinquentSet.has(votePubkey);
         let delinquentDurationMs: number | null = null;
@@ -236,6 +246,7 @@ export async function GET(request: NextRequest) {
           uptimePercent,
           uptimeDays,
           previousRank: previousRank ?? null,
+          stakeDelta,
         });
       }
     });
@@ -254,6 +265,8 @@ export async function GET(request: NextRequest) {
         }
         
         const previousRank = previousRankMap.get(votePubkey);
+        const previousStake = previousStakeMap.get(votePubkey);
+        const stakeDelta = previousStake !== undefined ? rpcStake - previousStake : null;
         
         const isDelinquent = delinquentSet.has(votePubkey);
         // For validators not in our DB, we don't have delinquent_since, so duration will be null
@@ -273,6 +286,7 @@ export async function GET(request: NextRequest) {
           uptimePercent,
           uptimeDays,
           previousRank: previousRank ?? null,
+          stakeDelta,
         });
       }
     });

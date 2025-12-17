@@ -27,6 +27,7 @@ type Validator = {
   delinquentDurationMs?: number | null;
   rank: number;
   rankChange: number | null;
+  stakeDelta: number | null;
   stakeAccountCount: number;
   jitoEnabled?: boolean;
   mevCommission?: number | null;
@@ -47,6 +48,7 @@ type SortKey =
   | "rank"
   | "name"
   | "activeStake"
+  | "stakeDelta"
   | "cumulativeStakePercent"
   | "commission"
   | "mevCommission"
@@ -222,6 +224,13 @@ function ValidatorsPageContent() {
         case "activeStake":
           aVal = a.activeStake;
           bVal = b.activeStake;
+          break;
+        case "stakeDelta":
+          // Handle null values - push to end
+          aVal =
+            a.stakeDelta ?? (sortDirection === "asc" ? Infinity : -Infinity);
+          bVal =
+            b.stakeDelta ?? (sortDirection === "asc" ? Infinity : -Infinity);
           break;
         case "cumulativeStakePercent":
           aVal = a.cumulativeStakePercent;
@@ -543,7 +552,7 @@ function ValidatorsPageContent() {
           className="sticky top-[80px] z-40 bg-[#1F1A1B] border border-[#403A3B] border-b-0 rounded-t-lg overflow-x-auto"
           style={{ isolation: "isolate" }}
         >
-          <div className="grid grid-cols-[80px_1fr_176px_128px_112px_112px_112px] min-w-full">
+          <div className="grid grid-cols-[80px_1fr_176px_140px_128px_112px_112px_112px] min-w-full">
             <div className="px-4 py-3.5 text-left text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
               <div
                 className="flex items-center gap-1"
@@ -577,6 +586,20 @@ function ValidatorsPageContent() {
               >
                 Active Stake
                 {sortKey === "activeStake" && (
+                  <span className="text-cyan-400">
+                    {sortDirection === "asc" ? "↑" : "↓"}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="px-4 py-3.5 text-right text-xs font-semibold text-[#B0B0B0] uppercase tracking-wider cursor-pointer hover:text-cyan-400 transition-colors select-none">
+              <div
+                className="flex items-center justify-end gap-1"
+                onClick={() => handleSort("stakeDelta")}
+                title="Stake change from previous epoch"
+              >
+                Stake Δ
+                {sortKey === "stakeDelta" && (
                   <span className="text-cyan-400">
                     {sortDirection === "asc" ? "↑" : "↓"}
                   </span>
@@ -655,6 +678,7 @@ function ValidatorsPageContent() {
                 <col style={{ width: "80px" }} />
                 <col style={{ width: "auto" }} />
                 <col style={{ width: "176px" }} />
+                <col style={{ width: "140px" }} />
                 <col style={{ width: "128px" }} />
                 <col style={{ width: "112px" }} />
                 <col style={{ width: "112px" }} />
@@ -666,7 +690,7 @@ function ValidatorsPageContent() {
               >
                 {loading && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
+                    <td colSpan={8} className="px-6 py-12 text-center">
                       <div className="flex items-center justify-center gap-3">
                         <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-gray-400">
@@ -678,7 +702,7 @@ function ValidatorsPageContent() {
                 )}
                 {!loading && displayedValidators.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
+                    <td colSpan={8} className="px-6 py-12 text-center">
                       <div className="text-4xl mb-2">🔍</div>
                       <p className="text-gray-400">No validators found</p>
                     </td>
@@ -689,9 +713,12 @@ function ValidatorsPageContent() {
                     {displayedValidators.map((validator, index) => {
                       // Check if we need to insert Nakamoto coefficient divider
                       // Show AFTER the validator that crosses 33.33% threshold
-                      // Only show if no filters are active (needs full unfiltered list)
+                      // Only show if:
+                      // 1. No filters are active (needs full unfiltered list)
+                      // 2. We're sorted by stake (default) - Nakamoto coefficient is about stake concentration
                       const showNakamotoDivider =
                         !hasActiveFilters &&
+                        (sortKey === "activeStake" || sortKey === "rank") &&
                         validator.cumulativeStakePercent > 33.33 &&
                         (index === 0 ||
                           displayedValidators[index - 1]
@@ -875,6 +902,38 @@ function ValidatorsPageContent() {
                               </div>
                             </td>
                             <td
+                              className="px-4 py-3 relative w-[140px] text-right"
+                              style={{ zIndex: 10, backgroundColor: "inherit" }}
+                            >
+                              {validator.stakeDelta !== null &&
+                              validator.stakeDelta !== undefined ? (
+                                <div
+                                  className={`text-sm font-semibold font-mono ${
+                                    validator.stakeDelta > 0
+                                      ? "text-green-400"
+                                      : validator.stakeDelta < 0
+                                      ? "text-red-400"
+                                      : "text-[#B0B0B0]"
+                                  }`}
+                                  style={{
+                                    fontFamily: "ui-monospace, monospace",
+                                  }}
+                                >
+                                  {validator.stakeDelta > 0 ? "+" : ""}
+                                  {validator.stakeDelta.toLocaleString(
+                                    undefined,
+                                    {
+                                      maximumFractionDigits: 0,
+                                    }
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-sm text-gray-600 font-mono">
+                                  —
+                                </div>
+                              )}
+                            </td>
+                            <td
                               className="px-4 py-3 relative w-[128px]"
                               style={{ zIndex: 10, backgroundColor: "inherit" }}
                             >
@@ -968,7 +1027,7 @@ function ValidatorsPageContent() {
                           </tr>
                           {showNakamotoDivider && (
                             <tr key={`nakamoto-${validator.votePubkey}`}>
-                              <td colSpan={7} className="px-0 py-0">
+                              <td colSpan={8} className="px-0 py-0">
                                 <div className="relative border-y border-[#403A3B] bg-[#2A2526]">
                                   <div className="px-4 py-2 flex items-center justify-center gap-2">
                                     <div className="flex-1 h-px bg-[#403A3B]"></div>
@@ -997,7 +1056,7 @@ function ValidatorsPageContent() {
                     })}
                     {displayCount < filteredValidators.length && (
                       <tr key="scroll-sentinel">
-                        <td colSpan={7} className="px-6 py-8 text-center">
+                        <td colSpan={8} className="px-6 py-8 text-center">
                           <div className="flex items-center justify-center gap-3">
                             <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                             <span className="text-gray-400 text-sm">
@@ -1033,9 +1092,12 @@ function ValidatorsPageContent() {
           <>
             {displayedValidators.map((validator, index) => {
               // Show AFTER the validator that crosses 33.33% threshold
-              // Only show if no filters are active (needs full unfiltered list)
+              // Only show if:
+              // 1. No filters are active (needs full unfiltered list)
+              // 2. We're sorted by stake (default) - Nakamoto coefficient is about stake concentration
               const showNakamotoDivider =
                 !hasActiveFilters &&
+                (sortKey === "activeStake" || sortKey === "rank") &&
                 validator.cumulativeStakePercent > 33.33 &&
                 (index === 0 ||
                   displayedValidators[index - 1].cumulativeStakePercent <=

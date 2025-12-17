@@ -289,7 +289,7 @@
     transform: translateY(-100vh) translateX(0) rotate(0deg);
     opacity: 0;
   }
-  10% {
+  2% {
     opacity: 1;
   }
   90% {
