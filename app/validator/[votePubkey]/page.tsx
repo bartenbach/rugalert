@@ -1510,7 +1510,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
           <div className="glass rounded-2xl p-4 sm:p-6 border border-white/10 shadow-sm hover:border-white/20 transition-all duration-300">
             <div className="flex items-center gap-2 mb-4">
               <h2 className="text-base sm:text-lg font-bold text-white">
-                📜 Validator Info History
+                Validator Info History
               </h2>
               {infoHistory.length > 1 && (
                 <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">
@@ -1637,7 +1637,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               </>
             ) : (
               <div className="text-center py-12 text-gray-400">
-                No validator info history
+                No validator info changes
               </div>
             )}
           </div>
