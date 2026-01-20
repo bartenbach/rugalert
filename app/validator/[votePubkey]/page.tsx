@@ -1078,25 +1078,21 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                               );
 
                               return (
-                                <div className="flex flex-col gap-0.5">
+                                <div className="flex flex-col gap-0.5 text-center">
                                   <span className="text-gray-400 text-xs">
-                                    {totalLeaderSlots.toLocaleString()} leader
-                                    slots
+                                    {totalLeaderSlots.toLocaleString()} leader slots
                                   </span>
-                                  <span>
-                                    <span className="text-green-400 font-medium">
-                                      {produced.toLocaleString()} produced
-                                    </span>
-                                    {" · "}
-                                    <span
-                                      className={
-                                        skipped === 0
-                                          ? "text-green-400"
-                                          : "text-red-400"
-                                      }
-                                    >
-                                      {skipped.toLocaleString()} skipped
-                                    </span>
+                                  <span className="text-green-400 font-medium">
+                                    {produced.toLocaleString()} produced
+                                  </span>
+                                  <span
+                                    className={
+                                      skipped === 0
+                                        ? "text-green-400"
+                                        : "text-red-400"
+                                    }
+                                  >
+                                    {skipped.toLocaleString()} skipped
                                   </span>
                                 </div>
                               );
