@@ -269,10 +269,10 @@ function CircularGauge({
         {/* Center content with fade-in animation */}
         <div className="absolute inset-0 flex items-center justify-center">
           <div
-            className={`text-2xl font-bold ${colors.text} transition-all duration-300`}
+            className={`text-xl font-bold ${colors.text} transition-all duration-300`}
             style={{ animation: "fadeIn 0.5s ease-out 0.3s both" }}
           >
-            {value.toFixed(1)}
+            {value >= 99.995 ? Math.round(value) : value.toFixed(2)}
             {max === 100 && "%"}
           </div>
         </div>
@@ -1029,10 +1029,10 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
 
           {/* Performance Gauges and Stake Distribution */}
           {validatorInfo && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-stretch">
               {/* Current Performance */}
-              <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
-                <div className="mb-6 sm:mb-8">
+              <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300 flex flex-col">
+                <div className="mb-4 sm:mb-6">
                   <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">
                     Current Performance
                   </h2>
@@ -1040,7 +1040,7 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     Epoch {validatorInfo.currentEpoch}
                   </p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-10 items-start justify-items-center">
                   {/* Block Production gauge */}
                   {validatorInfo.performance ? (
                     <CircularGauge
@@ -1077,19 +1077,6 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                 elapsedLeaderSlots - produced
                               );
 
-                              // Get skipped slots from performance data
-                              const skippedSlots = validatorInfo.performance.skippedSlots;
-                              const hasSkippedSlots = skippedSlots && skippedSlots.length > 0 && skipped > 0;
-                              
-                              // Limit displayed slots to avoid overwhelming the UI
-                              const MAX_DISPLAY_SLOTS = 20;
-                              const displaySlots = hasSkippedSlots 
-                                ? skippedSlots.slice(0, MAX_DISPLAY_SLOTS)
-                                : [];
-                              const remainingSlots = hasSkippedSlots && skippedSlots.length > MAX_DISPLAY_SLOTS
-                                ? skippedSlots.length - MAX_DISPLAY_SLOTS
-                                : 0;
-
                               return (
                                 <div className="flex flex-col gap-0.5">
                                   <span className="text-gray-400 text-xs">
@@ -1101,56 +1088,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                                       {produced.toLocaleString()} produced
                                     </span>
                                     {" · "}
-                                    {skipped > 0 && hasSkippedSlots ? (
-                                      <span className="group relative inline-block">
-                                        <span className="text-red-400 cursor-help underline decoration-dotted">
-                                          {skipped.toLocaleString()} skipped
-                                        </span>
-                                        {/* Tooltip with skipped slots */}
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 w-64">
-                                          <div className="bg-[#0a0a0a] rounded-xl p-3 border-2 border-red-500/30 whitespace-normal shadow-2xl backdrop-blur-xl">
-                                            <p className="text-white font-bold text-sm mb-2">
-                                              Scheduled Leader Slots
-                                            </p>
-                                            <p className="text-gray-400 text-xs mb-2">
-                                              {skipped.toLocaleString()} of {skippedSlots.length.toLocaleString()} scheduled slots were skipped. Click any slot to view details on Solscan.
-                                            </p>
-                                            <div className="flex flex-wrap gap-1.5 mb-2">
-                                              {displaySlots.map((slot) => (
-                                                <a
-                                                  key={slot}
-                                                  href={`https://solscan.io/block/${slot}`}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className="text-red-400 hover:text-red-300 text-xs font-mono px-1.5 py-0.5 bg-red-500/10 border border-red-500/30 rounded hover:border-red-500/50 transition-colors"
-                                                  onClick={(e) => e.stopPropagation()}
-                                                >
-                                                  {slot.toLocaleString()}
-                                                </a>
-                                              ))}
-                                              {remainingSlots > 0 && (
-                                                <span className="text-gray-400 text-xs px-1.5 py-0.5">
-                                                  +{remainingSlots.toLocaleString()} more
-                                                </span>
-                                              )}
-                                            </div>
-                                            <p className="text-gray-400 text-xs">
-                                              Click a slot to view on Solscan
-                                            </p>
-                                          </div>
-                                        </div>
-                                      </span>
-                                    ) : (
-                                      <span
-                                        className={
-                                          skipped === 0
-                                            ? "text-green-400"
-                                            : "text-red-400"
-                                        }
-                                      >
-                                        {skipped.toLocaleString()} skipped
-                                      </span>
-                                    )}
+                                    <span
+                                      className={
+                                        skipped === 0
+                                          ? "text-green-400"
+                                          : "text-red-400"
+                                      }
+                                    >
+                                      {skipped.toLocaleString()} skipped
+                                    </span>
                                   </span>
                                 </div>
                               );
@@ -1300,13 +1246,13 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
               {/* Stake Distribution */}
               {validatorInfo?.stake?.stakeDistribution &&
                 validatorInfo.stake.stakeDistribution.length > 0 && (
-                  <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
+                  <div className="glass rounded-2xl p-4 sm:p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300 flex flex-col">
                     <div className="mb-3 sm:mb-4">
                       <h2 className="text-xl sm:text-2xl font-bold text-white">
                         Stake Distribution
                       </h2>
                     </div>
-                    <div className="h-[450px] sm:h-[400px]">
+                    <div className="flex-1 min-h-[280px]">
                       <StakeDistributionPie
                         distribution={validatorInfo.stake.stakeDistribution}
                         totalStake={validatorInfo.stake.activeStake}

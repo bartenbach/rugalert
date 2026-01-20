@@ -809,54 +809,27 @@ function ValidatorsPageContent() {
                                   </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <div className="font-semibold text-sm text-[#EAEAEA] group-hover:text-cyan-300 transition-colors truncate">
-                                      {validator.name || validator.votePubkey}
-                                    </div>
-                                    {validator.delinquent && (
-                                      <>
-                                        <span className="relative inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold text-white whitespace-nowrap overflow-hidden">
-                                          {/* Vibrant red background with stronger glow - matching Orb's punchy red */}
-                                          <span
-                                            className="absolute inset-0 bg-gradient-to-br from-red-500/40 via-red-600/35 to-red-700/40 backdrop-blur-[2px] border border-red-400/70 rounded-lg"
-                                            style={{
-                                              boxShadow:
-                                                "0 0 20px rgba(239, 68, 68, 0.6), 0 0 40px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2)",
-                                              animation:
-                                                "delinquent-glow 3s ease-in-out infinite",
-                                            }}
-                                          ></span>
-                                          {/* Shimmer effect - more visible */}
-                                          <span
-                                            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-lg"
-                                            style={{
-                                              animation:
-                                                "delinquent-shimmer 2.5s ease-in-out infinite",
-                                              opacity: 0.6,
-                                            }}
-                                          ></span>
-                                          {/* Outer glow layer */}
-                                          <span className="absolute -inset-1 bg-red-500/30 rounded-lg blur-md animate-pulse-slow"></span>
-                                          {/* Text with strong glow - crisp white like Orb */}
-                                          <span className="relative z-10 drop-shadow-[0_0_6px_rgba(239,68,68,1),0_0_12px_rgba(239,68,68,0.6)] tracking-wider font-extrabold">
-                                            DELINQUENT
-                                          </span>
-                                        </span>
-                                        {validator.delinquentDurationMs !==
-                                          null &&
-                                          validator.delinquentDurationMs !==
-                                            undefined && (
-                                            <span className="text-[10px] text-red-400/90 font-mono whitespace-nowrap drop-shadow-[0_0_2px_rgba(239,68,68,0.5)]">
-                                              Offline For:{" "}
-                                              {formatDelinquencyDuration(
-                                                validator.delinquentDurationMs
-                                              ) || "—"}
-                                            </span>
-                                          )}
-                                      </>
-                                    )}
+                                  <div className="font-semibold text-sm text-[#EAEAEA] group-hover:text-cyan-300 transition-colors truncate">
+                                    {validator.name || validator.votePubkey}
                                   </div>
-                                  {validator.version && (
+                                  {validator.delinquent && (
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold text-red-300 bg-red-500/20 border border-red-500/40">
+                                        DELINQUENT
+                                      </span>
+                                      {validator.delinquentDurationMs !==
+                                        null &&
+                                        validator.delinquentDurationMs !==
+                                          undefined && (
+                                          <span className="text-[10px] text-red-400/70 font-mono whitespace-nowrap">
+                                            {formatDelinquencyDuration(
+                                              validator.delinquentDurationMs
+                                            ) || "—"}
+                                          </span>
+                                        )}
+                                    </div>
+                                  )}
+                                  {validator.version && !validator.delinquent && (
                                     <div className="text-[10px] text-gray-500 font-mono mt-0.5">
                                       v{validator.version}
                                     </div>
@@ -1131,76 +1104,49 @@ function ValidatorsPageContent() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-mono text-gray-500">
-                              #{validator.rank}
-                            </span>
-                            {validator.rankChange !== null &&
-                              validator.rankChange !== 0 && (
-                                <span
-                                  className={`text-[9px] font-bold ${
-                                    validator.rankChange > 0
-                                      ? "text-green-400"
-                                      : "text-red-400"
-                                  }`}
-                                  title={`${
-                                    validator.rankChange > 0 ? "Up" : "Down"
-                                  } ${Math.abs(
-                                    validator.rankChange
-                                  )} from last epoch`}
-                                >
-                                  {validator.rankChange > 0 ? "↑" : "↓"}
-                                  {Math.abs(validator.rankChange)}
-                                </span>
-                              )}
-                          </div>
-                          {validator.delinquent && (
-                            <>
-                              <span className="relative inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold text-white whitespace-nowrap overflow-hidden">
-                                {/* Vibrant red background with stronger glow - matching Orb's punchy red */}
-                                <span
-                                  className="absolute inset-0 bg-gradient-to-br from-red-500/40 via-red-600/35 to-red-700/40 backdrop-blur-[2px] border border-red-400/70 rounded-md"
-                                  style={{
-                                    boxShadow:
-                                      "0 0 16px rgba(239, 68, 68, 0.6), 0 0 32px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2)",
-                                    animation:
-                                      "delinquent-glow 3s ease-in-out infinite",
-                                  }}
-                                ></span>
-                                {/* Shimmer effect - more visible */}
-                                <span
-                                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-md"
-                                  style={{
-                                    animation:
-                                      "delinquent-shimmer 2.5s ease-in-out infinite",
-                                    opacity: 0.6,
-                                  }}
-                                ></span>
-                                {/* Outer glow layer */}
-                                <span className="absolute -inset-1 bg-red-500/30 rounded-md blur-md animate-pulse-slow"></span>
-                                {/* Text with strong glow - crisp white like Orb */}
-                                <span className="relative z-10 drop-shadow-[0_0_5px_rgba(239,68,68,1),0_0_10px_rgba(239,68,68,0.6)] tracking-wider font-extrabold">
-                                  DELINQUENT
-                                </span>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="text-xs font-mono text-gray-500">
+                            #{validator.rank}
+                          </span>
+                          {validator.rankChange !== null &&
+                            validator.rankChange !== 0 && (
+                              <span
+                                className={`text-[9px] font-bold ${
+                                  validator.rankChange > 0
+                                    ? "text-green-400"
+                                    : "text-red-400"
+                                }`}
+                                title={`${
+                                  validator.rankChange > 0 ? "Up" : "Down"
+                                } ${Math.abs(
+                                  validator.rankChange
+                                )} from last epoch`}
+                              >
+                                {validator.rankChange > 0 ? "↑" : "↓"}
+                                {Math.abs(validator.rankChange)}
                               </span>
-                              {validator.delinquentDurationMs !== null &&
-                                validator.delinquentDurationMs !==
-                                  undefined && (
-                                  <span className="text-[9px] text-red-400/90 font-mono drop-shadow-[0_0_2px_rgba(239,68,68,0.5)]">
-                                    Offline For:{" "}
-                                    {formatDelinquencyDuration(
-                                      validator.delinquentDurationMs
-                                    ) || "—"}
-                                  </span>
-                                )}
-                            </>
-                          )}
+                            )}
                         </div>
                         <div className="font-semibold text-sm text-white truncate">
                           {validator.name || validator.votePubkey}
                         </div>
-                        {validator.version && (
+                        {validator.delinquent && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold text-red-300 bg-red-500/20 border border-red-500/40">
+                              DELINQUENT
+                            </span>
+                            {validator.delinquentDurationMs !== null &&
+                              validator.delinquentDurationMs !==
+                                undefined && (
+                                <span className="text-[9px] text-red-400/70 font-mono">
+                                  {formatDelinquencyDuration(
+                                    validator.delinquentDurationMs
+                                  ) || "—"}
+                                </span>
+                              )}
+                          </div>
+                        )}
+                        {validator.version && !validator.delinquent && (
                           <div className="text-[10px] text-gray-500 font-mono">
                             v{validator.version}
                           </div>

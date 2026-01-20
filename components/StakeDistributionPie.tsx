@@ -33,26 +33,16 @@ export default function StakeDistributionPie({
   distribution,
   totalStake,
 }: StakeDistributionPieProps) {
-  // Smart logic: show enough top stakers to represent at least 70% of total stake
-  // But cap at 20 stakers max to avoid clutter
-  let topStakers = [];
-  let topStakersTotal = 0;
-  const targetPercentage = 0.7; // Show enough to represent 70%
-  const maxStakers = 20;
-
-  for (let i = 0; i < Math.min(distribution.length, maxStakers); i++) {
-    topStakers.push(distribution[i]);
-    topStakersTotal += distribution[i].amount;
-
-    // If we've hit 60% of total stake and have at least 8 stakers, we can stop
-    const currentPercentage = topStakersTotal / (totalStake * 1_000_000_000);
-    if (currentPercentage >= targetPercentage && i >= 7) {
-      break;
-    }
-  }
-
-  // Everything else is "Others"
-  const othersTotal = totalStake * 1_000_000_000 - topStakersTotal;
+  // Show top stakers that represent meaningful stake
+  // Cap at 50 slices max for visual clarity, group rest into "Others"
+  const maxSlices = 50;
+  const totalLamports = totalStake * 1_000_000_000;
+  
+  // Take top N stakers (already sorted by amount from API)
+  const topStakers = distribution.slice(0, maxSlices);
+  const topStakersTotal = topStakers.reduce((sum, e) => sum + e.amount, 0);
+  const othersTotal = totalLamports - topStakersTotal;
+  const othersCount = Math.max(0, distribution.length - maxSlices);
 
   // Prepare data for pie chart
   const chartData = topStakers.map((entry) => ({
@@ -63,14 +53,14 @@ export default function StakeDistributionPie({
     fullAddress: entry.staker,
   }));
 
-  // Always add "Others" if there's any unaccounted stake
-  if (othersTotal > 0) {
+  // Add "Others" if there's remaining stake
+  if (othersTotal > 0 && othersCount > 0) {
     const othersPercentage = (
       (othersTotal / 1_000_000_000 / totalStake) *
       100
     ).toFixed(1);
     chartData.push({
-      name: `Others (${othersPercentage}%)`,
+      name: `Others (${othersCount} more)`,
       value: othersTotal / 1_000_000_000,
       percentage: othersPercentage,
       fullAddress: "",
@@ -103,12 +93,12 @@ export default function StakeDistributionPie({
     outerRadius,
     percent,
   }: any) => {
-    // Only show label if slice is > 8% to avoid overlapping
-    if (percent < 0.08) return null;
+    // Only show label if slice is > 12% to avoid overlapping
+    if (percent < 0.12) return null;
 
     const RADIAN = Math.PI / 180;
-    // Position label inside the slice, closer to outer edge for better spacing
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.6;
+    // Position label inside the slice
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
 
@@ -121,8 +111,8 @@ export default function StakeDistributionPie({
         dominantBaseline="central"
         className="font-bold"
         style={{
-          fontSize: "13px",
-          textShadow: "0 0 4px rgba(0,0,0,0.9)",
+          fontSize: "12px",
+          textShadow: "0 0 6px rgba(0,0,0,1), 0 0 3px rgba(0,0,0,1)",
         }}
       >
         {`${(percent * 100).toFixed(1)}%`}
@@ -139,7 +129,6 @@ export default function StakeDistributionPie({
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Pie Chart */}
       <div className="flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -149,7 +138,7 @@ export default function StakeDistributionPie({
               cy="50%"
               labelLine={false}
               label={renderCustomLabel}
-              outerRadius="70%"
+              outerRadius="85%"
               fill="#8884d8"
               dataKey="value"
               animationBegin={0}
@@ -174,36 +163,9 @@ export default function StakeDistributionPie({
           </PieChart>
         </ResponsiveContainer>
       </div>
-
-      {/* Custom Legend Below Chart */}
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 px-4 py-4 border-t border-white/10">
-        {chartData.map((entry, index) => (
-          <div
-            key={`legend-${index}`}
-            className="flex items-center gap-1.5 text-xs"
-          >
-            <div
-              className="w-3 h-3 rounded flex-shrink-0"
-              style={{ backgroundColor: COLORS[index % COLORS.length] }}
-            />
-            {entry.fullAddress && !entry.name.includes("Others") ? (
-              <a
-                href={`https://solscan.io/account/${entry.fullAddress}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-gray-300 hover:text-cyan-400 transition-colors truncate max-w-[140px] sm:max-w-[180px]"
-                title={`${entry.name} - Click to view on Solscan`}
-              >
-                {entry.name}
-              </a>
-            ) : (
-              <span className="text-gray-300 truncate max-w-[140px] sm:max-w-[180px]">
-                {entry.name}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+      <p className="text-center text-xs text-gray-500 pb-2">
+        Hover for details · Click to view on Solscan
+      </p>
     </div>
   );
 }

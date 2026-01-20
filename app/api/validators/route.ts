@@ -132,39 +132,26 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch uptime data from daily_uptime table
+    // Fetch uptime data from daily_uptime table (aggregated in SQL for accuracy)
     const uptimeMap = new Map<string, { totalChecks: number; delinquentChecks: number; days: number }>();
     if (validatorVotePubkeys.length > 0) {
       const uptimeRecords = await sql`
         SELECT 
           vote_pubkey, 
-          uptime_checks, 
-          delinquent_checks, 
-          date
+          SUM(uptime_checks) as total_checks,
+          SUM(delinquent_checks) as total_delinquent,
+          COUNT(*) as days
         FROM daily_uptime
         WHERE vote_pubkey = ANY(${validatorVotePubkeys})
-        ORDER BY date DESC
-        LIMIT 7000
+        GROUP BY vote_pubkey
       `;
       
       uptimeRecords.forEach((record: any) => {
-        const votePubkey = record.vote_pubkey;
-        const uptimeChecks = Number(record.uptime_checks || 0);
-        const delinquentChecks = Number(record.delinquent_checks || 0);
-        
-        // Aggregate uptime data per validator
-        const existing = uptimeMap.get(votePubkey);
-        if (existing) {
-          existing.totalChecks += uptimeChecks;
-          existing.delinquentChecks += delinquentChecks;
-          existing.days += 1;
-        } else {
-          uptimeMap.set(votePubkey, {
-            totalChecks: uptimeChecks,
-            delinquentChecks: delinquentChecks,
-            days: 1,
-          });
-        }
+        uptimeMap.set(record.vote_pubkey, {
+          totalChecks: Number(record.total_checks || 0),
+          delinquentChecks: Number(record.total_delinquent || 0),
+          days: Number(record.days || 0),
+        });
       });
     }
 
@@ -191,6 +178,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Build set of all validators in RPC (both current and delinquent)
+    const inRpcSet = new Set<string>([...rpcStakeMap.keys()]);
+    
     // Merge ALL validators with their commission data
     const validatorsWithStake: any[] = [];
     const processedVotePubkeys = new Set<string>();
@@ -200,11 +190,17 @@ export async function GET(request: NextRequest) {
       processedVotePubkeys.add(votePubkey);
       const rpcStake = rpcStakeMap.get(votePubkey) || 0;
       
-      // Use cached activeStake from validator record, fallback to RPC
-      const activeStake = Number(validator.activeStake || rpcStake);
+      // Use RPC stake as source of truth, fallback to cached for display
+      // If not in RPC at all, use 0 (they're dead)
+      const inRpc = inRpcSet.has(votePubkey);
+      const activeStake = inRpc ? rpcStake : 0;
       
-      // Only include validators with stake > 0
-      if (activeStake > 0) {
+      // Include validators with stake > 0, OR validators in our DB that have historical data
+      // (zombie validators with 0 stake are still shown as delinquent historical records)
+      const hasStake = activeStake > 0;
+      const hasHistoricalData = validator.name || validator.iconUrl;
+      
+      if (hasStake || hasHistoricalData) {
         // Calculate uptime percentage from aggregated data
         const uptimeData = uptimeMap.get(votePubkey);
         let uptimePercent: number | null = null;
@@ -225,8 +221,8 @@ export async function GET(request: NextRequest) {
         const previousStake = previousStakeMap.get(votePubkey);
         const stakeDelta = previousStake !== undefined ? activeStake - previousStake : null;
         
-        // Calculate delinquency duration if delinquent
-        const isDelinquent = delinquentSet.has(votePubkey);
+        // Delinquent if: in RPC delinquent list, OR not in RPC at all (zombie/dead validator)
+        const isDelinquent = delinquentSet.has(votePubkey) || !inRpc;
         let delinquentDurationMs: number | null = null;
         if (isDelinquent && validator.delinquentSince) {
           const delinquentSince = new Date(validator.delinquentSince);
@@ -237,9 +233,9 @@ export async function GET(request: NextRequest) {
           ...validator,
           commission: Number(validator.commission || 0),
           activeStake,
-          activatingStake: Number(validator.activatingStake || 0),
-          deactivatingStake: Number(validator.deactivatingStake || 0),
-          // Override delinquent status with real-time RPC data
+          activatingStake: inRpc ? Number(validator.activatingStake || 0) : 0,
+          deactivatingStake: inRpc ? Number(validator.deactivatingStake || 0) : 0,
+          // Delinquent if in RPC delinquent list OR not in RPC at all
           delinquent: isDelinquent,
           delinquentDurationMs,
           mevCommission: mevCommissionMap.get(votePubkey) ?? null,
