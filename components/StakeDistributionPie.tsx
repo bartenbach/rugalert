@@ -33,39 +33,17 @@ export default function StakeDistributionPie({
   distribution,
   totalStake,
 }: StakeDistributionPieProps) {
-  // Show top stakers that represent meaningful stake
-  // Cap at 50 slices max for visual clarity, group rest into "Others"
-  const maxSlices = 50;
-  const totalLamports = totalStake * 1_000_000_000;
-  
-  // Take top N stakers (already sorted by amount from API)
-  const topStakers = distribution.slice(0, maxSlices);
-  const topStakersTotal = topStakers.reduce((sum, e) => sum + e.amount, 0);
-  const othersTotal = totalLamports - topStakersTotal;
-  const othersCount = Math.max(0, distribution.length - maxSlices);
+  // Show ALL stakers from the distribution data
+  const totalDisplayedStake = distribution.reduce((sum, e) => sum + e.amount, 0);
 
   // Prepare data for pie chart
-  const chartData = topStakers.map((entry) => ({
+  const chartData = distribution.map((entry) => ({
     name:
       entry.label || `${entry.staker.slice(0, 4)}...${entry.staker.slice(-4)}`,
     value: entry.amount / 1_000_000_000, // Convert to SOL
-    percentage: ((entry.amount / 1_000_000_000 / totalStake) * 100).toFixed(2),
+    percentage: ((entry.amount / totalDisplayedStake) * 100).toFixed(2),
     fullAddress: entry.staker,
   }));
-
-  // Add "Others" if there's remaining stake
-  if (othersTotal > 0 && othersCount > 0) {
-    const othersPercentage = (
-      (othersTotal / 1_000_000_000 / totalStake) *
-      100
-    ).toFixed(1);
-    chartData.push({
-      name: `Others (${othersCount} more)`,
-      value: othersTotal / 1_000_000_000,
-      percentage: othersPercentage,
-      fullAddress: "",
-    });
-  }
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -144,16 +122,14 @@ export default function StakeDistributionPie({
               animationBegin={0}
               animationDuration={800}
               onClick={handleSliceClick}
+              stroke="none"
             >
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={COLORS[index % COLORS.length]}
                   style={{
-                    cursor:
-                      entry.fullAddress && !entry.name.includes("Others")
-                        ? "pointer"
-                        : "default",
+                    cursor: entry.fullAddress ? "pointer" : "default",
                     outline: "none",
                   }}
                 />
