@@ -78,9 +78,9 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
 
   if (loading) {
     return (
-      <div className="glass rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
-        <h3 className="text-xl font-bold text-white mb-4">Uptime</h3>
-        <div className="flex items-center justify-center h-32">
+      <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300 min-h-[280px]">
+        <h3 className="text-2xl font-bold text-white mb-4">Uptime</h3>
+        <div className="flex items-center justify-center h-40">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500"></div>
         </div>
       </div>
@@ -89,8 +89,8 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
 
   if (error) {
     return (
-      <div className="glass rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
-        <h3 className="text-xl font-bold text-white mb-4">Uptime</h3>
+      <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300 min-h-[280px]">
+        <h3 className="text-2xl font-bold text-white mb-4">Uptime</h3>
         <div className="text-center text-gray-400 py-8">
           <p>Failed to load uptime data</p>
           <p className="text-sm text-gray-500 mt-2">{error}</p>
@@ -101,8 +101,8 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
 
   if (!data || data.days.length === 0) {
     return (
-      <div className="glass rounded-2xl p-6 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
-        <h3 className="text-xl font-bold text-white mb-4">Uptime</h3>
+      <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300 min-h-[280px]">
+        <h3 className="text-2xl font-bold text-white mb-4">Uptime</h3>
         <div className="text-center text-gray-400 py-8">
           <p>Collecting uptime data...</p>
           <p className="text-sm text-gray-500 mt-2">
@@ -114,7 +114,7 @@ export default function UptimeChart({ votePubkey }: UptimeChartProps) {
   }
 
   return (
-    <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300">
+    <div className="glass rounded-2xl p-8 border border-white/10 shadow-2xl shadow-black/30 hover:border-white/20 transition-all duration-300 min-h-[280px]">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-2xl font-bold text-white mb-1">Uptime</h3>

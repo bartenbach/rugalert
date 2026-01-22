@@ -712,6 +712,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                             <img
                               src={result.iconUrl}
                               alt={result.name}
+                              width={40}
+                              height={40}
                               className="w-10 h-10 rounded-lg border-2 border-white/20 group-hover:border-cyan-500/70 transition-colors flex-shrink-0"
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";
@@ -766,6 +768,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                   <>
                     <img
                       src={meta.avatarUrl}
+                      width={96}
+                      height={96}
                       className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-xl object-cover border-2 border-white/10 transition-all duration-[1200ms] ease-in-out shadow-md hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:border-cyan-400/60"
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
@@ -1564,6 +1568,8 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                               <img
                                 src={record.iconUrl}
                                 alt={record.name || "Icon"}
+                                width={40}
+                                height={40}
                                 className="w-10 h-10 rounded-lg border border-white/20 flex-shrink-0"
                                 onError={(e) => {
                                   e.currentTarget.style.display = "none";

@@ -61,6 +61,8 @@ export default function RootLayout({
                 <img
                   src="/rugalert-logo.png"
                   alt="RugAlert Logo"
+                  width={80}
+                  height={80}
                   className="relative w-12 h-12 sm:w-20 sm:h-20 object-contain"
                   style={{
                     filter: "hue-rotate(150deg) saturate(1.3) brightness(1.15)",

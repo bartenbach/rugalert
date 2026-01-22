@@ -139,18 +139,47 @@ export default function RugsPerEpochChart() {
 
   if (initialLoading) {
     return (
-      <div className="glass rounded-2xl p-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-white/10 rounded w-1/3 mb-4"></div>
-          <div className="h-64 bg-white/5 rounded"></div>
+      <>
+        {/* Skeleton for global stats header */}
+        <div className="glass rounded-2xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-6 shadow-2xl shadow-black/20 mb-6 min-h-[120px]">
+          <div className="animate-pulse grid grid-cols-3 gap-6 text-center">
+            <div>
+              <div className="h-8 bg-white/10 rounded w-16 mx-auto mb-2"></div>
+              <div className="h-3 bg-white/5 rounded w-24 mx-auto"></div>
+            </div>
+            <div>
+              <div className="h-8 bg-white/10 rounded w-16 mx-auto mb-2"></div>
+              <div className="h-3 bg-white/5 rounded w-24 mx-auto"></div>
+            </div>
+            <div>
+              <div className="h-8 bg-white/10 rounded w-16 mx-auto mb-2"></div>
+              <div className="h-3 bg-white/5 rounded w-24 mx-auto"></div>
+            </div>
+          </div>
         </div>
-      </div>
+        {/* Skeleton for chart */}
+        <div className="glass rounded-2xl p-8 min-h-[500px]">
+          <div className="animate-pulse">
+            <div className="h-8 bg-white/10 rounded w-1/3 mb-6"></div>
+            <div className="h-4 bg-white/5 rounded w-48 mb-6"></div>
+            <div className="space-y-3">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="w-20 h-4 bg-white/5 rounded"></div>
+                  <div className="flex-1 h-10 bg-white/5 rounded-lg"></div>
+                  <div className="w-24 h-6 bg-white/5 rounded-lg"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 
   if (!data.length) {
     return (
-      <div className="glass rounded-2xl p-8 text-center">
+      <div className="glass rounded-2xl p-8 text-center min-h-[500px] flex items-center justify-center">
         <p className="text-gray-400">No rug data available yet</p>
       </div>
     );
@@ -194,7 +223,7 @@ export default function RugsPerEpochChart() {
       </div>
 
       {/* Chart Section */}
-      <div className="glass rounded-2xl p-8">
+      <div className="glass rounded-2xl p-8 min-h-[500px]">
         <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
           🚨 Rugs per Epoch
         </h2>
@@ -371,6 +400,8 @@ export default function RugsPerEpochChart() {
                                     <img
                                       src={event.icon_url}
                                       alt=""
+                                      width={32}
+                                      height={32}
                                       className="w-8 h-8 rounded-lg object-cover border border-white/10"
                                       onError={(e) => {
                                         e.currentTarget.style.display = "none";

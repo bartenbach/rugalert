@@ -222,6 +222,8 @@ export default function Page() {
                     <img
                       src={newRugDetected.icon_url}
                       alt="Validator"
+                      width={64}
+                      height={64}
                       className="w-16 h-16 rounded-xl border-2 border-red-400"
                     />
                   ) : (
@@ -537,6 +539,8 @@ export default function Page() {
                             <img
                               src={it.icon_url}
                               alt=""
+                              width={40}
+                              height={40}
                               className="w-10 h-10 rounded-xl object-cover border border-white/10 hover:border-cyan-400 transition-colors"
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";

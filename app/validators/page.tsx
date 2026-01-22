@@ -791,6 +791,8 @@ function ValidatorsPageContent() {
                                       src={validator.iconUrl}
                                       alt={validator.name || "Validator"}
                                       loading="lazy"
+                                      width={40}
+                                      height={40}
                                       className="w-10 h-10 rounded-xl object-cover border-2 border-[#403A3B] group-hover:border-cyan-400/60 group-hover:shadow-lg group-hover:shadow-cyan-500/30 transition-all"
                                       onError={(e) => {
                                         e.currentTarget.style.display = "none";
@@ -1096,6 +1098,8 @@ function ValidatorsPageContent() {
                           src={validator.iconUrl}
                           alt={validator.name || "Validator"}
                           loading="lazy"
+                          width={48}
+                          height={48}
                           className="w-12 h-12 rounded-lg object-cover border-2 border-white/10 flex-shrink-0"
                         />
                       ) : (
