@@ -377,6 +377,7 @@ export async function POST(req: NextRequest) {
     let stakeAccountCounts = new Map<string, number>(); // Count of stake accounts per validator
     let stakeDistribution = new Map<string, Map<string, number>>(); // voter -> (staker -> total stake amount)
     const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
+    let stakeFetchComplete = false; // Track if we successfully fetched ALL stake accounts
     
     if (enableStakeTracking) {
       logProgress("Fetching all stake accounts with pagination...");
@@ -416,16 +417,27 @@ export async function POST(req: NextRequest) {
               logProgress(`Fetched ${pageCount} pages: ${allStakeAccounts.length} accounts`);
             }
           } catch (pageError: any) {
-            console.log(`⚠️  Page ${pageCount} failed (${pageError.message}), continuing with ${allStakeAccounts.length} accounts`);
-            break; // Stop pagination on error, use what we have
+            console.log(`🚨 Page ${pageCount} failed (${pageError.message}) - ABORTING stake fetch to preserve existing data`);
+            console.log(`🚨 Will NOT update stake data this run to avoid overwriting good data with incomplete data`);
+            break; // Stop pagination on error, but stakeFetchComplete stays false
           }
           
           // Stop if we hit page limit
           if (pageCount >= MAX_PAGES) {
             logProgress(`⚠️  Reached page limit (${MAX_PAGES}), continuing with ${allStakeAccounts.length} accounts`);
+            // Still mark as complete since we got a reasonable amount of data
+            stakeFetchComplete = true;
             break;
           }
         } while (paginationKey);
+        
+        // Only mark complete if we exhausted pagination naturally (no errors)
+        if (!paginationKey && pageCount < MAX_PAGES) {
+          stakeFetchComplete = true;
+          logProgress(`✅ Stake fetch complete: ${allStakeAccounts.length} accounts from ${pageCount} pages`);
+        } else if (!stakeFetchComplete) {
+          logProgress(`⚠️  Stake fetch INCOMPLETE - will preserve existing stake data in database`);
+        }
         
         logProgress(`Processing ${allStakeAccounts.length} stake accounts from ${pageCount} pages...`);
         
@@ -494,10 +506,13 @@ export async function POST(req: NextRequest) {
         }
         logProgress(`Processed stake for ${stakeByVoter.size} voters, ${stakeAccountCounts.size} validators with accounts`);
       } catch (e: any) {
-        console.log(`⚠️ Could not fetch stake accounts (continuing without activating/deactivating data):`, e?.message || e);
+        console.log(`🚨 Could not fetch stake accounts: ${e?.message || e}`);
+        console.log(`🚨 Stake data will be PRESERVED in database (not overwritten with incomplete data)`);
+        // stakeFetchComplete stays false, so existing DB values will be preserved
       }
     } else {
       console.log(`⏭️ Stake tracking disabled (set ENABLE_STAKE_TRACKING=true to enable)`);
+      // stakeFetchComplete stays false when disabled
     }
     
     // Extract vote credits from the vote accounts we already fetched
@@ -759,29 +774,34 @@ export async function POST(req: NextRequest) {
         : (existing?.jito_enabled ?? false); // Preserve existing value if not in API response
       
       // Prepare validator upsert (batch later)
-      const accountCount = stakeAccountCounts.get(v.votePubkey) || 0;
       
       // Get activating/deactivating stake from pre-fetched data
-      const stakeData = stakeByVoter.get(v.votePubkey);
-      const activatingStake = stakeData?.activating || 0;
-      const deactivatingStake = stakeData?.deactivating || 0;
-      const activatingAccounts = stakeData?.activatingAccounts || [];
-      const deactivatingAccounts = stakeData?.deactivatingAccounts || [];
+      // ONLY use this data if the stake fetch was complete - otherwise preserve existing DB values
+      const stakeData = stakeFetchComplete ? stakeByVoter.get(v.votePubkey) : undefined;
+      const activatingStake = stakeData?.activating ?? null; // null means "don't update"
+      const deactivatingStake = stakeData?.deactivating ?? null;
+      const activatingAccounts = stakeData?.activatingAccounts ?? null;
+      const deactivatingAccounts = stakeData?.deactivatingAccounts ?? null;
+      const accountCount = stakeFetchComplete ? (stakeAccountCounts.get(v.votePubkey) || 0) : null;
       
       // Get stake distribution for pie chart (top 100 stakers)
-      const distribution = stakeDistribution.get(v.votePubkey);
-      const distributionArray: Array<{ staker: string; amount: number; label: string | null }> = [];
-      if (distribution) {
-        const sorted = Array.from(distribution.entries())
-          .sort((a, b) => b[1] - a[1]) // Sort by amount descending
-          .slice(0, 100); // Top 100 stakers
-        
-        for (const [staker, amount] of sorted) {
-          distributionArray.push({
-            staker,
-            amount,
-            label: getStakerLabel(staker)
-          });
+      // Only update if stake fetch was complete
+      let distributionArray: Array<{ staker: string; amount: number; label: string | null }> | null = null;
+      if (stakeFetchComplete) {
+        const distribution = stakeDistribution.get(v.votePubkey);
+        distributionArray = [];
+        if (distribution) {
+          const sorted = Array.from(distribution.entries())
+            .sort((a, b) => b[1] - a[1]) // Sort by amount descending
+            .slice(0, 100); // Top 100 stakers
+          
+          for (const [staker, amount] of sorted) {
+            distributionArray.push({
+              staker,
+              amount,
+              label: getStakerLabel(staker)
+            });
+          }
         }
       }
       
@@ -793,18 +813,24 @@ export async function POST(req: NextRequest) {
           delinquent: isDelinquent,
           commission: v.commission,
           activeStake: Number(v.activatedStake || 0),
-          activatingStake,
-          deactivatingStake,
-          activatingAccounts: activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]",
-          deactivatingAccounts: deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]",
           jitoEnabled: isJitoEnabled,
-          stakeAccountCount: accountCount,
-          stakeDistribution: JSON.stringify(distributionArray),
           name: chainName || null,
           iconUrl: iconUrl || null,
           website: website || null,
           description: description || null,
           version: version || null,
+          // Stake fields: only include if stake fetch was complete (not null)
+          // null means "preserve existing DB value"
+          activatingStake,
+          deactivatingStake,
+          activatingAccounts: activatingAccounts !== null 
+            ? (activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]")
+            : null,
+          deactivatingAccounts: deactivatingAccounts !== null
+            ? (deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]")
+            : null,
+          stakeAccountCount: accountCount,
+          stakeDistribution: distributionArray !== null ? JSON.stringify(distributionArray) : null,
         };
         
         // Detect BAM (Block Auction Mechanism) from description
@@ -820,21 +846,25 @@ export async function POST(req: NextRequest) {
           ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block auction'))
           : false;
         
-        // Create new validator
+        // Create new validator - for new validators, use 0 if stake fetch incomplete
         validatorsToCreate.push({
           votePubkey: v.votePubkey,
           identityPubkey: v.nodePubkey,
           commission: v.commission,
           delinquent: isDelinquent,
           activeStake: Number(v.activatedStake || 0),
-          activatingStake,
-          deactivatingStake,
-          activatingAccounts: activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]",
-          deactivatingAccounts: deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]",
+          activatingStake: activatingStake ?? 0,
+          deactivatingStake: deactivatingStake ?? 0,
+          activatingAccounts: activatingAccounts !== null 
+            ? (activatingAccounts.length > 0 ? JSON.stringify(activatingAccounts) : "[]")
+            : "[]",
+          deactivatingAccounts: deactivatingAccounts !== null
+            ? (deactivatingAccounts.length > 0 ? JSON.stringify(deactivatingAccounts) : "[]")
+            : "[]",
           jitoEnabled: isJitoEnabled,
           bamEnabled: isBamEnabled,
-          stakeAccountCount: accountCount,
-          stakeDistribution: JSON.stringify(distributionArray),
+          stakeAccountCount: accountCount ?? 0,
+          stakeDistribution: distributionArray !== null ? JSON.stringify(distributionArray) : "[]",
           firstSeenEpoch: epoch,
           name: chainName || null,
           iconUrl: iconUrl || null,
@@ -1464,6 +1494,8 @@ export async function POST(req: NextRequest) {
     console.log(`========== END DELINQUENCY CHECK ==========\n`);
     
     for (const validator of validatorsToUpdate) {
+      // Use COALESCE for stake fields - if null, preserve existing DB value
+      // This prevents overwriting good data when stake fetch was incomplete
       await sql`
         UPDATE validators SET
           identity_pubkey = ${validator.identityPubkey},
@@ -1474,19 +1506,19 @@ export async function POST(req: NextRequest) {
           version = ${validator.version},
           commission = ${validator.commission},
           active_stake = ${validator.activeStake},
-          activating_stake = ${validator.activatingStake},
-          deactivating_stake = ${validator.deactivatingStake},
-          activating_accounts = ${validator.activatingAccounts},
-          deactivating_accounts = ${validator.deactivatingAccounts},
+          activating_stake = COALESCE(${validator.activatingStake}, activating_stake),
+          deactivating_stake = COALESCE(${validator.deactivatingStake}, deactivating_stake),
+          activating_accounts = COALESCE(${validator.activatingAccounts}, activating_accounts),
+          deactivating_accounts = COALESCE(${validator.deactivatingAccounts}, deactivating_accounts),
           delinquent = ${validator.delinquent},
           jito_enabled = ${validator.jitoEnabled},
           bam_enabled = ${validator.bamEnabled || false},
-          stake_account_count = ${validator.stakeAccountCount},
-          stake_distribution = ${validator.stakeDistribution}
+          stake_account_count = COALESCE(${validator.stakeAccountCount}, stake_account_count),
+          stake_distribution = COALESCE(${validator.stakeDistribution}, stake_distribution)
         WHERE vote_pubkey = ${validator.votePubkey}
       `;
     }
-    logProgress(`Updated ${validatorsToUpdate.length} validators`);
+    logProgress(`Updated ${validatorsToUpdate.length} validators${stakeFetchComplete ? '' : ' (stake data preserved - fetch incomplete)'}`);
     
     // Create/update stake records with ranks
     for (const stake of stakeRecordsToCreate) {
