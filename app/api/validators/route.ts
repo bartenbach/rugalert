@@ -62,7 +62,9 @@ export async function GET(request: NextRequest) {
         version, 
         commission, 
         stake_account_count, 
-        jito_enabled, 
+        jito_enabled,
+        bam_enabled,
+        client_type,
         active_stake, 
         activating_stake, 
         deactivating_stake,
@@ -73,6 +75,8 @@ export async function GET(request: NextRequest) {
     validators.forEach((record: any) => {
       const votePubkey = record.vote_pubkey;
       const jitoEnabled = Boolean(record.jito_enabled);
+      const bamEnabled = Boolean(record.bam_enabled);
+      const clientType = record.client_type || null;
       
       // Convert BigInt/lamports to Number (SOL)
       const lamportsToSolFromDb = (val: any) => {
@@ -96,6 +100,8 @@ export async function GET(request: NextRequest) {
         stakeAccountCount: toNumber(record.stake_account_count),
         commission: toNumber(record.commission),
         jitoEnabled,
+        bamEnabled,
+        clientType,
         activeStake: lamportsToSolFromDb(record.active_stake),
         activatingStake: lamportsToSolFromDb(record.activating_stake),
         deactivatingStake: lamportsToSolFromDb(record.deactivating_stake),

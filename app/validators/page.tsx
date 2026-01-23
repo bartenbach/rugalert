@@ -30,6 +30,8 @@ type Validator = {
   stakeDelta: number | null;
   stakeAccountCount: number;
   jitoEnabled?: boolean;
+  bamEnabled?: boolean;
+  clientType?: string | null; // 'agave' | 'frankendancer' | 'firedancer' | 'unknown'
   mevCommission?: number | null;
   uptimePercent?: number | null;
   uptimeDays?: number | null;

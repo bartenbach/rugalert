@@ -196,6 +196,7 @@ export async function GET(
         delinquent: isDelinquent, // Use real-time RPC data
         jitoEnabled,
         bamEnabled: isBamEnabled,
+        clientType: validator.client_type || null, // 'agave', 'frankendancer', 'firedancer', or 'unknown'
         firstSeenEpoch: Number(validator.first_seen_epoch || 0),
         stakeAccountCount: Number(validator.stake_account_count || 0),
       },

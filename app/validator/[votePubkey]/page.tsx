@@ -88,6 +88,7 @@ type ValidatorInfo = {
     delinquent?: boolean;
     jitoEnabled?: boolean;
     bamEnabled?: boolean;
+    clientType?: string | null; // 'agave' | 'frankendancer' | 'firedancer' | 'unknown'
     firstSeenEpoch?: number;
     stakeAccountCount?: number;
   };
@@ -890,8 +891,35 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                     <div className="flex items-baseline gap-2">
                       <span className="text-gray-500">Version:</span>
                       <span className="text-white font-mono font-semibold text-xs">
+                        {/* Show client type before version if known */}
+                        {validatorInfo.validator.clientType && validatorInfo.validator.clientType !== 'unknown' && (
+                          <span 
+                            title={
+                              validatorInfo.validator.clientType === 'frankendancer'
+                                ? 'Frankendancer: Firedancer networking + Agave runtime'
+                                : validatorInfo.validator.clientType === 'firedancer'
+                                ? 'Firedancer by Jump Crypto'
+                                : 'Agave (formerly Solana Labs)'
+                            }
+                          >
+                            {validatorInfo.validator.clientType === 'frankendancer' ? 'Frankendancer' :
+                             validatorInfo.validator.clientType === 'firedancer' ? 'Firedancer' :
+                             'Agave'}{' '}
+                          </span>
+                        )}
                         {validatorInfo.validator.version}
                       </span>
+                      {/* Jito/BAM indicators */}
+                      {validatorInfo.validator.jitoEnabled && (
+                        <span className="text-xs" title="Jito MEV enabled">
+                          <span className="text-gray-500">+</span><span className="text-purple-400">Jito</span>
+                        </span>
+                      )}
+                      {validatorInfo.validator.bamEnabled && (
+                        <span className="text-xs" title="Block Assembly Marketplace">
+                          <span className="text-gray-500">+</span><span className="text-pink-400">BAM</span>
+                        </span>
+                      )}
                     </div>
                   )}
 
