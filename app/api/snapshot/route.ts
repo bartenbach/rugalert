@@ -8,6 +8,7 @@ import { generateCommissionChangeEmail, generateDelinquencyEmail } from "../../.
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
 import { getStakerLabel, type StakeAccountBreakdown } from "../../../lib/stakers";
 import { formatTwitterMevRug, formatTwitterRug, postToTwitter } from "../../../lib/twitter";
+import { detectClientType } from "../../../lib/clientType";
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for Vercel Pro (max allowed)
@@ -833,18 +834,25 @@ export async function POST(req: NextRequest) {
           stakeDistribution: distributionArray !== null ? JSON.stringify(distributionArray) : null,
         };
         
-        // Detect BAM (Block Auction Mechanism) from description
-        const isBamEnabled = description 
-          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block auction'))
-          : false;
+        // Detect BAM (Block Assembly Marketplace) from Jito API or description
+        const isBamEnabled = jitoInfo?.hasBam || (description 
+          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block assembly'))
+          : false);
         patch.bamEnabled = isBamEnabled;
+        
+        // Detect client type from version string (just the base software)
+        const clientInfo = detectClientType(version);
+        patch.clientType = clientInfo.clientType;
         
         validatorsToUpdate.push(patch);
       } else {
-        // Detect BAM (Block Auction Mechanism) from description
-        const isBamEnabled = description 
-          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block auction'))
-          : false;
+        // Detect BAM (Block Assembly Marketplace) from Jito API or description
+        const isBamEnabled = jitoInfo?.hasBam || (description 
+          ? (description.toLowerCase().includes('bam') || description.toLowerCase().includes('block assembly'))
+          : false);
+        
+        // Detect client type from version string (just the base software)
+        const clientInfo = detectClientType(version);
         
         // Create new validator - for new validators, use 0 if stake fetch incomplete
         validatorsToCreate.push({
@@ -863,6 +871,7 @@ export async function POST(req: NextRequest) {
             : "[]",
           jitoEnabled: isJitoEnabled,
           bamEnabled: isBamEnabled,
+          clientType: clientInfo.clientType,
           stakeAccountCount: accountCount ?? 0,
           stakeDistribution: distributionArray !== null ? JSON.stringify(distributionArray) : "[]",
           firstSeenEpoch: epoch,
@@ -1399,7 +1408,7 @@ export async function POST(req: NextRequest) {
           vote_pubkey, identity_pubkey, name, icon_url, website, description, version,
           commission, active_stake, activating_stake, deactivating_stake,
           activating_accounts, deactivating_accounts, delinquent, jito_enabled, bam_enabled,
-          stake_account_count, stake_distribution, first_seen_epoch
+          client_type, stake_account_count, stake_distribution, first_seen_epoch
         ) VALUES (
           ${validator.votePubkey},
           ${validator.identityPubkey},
@@ -1417,6 +1426,7 @@ export async function POST(req: NextRequest) {
           ${validator.delinquent},
           ${validator.jitoEnabled},
           ${validator.bamEnabled || false},
+          ${validator.clientType},
           ${validator.stakeAccountCount},
           ${validator.stakeDistribution},
           ${validator.firstSeenEpoch}
@@ -1513,6 +1523,7 @@ export async function POST(req: NextRequest) {
           delinquent = ${validator.delinquent},
           jito_enabled = ${validator.jitoEnabled},
           bam_enabled = ${validator.bamEnabled || false},
+          client_type = ${validator.clientType},
           stake_account_count = COALESCE(${validator.stakeAccountCount}, stake_account_count),
           stake_distribution = COALESCE(${validator.stakeDistribution}, stake_distribution)
         WHERE vote_pubkey = ${validator.votePubkey}

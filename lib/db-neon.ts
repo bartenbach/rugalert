@@ -24,6 +24,8 @@ export type Validator = {
   stake_account_count: number
   delinquent: boolean
   jito_enabled: boolean
+  bam_enabled: boolean
+  client_type?: string | null  // 'agave' | 'jito-agave' | 'firedancer' | 'jito-firedancer' | 'unknown'
   created_at: Date
   updated_at: Date
 }

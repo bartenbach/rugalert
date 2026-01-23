@@ -180,7 +180,7 @@ export async function GET(
     const isBamEnabled = validator.bam_enabled !== undefined && validator.bam_enabled !== null
       ? Boolean(validator.bam_enabled)
       : (validator.description 
-          ? (validator.description.toLowerCase().includes('bam') || validator.description.toLowerCase().includes('block auction'))
+          ? (validator.description.toLowerCase().includes('bam') || validator.description.toLowerCase().includes('block assembly'))
           : false);
 
     const response = NextResponse.json({

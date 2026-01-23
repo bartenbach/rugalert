@@ -19,11 +19,13 @@ interface JitoApiValidator {
   priority_fee_commission_bps: number;
   priority_fee_rewards: number;
   running_jito: boolean;
+  running_bam: boolean;
   active_stake: number;
 }
 
 interface JitoValidatorInfo {
   isJitoEnabled: boolean;
+  hasBam: boolean; // Block Assembly Marketplace
   mevCommission: number | null; // Percentage (0-100)
   priorityFeeCommission: number | null; // Percentage (0-100)
   mevRewards: number;
@@ -50,6 +52,7 @@ export async function fetchAllJitoValidators(): Promise<Map<string, JitoValidato
       if (validator.running_jito) {
         jitoMap.set(validator.vote_account, {
           isJitoEnabled: true,
+          hasBam: validator.running_bam || false,
           // Convert basis points to percentage: 800 bps = 8%
           mevCommission: validator.mev_commission_bps !== null 
             ? validator.mev_commission_bps / 100 
@@ -85,6 +88,7 @@ export async function checkJitoValidator(
     
     return {
       isJitoEnabled: false,
+      hasBam: false,
       mevCommission: null,
       priorityFeeCommission: null,
       mevRewards: 0,
@@ -94,6 +98,7 @@ export async function checkJitoValidator(
     console.error(`Error checking Jito status for ${votePubkey}:`, error);
     return {
       isJitoEnabled: false,
+      hasBam: false,
       mevCommission: null,
       priorityFeeCommission: null,
       mevRewards: 0,
