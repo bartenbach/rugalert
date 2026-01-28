@@ -87,25 +87,25 @@ export default function RootLayout({
             <nav className="flex items-center gap-1 sm:gap-2">
               <a
                 href="/"
-                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 uppercase tracking-wider ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 uppercase tracking-wider ${
                   isActive("/") && pathname === "/"
                     ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50"
                     : "text-[#B0B0B0] hover:bg-[#2A2526] hover:text-cyan-400"
                 }`}
               >
                 <span className="hidden sm:inline">Dashboard</span>
-                <span className="sm:hidden">🏠</span>
+                <span className="sm:hidden">Home</span>
               </a>
               <a
                 href="/validators"
-                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 uppercase tracking-wider ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 uppercase tracking-wider ${
                   isActive("/validators")
                     ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50"
                     : "text-[#B0B0B0] hover:bg-[#2A2526] hover:text-cyan-400"
                 }`}
               >
                 <span className="hidden sm:inline">Validators</span>
-                <span className="sm:hidden">📋</span>
+                <span className="sm:hidden">List</span>
               </a>
             </nav>
           </div>

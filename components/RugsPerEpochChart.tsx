@@ -346,134 +346,206 @@ export default function RugsPerEpochChart() {
 
             {/* Expanded Details */}
             {selectedEpoch === item.epoch && (
-              <div className="mt-3 mb-4 ml-24 mr-24 bg-white/5 rounded-lg border border-white/10 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+              <div className="mt-3 mb-4 ml-0 sm:ml-8 md:ml-24 mr-0 sm:mr-8 md:mr-24 bg-white/5 rounded-lg border border-white/10 overflow-hidden animate-in slide-in-from-top-2 duration-200">
                 {loadingEvents ? (
-                  <div className="p-6 text-center">
+                  <div className="p-4 sm:p-6 text-center">
                     <div className="inline-flex items-center gap-3">
                       <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                       <span className="text-gray-400">Loading details...</span>
                     </div>
                   </div>
                 ) : epochEvents.length === 0 ? (
-                  <div className="p-6 text-center text-gray-400">
+                  <div className="p-4 sm:p-6 text-center text-gray-400">
                     No events found for this epoch
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-white/5 border-b border-white/10">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
-                            Validator
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
-                            Type
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
-                            Commission
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
-                            Change
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {epochEvents.map((event) => {
-                          // Use GLOBAL rug count, not page-specific count
-                          const globalRugCount = globalValidatorRugCounts[event.vote_pubkey] || 0;
-                          const isRepeatOffender = globalRugCount > 1;
-                          return (
-                          <tr
+                  <>
+                    {/* Mobile: Card Layout */}
+                    <div className="sm:hidden divide-y divide-white/5">
+                      {epochEvents.map((event) => {
+                        const globalRugCount = globalValidatorRugCounts[event.vote_pubkey] || 0;
+                        const isRepeatOffender = globalRugCount > 1;
+                        return (
+                          <a
                             key={event.id}
-                            className={`hover:bg-white/5 transition-colors ${
+                            href={`/validator/${event.vote_pubkey}`}
+                            className={`block p-3 hover:bg-white/5 transition-colors ${
                               isRepeatOffender ? 'bg-cyan-500/5' : ''
                             }`}
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <a
-                                  href={`/validator/${event.vote_pubkey}`}
-                                  className="flex items-center gap-2 hover:text-cyan-400 transition-colors"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {event.icon_url ? (
-                                    <img
-                                      src={event.icon_url}
-                                      alt=""
-                                      width={32}
-                                      height={32}
-                                      className="w-8 h-8 rounded-lg object-cover border border-white/10"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = "none";
-                                        const fallback =
-                                          e.currentTarget.nextElementSibling;
-                                        if (fallback) {
-                                          fallback.classList.remove("hidden");
-                                        }
-                                      }}
-                                    />
-                                  ) : null}
-                                  <div
-                                    className={`w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-cyan-500/30 border border-white/10 flex items-center justify-center ${
-                                      event.icon_url ? "hidden" : ""
-                                    }`}
-                                  >
-                                    <span className="text-sm">🔷</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-white">
-                                      {event.name ||
-                                        event.vote_pubkey.slice(0, 8)}
-                                    </span>
-                                    {isRepeatOffender && (
-                                      <span 
-                                        className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-semibold border border-cyan-500/30"
-                                        title={`Rugged in ${globalRugCount} total epochs (across all time)`}
-                                      >
-                                        ⚠️ {globalRugCount}x
-                                      </span>
-                                    )}
-                                  </div>
-                                </a>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${
-                                  event.rug_type === 'COMMISSION'
-                                    ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                                    : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            <div className="flex items-center gap-2 mb-2">
+                              {event.icon_url ? (
+                                <img
+                                  src={event.icon_url}
+                                  alt=""
+                                  width={24}
+                                  height={24}
+                                  className="w-6 h-6 rounded object-cover border border-white/10 flex-shrink-0"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    const fallback = e.currentTarget.nextElementSibling;
+                                    if (fallback) fallback.classList.remove("hidden");
+                                  }}
+                                />
+                              ) : null}
+                              <div
+                                className={`w-6 h-6 rounded bg-gradient-to-br from-cyan-500/20 to-cyan-500/30 border border-white/10 flex items-center justify-center flex-shrink-0 ${
+                                  event.icon_url ? "hidden" : ""
                                 }`}
                               >
-                                {event.rug_type === 'COMMISSION' ? 'Inflation Commission' : 'MEV Commission'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2 text-sm">
-                                <span className="text-gray-400">
-                                  {event.rug_type === 'MEV' && event.from_disabled
-                                    ? 'MEV Disabled'
-                                    : `${event.from_commission}%`}
-                                </span>
-                                <span className="text-gray-600">→</span>
-                                <span className="text-red-400 font-semibold">
-                                  {event.rug_type === 'MEV' && event.to_disabled
-                                    ? 'MEV Disabled'
-                                    : `${event.to_commission}%`}
-                                </span>
+                                <span className="text-xs">🔷</span>
                               </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="text-sm font-semibold text-red-400">
-                                +{event.delta}%
+                              <span className="text-sm font-medium text-white truncate flex-1">
+                                {event.name || event.vote_pubkey.slice(0, 12) + '...'}
                               </span>
-                            </td>
-                          </tr>
+                              {isRepeatOffender && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-semibold border border-cyan-500/30 flex-shrink-0">
+                                  {globalRugCount}x
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span
+                                className={`px-1.5 py-0.5 rounded font-semibold ${
+                                  event.rug_type === 'COMMISSION'
+                                    ? 'bg-red-500/20 text-red-300'
+                                    : 'bg-purple-500/20 text-purple-300'
+                                }`}
+                              >
+                                {event.rug_type === 'COMMISSION' ? 'Inflation' : 'MEV'}
+                              </span>
+                              <span className="text-gray-400">
+                                {event.rug_type === 'MEV' && event.from_disabled ? 'Off' : `${event.from_commission}%`}
+                                {' → '}
+                                <span className="text-red-400 font-semibold">
+                                  {event.rug_type === 'MEV' && event.to_disabled ? 'Off' : `${event.to_commission}%`}
+                                </span>
+                              </span>
+                              <span className="text-red-400 font-semibold">+{event.delta}%</span>
+                            </div>
+                          </a>
                         );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                      })}
+                    </div>
+                    
+                    {/* Desktop: Table Layout */}
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-white/5 border-b border-white/10">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                              Validator
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                              Type
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                              Commission
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400">
+                              Change
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {epochEvents.map((event) => {
+                            // Use GLOBAL rug count, not page-specific count
+                            const globalRugCount = globalValidatorRugCounts[event.vote_pubkey] || 0;
+                            const isRepeatOffender = globalRugCount > 1;
+                            return (
+                            <tr
+                              key={event.id}
+                              className={`hover:bg-white/5 transition-colors ${
+                                isRepeatOffender ? 'bg-cyan-500/5' : ''
+                              }`}
+                            >
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <a
+                                    href={`/validator/${event.vote_pubkey}`}
+                                    className="flex items-center gap-2 hover:text-cyan-400 transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {event.icon_url ? (
+                                      <img
+                                        src={event.icon_url}
+                                        alt=""
+                                        width={32}
+                                        height={32}
+                                        className="w-8 h-8 rounded-lg object-cover border border-white/10"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = "none";
+                                          const fallback =
+                                            e.currentTarget.nextElementSibling;
+                                          if (fallback) {
+                                            fallback.classList.remove("hidden");
+                                          }
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div
+                                      className={`w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-cyan-500/30 border border-white/10 flex items-center justify-center ${
+                                        event.icon_url ? "hidden" : ""
+                                      }`}
+                                    >
+                                      <span className="text-sm">🔷</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-white">
+                                        {event.name ||
+                                          event.vote_pubkey.slice(0, 8)}
+                                      </span>
+                                      {isRepeatOffender && (
+                                        <span 
+                                          className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-semibold border border-cyan-500/30"
+                                          title={`Rugged in ${globalRugCount} total epochs (across all time)`}
+                                        >
+                                          ⚠️ {globalRugCount}x
+                                        </span>
+                                      )}
+                                    </div>
+                                  </a>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${
+                                    event.rug_type === 'COMMISSION'
+                                      ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                      : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                  }`}
+                                >
+                                  {event.rug_type === 'COMMISSION' ? 'Inflation Commission' : 'MEV Commission'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="text-gray-400">
+                                    {event.rug_type === 'MEV' && event.from_disabled
+                                      ? 'MEV Disabled'
+                                      : `${event.from_commission}%`}
+                                  </span>
+                                  <span className="text-gray-600">→</span>
+                                  <span className="text-red-400 font-semibold">
+                                    {event.rug_type === 'MEV' && event.to_disabled
+                                      ? 'MEV Disabled'
+                                      : `${event.to_commission}%`}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-sm font-semibold text-red-400">
+                                  +{event.delta}%
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             )}

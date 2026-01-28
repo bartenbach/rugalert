@@ -1052,7 +1052,7 @@ function ValidatorsPageContent() {
       </div>
 
       {/* Validators Cards - Mobile */}
-      <div className="md:hidden space-y-3">
+      <div className="md:hidden space-y-1.5">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="flex items-center gap-3">
@@ -1087,31 +1087,34 @@ function ValidatorsPageContent() {
                     onClick={() =>
                       (window.location.href = `/validator/${validator.votePubkey}`)
                     }
-                    className={`bg-[#2A2526] rounded-lg p-4 border cursor-pointer transition-all ${
+                    className={`bg-[#2A2526] rounded-lg px-3 py-2.5 border cursor-pointer transition-all ${
                       validator.delinquent
                         ? "border-[rgb(239,68,68)]/50 bg-[rgb(239,68,68)]/5"
-                        : "border-[#403A3B] hover:border-cyan-500/50 hover:shadow-lg hover:shadow-cyan-500/20"
+                        : "border-[#403A3B] active:bg-cyan-500/10"
                     }`}
                   >
-                    {/* Header */}
-                    <div className="flex items-start gap-3 mb-3">
+                    {/* Compact single-row layout */}
+                    <div className="flex items-center gap-2.5">
+                      {/* Icon */}
                       {validator.iconUrl ? (
                         <img
                           src={validator.iconUrl}
                           alt={validator.name || "Validator"}
                           loading="lazy"
-                          width={48}
-                          height={48}
-                          className="w-12 h-12 rounded-lg object-cover border-2 border-white/10 flex-shrink-0"
+                          width={36}
+                          height={36}
+                          className="w-9 h-9 rounded-lg object-cover border border-white/10 flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-12 h-12 rounded-lg border-2 border-white/10 bg-gradient-to-br from-white/5 to-white/0 flex-shrink-0 flex items-center justify-center text-gray-500 text-xl">
+                        <div className="w-9 h-9 rounded-lg border border-white/10 bg-gradient-to-br from-white/5 to-white/0 flex-shrink-0 flex items-center justify-center text-gray-500 text-sm">
                           ?
                         </div>
                       )}
+                      
+                      {/* Name & Rank */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-xs font-mono text-gray-500">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono text-gray-500">
                             #{validator.rank}
                           </span>
                           {validator.rankChange !== null &&
@@ -1122,128 +1125,80 @@ function ValidatorsPageContent() {
                                     ? "text-green-400"
                                     : "text-red-400"
                                 }`}
-                                title={`${
-                                  validator.rankChange > 0 ? "Up" : "Down"
-                                } ${Math.abs(
-                                  validator.rankChange
-                                )} from last epoch`}
                               >
                                 {validator.rankChange > 0 ? "↑" : "↓"}
                                 {Math.abs(validator.rankChange)}
                               </span>
                             )}
+                          {validator.delinquent && (
+                            <span className="px-1 py-0.5 rounded text-[8px] font-bold text-red-300 bg-red-500/20">
+                              DELINQ
+                            </span>
+                          )}
                         </div>
-                        <div className="font-semibold text-sm text-white truncate">
+                        <div className="font-semibold text-sm text-white truncate leading-tight">
                           {validator.name || validator.votePubkey}
                         </div>
-                        {validator.delinquent && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold text-red-300 bg-red-500/20 border border-red-500/40">
-                              DELINQUENT
-                            </span>
-                            {validator.delinquentDurationMs !== null &&
-                              validator.delinquentDurationMs !==
-                                undefined && (
-                                <span className="text-[9px] text-red-400/70 font-mono">
-                                  {formatDelinquencyDuration(
-                                    validator.delinquentDurationMs
-                                  ) || "—"}
-                                </span>
-                              )}
+                      </div>
+                      
+                      {/* Stats - inline compact */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Stake */}
+                        <div className="text-right">
+                          <div className="text-[10px] text-gray-500">Stake</div>
+                          <div className="text-xs text-white font-semibold whitespace-nowrap">
+                            ◎ {(validator.activeStake / 1_000_000).toFixed(2)}M
                           </div>
-                        )}
-                        {validator.version && !validator.delinquent && (
-                          <div className="text-[10px] text-gray-500 font-mono">
-                            v{validator.version}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <div className="text-gray-500 mb-1">Stake</div>
-                        <div className="text-white font-semibold">
-                          ◎{" "}
-                          {validator.activeStake.toLocaleString(undefined, {
-                            maximumFractionDigits: 0,
-                          })}
                         </div>
-                        <div className="text-[10px] text-gray-600">
-                          {validator.stakePercent.toFixed(2)}%
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 mb-1">Cumulative</div>
-                        <div className="text-white font-semibold">
-                          {validator.cumulativeStakePercent.toFixed(1)}%
-                        </div>
-                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1">
-                          <div
-                            className="h-full bg-cyan-500"
-                            style={{
-                              width: `${Math.min(
-                                validator.cumulativeStakePercent,
-                                100
-                              )}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 mb-1">Commission</div>
+                        
+                        {/* Commission */}
                         <span
-                          className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                             validator.commission <= 5
-                              ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                              ? "bg-green-500/15 text-green-300"
                               : validator.commission <= 10
-                              ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                              : "bg-red-500/15 text-red-300 border border-red-500/30"
+                              ? "bg-yellow-500/15 text-yellow-300"
+                              : "bg-red-500/15 text-red-300"
                           }`}
                         >
                           {validator.commission}%
                         </span>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 mb-1">MEV</div>
+                        
+                        {/* MEV */}
                         {validator.jitoEnabled &&
                         validator.mevCommission !== null &&
                         validator.mevCommission !== undefined ? (
                           <span
-                            className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                               validator.mevCommission <= 5
-                                ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                                ? "bg-green-500/15 text-green-300"
                                 : validator.mevCommission <= 10
-                                ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                                : "bg-red-500/15 text-red-300 border border-red-500/30"
+                                ? "bg-yellow-500/15 text-yellow-300"
+                                : "bg-red-500/15 text-red-300"
                             }`}
                           >
                             {validator.mevCommission}%
                           </span>
                         ) : (
-                          <span className="text-gray-600 text-xs">—</span>
+                          <span className="text-gray-600 text-[10px] w-6 text-center">—</span>
                         )}
-                      </div>
-                      <div className="col-span-2">
-                        <div className="text-gray-500 mb-1">Uptime</div>
+                        
+                        {/* Uptime */}
                         {validator.uptimePercent !== null &&
                         validator.uptimePercent !== undefined ? (
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-bold ${
-                                validator.uptimePercent >= 99.9
-                                  ? "bg-green-500/15 text-green-300 border border-green-500/30"
-                                  : validator.uptimePercent >= 99.0
-                                  ? "bg-yellow-500/15 text-yellow-300 border border-yellow-500/30"
-                                  : "bg-red-500/15 text-red-300 border border-red-500/30"
-                              }`}
-                            >
-                              {validator.uptimePercent.toFixed(2)}%
-                            </span>
-                          </div>
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              validator.uptimePercent >= 99.9
+                                ? "bg-green-500/15 text-green-300"
+                                : validator.uptimePercent >= 99.0
+                                ? "bg-yellow-500/15 text-yellow-300"
+                                : "bg-red-500/15 text-red-300"
+                            }`}
+                          >
+                            {validator.uptimePercent.toFixed(2)}%
+                          </span>
                         ) : (
-                          <span className="text-gray-600 text-xs">—</span>
+                          <span className="text-gray-600 text-[10px] w-10 text-center">—</span>
                         )}
                       </div>
                     </div>
@@ -1251,14 +1206,11 @@ function ValidatorsPageContent() {
                   {showNakamotoDivider && (
                     <div
                       key={`nakamoto-mobile-${validator.votePubkey}`}
-                      className="relative border-y border-[#403A3B] bg-[#2A2526] rounded-lg p-3"
+                      className="relative border-y border-[#403A3B] bg-[#2A2526] rounded-lg py-2 px-3"
                     >
                       <div className="text-center">
-                        <div className="text-cyan-400 font-bold text-xs uppercase tracking-wider mb-1">
-                          ⚠️ Nakamoto Coefficient
-                        </div>
-                        <div className="text-[10px] text-[#B0B0B0]">
-                          Cumulative stake above forms a superminority
+                        <div className="text-cyan-400 font-bold text-[10px] uppercase tracking-wider">
+                          ⚠️ Nakamoto Coefficient - Superminority above
                         </div>
                       </div>
                     </div>
@@ -1267,10 +1219,10 @@ function ValidatorsPageContent() {
               );
             })}
             {displayCount < filteredValidators.length && (
-              <div className="flex items-center justify-center gap-3 py-6">
-                <div className="w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-gray-400 text-sm">
-                  Loading more validators...
+              <div className="flex items-center justify-center gap-3 py-4">
+                <div className="w-4 h-4 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-gray-400 text-xs">
+                  Loading more...
                 </span>
               </div>
             )}
