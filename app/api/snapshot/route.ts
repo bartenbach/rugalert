@@ -387,9 +387,10 @@ export async function POST(req: NextRequest) {
         const allStakeAccounts: any[] = [];
         let paginationKey: string | null = null;
         let pageCount = 0;
-        // Increased limit - we need ALL accounts for accurate data
-        // Each page = 5K accounts, so 250 pages = 1.25M accounts
-        const MAX_PAGES = 250; // Was 200 (1M accounts), now 250 (1.25M accounts)
+        // Safety limit to prevent infinite loops - set high enough to fetch ALL accounts
+        // Each page = 5K accounts, so 500 pages = 2.5M accounts
+        // As of Feb 2026, Solana has ~1.3M+ stake accounts and growing
+        const MAX_PAGES = 500;
         
         do {
           pageCount++;
@@ -423,11 +424,11 @@ export async function POST(req: NextRequest) {
             break; // Stop pagination on error, but stakeFetchComplete stays false
           }
           
-          // Stop if we hit page limit
+          // Stop if we hit page limit (safety valve)
           if (pageCount >= MAX_PAGES) {
-            logProgress(`⚠️  Reached page limit (${MAX_PAGES}), continuing with ${allStakeAccounts.length} accounts`);
-            // Still mark as complete since we got a reasonable amount of data
-            stakeFetchComplete = true;
+            logProgress(`🚨 Reached page limit (${MAX_PAGES}), stopping with ${allStakeAccounts.length} accounts — stake data will NOT be updated to avoid incomplete data`);
+            // Do NOT mark stakeFetchComplete — this is incomplete data and should
+            // not overwrite existing good data in the database
             break;
           }
         } while (paginationKey);
