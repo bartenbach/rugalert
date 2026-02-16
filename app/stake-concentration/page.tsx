@@ -479,11 +479,14 @@ export default function StakeConcentrationPage() {
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#1f2937",
+                        backgroundColor: "#1a1a2e",
                         border: "1px solid #374151",
                         borderRadius: "8px",
                         fontSize: "12px",
+                        color: "#e5e7eb",
                       }}
+                      labelStyle={{ color: "#9ca3af" }}
+                      itemStyle={{ color: "#e5e7eb" }}
                       formatter={(value: any, name: string, props: any) => [
                         `${formatStake(value)} SOL (${formatPercent(
                           props.payload.percent
@@ -531,11 +534,14 @@ export default function StakeConcentrationPage() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#1f2937",
+                        backgroundColor: "#1a1a2e",
                         border: "1px solid #374151",
                         borderRadius: "8px",
                         fontSize: "12px",
+                        color: "#e5e7eb",
                       }}
+                      labelStyle={{ color: "#9ca3af" }}
+                      itemStyle={{ color: "#e5e7eb" }}
                       formatter={(value: any, name: string, props: any) => [
                         `${formatStake(value as number)} SOL (${formatPercent(
                           props.payload.percent

@@ -107,6 +107,17 @@ export default function RootLayout({
                 <span className="hidden sm:inline">Validators</span>
                 <span className="sm:hidden">List</span>
               </a>
+              <a
+                href="/stake-concentration"
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 uppercase tracking-wider ${
+                  isActive("/stake-concentration")
+                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/50"
+                    : "text-[#B0B0B0] hover:bg-[#2A2526] hover:text-cyan-400"
+                }`}
+              >
+                <span className="hidden sm:inline">Stake Map</span>
+                <span className="sm:hidden">Map</span>
+              </a>
             </nav>
           </div>
         </header>

@@ -422,6 +422,15 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
   );
   const [uptimePercentage, setUptimePercentage] = useState<number | null>(null);
   const [uptimeDaysTracked, setUptimeDaysTracked] = useState<number>(0);
+  const [geoData, setGeoData] = useState<{
+    country?: string;
+    countryCode?: string;
+    city?: string;
+    region?: string;
+    dataCenter?: string;
+    asName?: string;
+    asNumber?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [copiedIdentity, setCopiedIdentity] = useState(false);
   const [copiedVote, setCopiedVote] = useState(false);
@@ -514,6 +523,19 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
         console.error("Failed to fetch uptime:", err);
         setUptimePercentage(null);
         setUptimeDaysTracked(0);
+      }
+
+      // Fetch geolocation data
+      try {
+        const g = await fetch(`/api/geo/${params.votePubkey}`, {
+          cache: "no-store",
+        });
+        if (g.ok) {
+          const gj = await g.json();
+          setGeoData(gj);
+        }
+      } catch (err) {
+        console.error("Failed to fetch geo data:", err);
       }
 
       setLoading(false);
@@ -989,6 +1011,32 @@ export default function Detail({ params }: { params: { votePubkey: string } }) {
                         </span>
                       </div>
                     )}
+
+                  {/* Row 3: Geolocation data */}
+                  {geoData?.city && geoData?.country && (
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="text-gray-500 shrink-0">Location:</span>
+                      <span className="text-white font-semibold truncate" title={`${geoData.city}${geoData.region && geoData.region !== geoData.city ? `, ${geoData.region}` : ''}, ${geoData.country}`}>
+                        {geoData.city}, {geoData.country}
+                      </span>
+                    </div>
+                  )}
+                  {geoData?.dataCenter && geoData.dataCenter !== 'Other' && (
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="text-gray-500 shrink-0">Data Center:</span>
+                      <span className="text-white font-semibold truncate" title={geoData.asName ? `${geoData.dataCenter} (${geoData.asName})` : geoData.dataCenter}>
+                        {geoData.dataCenter}
+                      </span>
+                    </div>
+                  )}
+                  {geoData?.dataCenter === 'Other' && geoData?.asName && (
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="text-gray-500 shrink-0">Network:</span>
+                      <span className="text-white font-semibold truncate" title={geoData.asName}>
+                        {geoData.asName}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Copy buttons - More compact */}
