@@ -7,6 +7,10 @@
     {
       "path": "/api/delinquency-check",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/geo-snapshot",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

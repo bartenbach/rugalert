@@ -154,6 +154,30 @@ CREATE TABLE validator_info_history (
   FOREIGN KEY (vote_pubkey) REFERENCES validators(vote_pubkey) ON DELETE CASCADE
 );
 
+-- 11. Validator geolocation table
+CREATE TABLE validator_locations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  vote_pubkey TEXT NOT NULL REFERENCES validators(vote_pubkey) ON DELETE CASCADE,
+  identity_pubkey TEXT,
+  ip_address TEXT,
+  country TEXT,
+  country_code TEXT,
+  region TEXT,
+  city TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  timezone TEXT,
+  isp TEXT,
+  org TEXT,
+  as_number INTEGER,
+  as_name TEXT,
+  data_center TEXT,
+  lookup_success BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT validator_locations_unique_vote UNIQUE (vote_pubkey)
+);
+
 -- ============================================
 -- INDEXES for Performance
 -- ============================================
@@ -197,6 +221,13 @@ CREATE INDEX idx_daily_uptime_date ON daily_uptime(date DESC);
 CREATE INDEX idx_validator_info_history_vote_pubkey ON validator_info_history(vote_pubkey);
 CREATE INDEX idx_validator_info_history_epoch ON validator_info_history(epoch DESC);
 
+-- Validator locations indexes
+CREATE INDEX idx_validator_locations_vote_pubkey ON validator_locations(vote_pubkey);
+CREATE INDEX idx_validator_locations_country ON validator_locations(country_code);
+CREATE INDEX idx_validator_locations_data_center ON validator_locations(data_center);
+CREATE INDEX idx_validator_locations_as_number ON validator_locations(as_number);
+CREATE INDEX idx_validator_locations_city_country ON validator_locations(city, country_code);
+
 -- ============================================
 -- FUNCTIONS & TRIGGERS
 -- ============================================
@@ -220,6 +251,11 @@ CREATE TRIGGER update_subscribers_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_validator_locations_updated_at
+  BEFORE UPDATE ON validator_locations
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================
 -- ROW LEVEL SECURITY (Optional - for safety)
 -- ============================================
@@ -235,6 +271,7 @@ ALTER TABLE mev_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mev_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_uptime ENABLE ROW LEVEL SECURITY;
 ALTER TABLE validator_info_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE validator_locations ENABLE ROW LEVEL SECURITY;
 
 -- Allow service role full access (for API)
 CREATE POLICY "Service role has full access" ON validators FOR ALL USING (true);
@@ -247,6 +284,7 @@ CREATE POLICY "Service role has full access" ON mev_snapshots FOR ALL USING (tru
 CREATE POLICY "Service role has full access" ON mev_events FOR ALL USING (true);
 CREATE POLICY "Service role has full access" ON daily_uptime FOR ALL USING (true);
 CREATE POLICY "Service role has full access" ON validator_info_history FOR ALL USING (true);
+CREATE POLICY "Service role has full access" ON validator_locations FOR ALL USING (true);
 
 -- Allow anon read access to public data
 CREATE POLICY "Public read access" ON validators FOR SELECT USING (true);
@@ -258,4 +296,5 @@ CREATE POLICY "Public read access" ON mev_snapshots FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON mev_events FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON daily_uptime FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON validator_info_history FOR SELECT USING (true);
+CREATE POLICY "Public read access" ON validator_locations FOR SELECT USING (true);
 
