@@ -313,71 +313,54 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fetch Jito MEV commission data for all validators
-    logProgress("Fetching Jito MEV data...");
-    const jitoValidators = await fetchAllJitoValidators();
-    logProgress(`Found ${jitoValidators.size} Jito-enabled validators`);
-
     // Track stake and performance metrics
     let stakeRecordsCreated = 0;
     let performanceRecordsCreated = 0;
     let mevSnapshotsCreated = 0;
     let mevEventsCreated = 0;
     
-    // Get block production data for skip rate calculation (current epoch only)
-    logProgress("Fetching block production data...");
-    const blockProduction = await rpc("getBlockProduction", [{ epoch }]);
+    const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
+
+    // Parallelize independent fetches: Jito, block production, leader schedule, stake pool names
+    logProgress("Fetching Jito, block production, leader schedule, stake pool names (parallel)...");
+    const [jitoValidators, blockProduction, leaderSchedule, stakePoolNames] = await Promise.all([
+      fetchAllJitoValidators(),
+      rpc("getBlockProduction", [{ epoch }]),
+      rpc("getLeaderSchedule", [null]),
+      enableStakeTracking
+        ? fetchStakePoolNames(process.env.RPC_URL!).catch((e: any) => {
+            console.log(`⚠️ Could not fetch stake pool names: ${e?.message || e}`);
+            return {} as Record<string, string>;
+          })
+        : Promise.resolve({} as Record<string, string>),
+    ]);
     const blockProductionData = blockProduction?.value?.byIdentity || {};
-    logProgress("Block production data fetched");
-    
-    // Get full leader schedule for total leader slots (not just elapsed)
-    logProgress("Fetching leader schedule...");
-    // getLeaderSchedule returns data keyed by IDENTITY pubkey (nodePubkey)
-    // Call with [null] to get current epoch's schedule
-    const leaderSchedule = await rpc("getLeaderSchedule", [null]);
     const leaderScheduleData: Record<string, number[]> = leaderSchedule || {};
-    logProgress(`Leader schedule fetched (${Object.keys(leaderScheduleData).length} validators)`);
+    logProgress(`Parallel fetch done: ${jitoValidators.size} Jito validators, ${Object.keys(leaderScheduleData).length} leader schedule entries, ${Object.keys(stakePoolNames).length} pool names`);
     
     const nodePubkeyToVote = new Map<string, any>();
     for (const v of allVotes) {
       nodePubkeyToVote.set(v.nodePubkey, v);
     }
     
-    // Fetch ALL stake accounts at once to avoid per-validator RPC calls
-    // WARNING: This can be very expensive on mainnet (millions of accounts)
-    // Set ENABLE_STAKE_TRACKING=false to disable if causing timeouts
+    // Fetch and process stake accounts inline (process each page as it arrives
+    // to avoid accumulating 1.3M+ objects in memory)
     let stakeByVoter = new Map<string, { 
       activating: number; 
       deactivating: number;
       activatingAccounts: StakeAccountBreakdown[];
       deactivatingAccounts: StakeAccountBreakdown[];
     }>();
-    let stakeAccountCounts = new Map<string, number>(); // Count of stake accounts per validator
-    let stakeDistribution = new Map<string, Map<string, number>>(); // voter -> (staker -> total stake amount)
-    const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
-    let stakeFetchComplete = false; // Track if we successfully fetched ALL stake accounts
+    let stakeAccountCounts = new Map<string, number>();
+    let stakeDistribution = new Map<string, Map<string, number>>();
+    let stakeFetchComplete = false;
     
-    // Fetch SPL stake pool names for automatic label resolution
-    let stakePoolNames: Record<string, string> = {};
     if (enableStakeTracking) {
+      logProgress("Fetching all stake accounts with pagination (inline processing)...");
       try {
-        stakePoolNames = await fetchStakePoolNames(process.env.RPC_URL!);
-        logProgress(`Loaded ${Object.keys(stakePoolNames).length} stake pool name mappings`);
-      } catch (e: any) {
-        console.log(`⚠️ Could not fetch stake pool names: ${e?.message || e}`);
-      }
-    }
-
-    if (enableStakeTracking) {
-      logProgress("Fetching all stake accounts with pagination...");
-      try {
-        // Use Helius getProgramAccountsV2 with pagination
-        const allStakeAccounts: any[] = [];
         let paginationKey: string | null = null;
         let pageCount = 0;
-        // Safety limit to prevent infinite loops - set high enough to fetch ALL accounts
-        // Each page = 5K accounts, so 500 pages = 2.5M accounts
-        // As of Feb 2026, Solana has ~1.3M+ stake accounts and growing
+        let totalAccountsFetched = 0;
         const MAX_PAGES = 500;
         
         do {
@@ -385,7 +368,7 @@ export async function POST(req: NextRequest) {
           const params: any = {
             encoding: "jsonParsed",
             filters: [{ dataSize: 200 }],
-            limit: 5000, // Helius recommends 1000-5000
+            limit: 5000,
           };
           
           if (paginationKey) {
@@ -399,110 +382,91 @@ export async function POST(req: NextRequest) {
             ]);
             
             const accounts = response.accounts || [];
-            allStakeAccounts.push(...accounts);
             paginationKey = response.paginationKey || null;
             
-            // Log progress every 50 pages to reduce noise
+            // Process this page inline — no accumulation
+            for (const account of accounts) {
+              const stakeData = account?.account?.data?.parsed?.info?.stake;
+              const meta = account?.account?.data?.parsed?.info?.meta;
+              if (!stakeData?.delegation || !meta?.authorized?.staker) continue;
+
+              const delegation = stakeData.delegation;
+              const voter = delegation.voter;
+              const staker = meta.authorized.staker;
+              const activationEpoch = Number(delegation.activationEpoch || 0);
+              const deactivationEpoch = Number(delegation.deactivationEpoch || Number.MAX_SAFE_INTEGER);
+              const stake = Number(delegation.stake || 0);
+              
+              stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
+              
+              const isFullyActive = activationEpoch < epoch && deactivationEpoch > epoch;
+              if (isFullyActive) {
+                if (!stakeDistribution.has(voter)) {
+                  stakeDistribution.set(voter, new Map());
+                }
+                const voterDist = stakeDistribution.get(voter)!;
+                voterDist.set(staker, (voterDist.get(staker) || 0) + stake);
+              }
+              
+              if (!stakeByVoter.has(voter)) {
+                stakeByVoter.set(voter, { 
+                  activating: 0, 
+                  deactivating: 0,
+                  activatingAccounts: [],
+                  deactivatingAccounts: []
+                });
+              }
+              
+              const data = stakeByVoter.get(voter)!;
+              
+              if (activationEpoch >= epoch) {
+                data.activating += stake;
+                data.activatingAccounts.push({
+                  staker,
+                  amount: stake,
+                  label: getStakerLabel(staker, stakePoolNames),
+                  epoch: activationEpoch
+                });
+              }
+              
+              if (deactivationEpoch === epoch) {
+                data.deactivating += stake;
+                data.deactivatingAccounts.push({
+                  staker,
+                  amount: stake,
+                  label: getStakerLabel(staker, stakePoolNames),
+                  epoch: deactivationEpoch
+                });
+              }
+            }
+            
+            totalAccountsFetched += accounts.length;
             if (pageCount % 50 === 0 || !paginationKey) {
-              logProgress(`Fetched ${pageCount} pages: ${allStakeAccounts.length} accounts`);
+              logProgress(`Fetched+processed ${pageCount} pages: ${totalAccountsFetched} accounts`);
             }
           } catch (pageError: any) {
             console.log(`🚨 Page ${pageCount} failed (${pageError.message}) - ABORTING stake fetch to preserve existing data`);
-            console.log(`🚨 Will NOT update stake data this run to avoid overwriting good data with incomplete data`);
-            break; // Stop pagination on error, but stakeFetchComplete stays false
+            break;
           }
           
-          // Stop if we hit page limit (safety valve)
           if (pageCount >= MAX_PAGES) {
-            logProgress(`🚨 Reached page limit (${MAX_PAGES}), stopping with ${allStakeAccounts.length} accounts — stake data will NOT be updated to avoid incomplete data`);
-            // Do NOT mark stakeFetchComplete — this is incomplete data and should
-            // not overwrite existing good data in the database
+            logProgress(`🚨 Reached page limit (${MAX_PAGES}), stopping with ${totalAccountsFetched} accounts — stake data will NOT be updated`);
             break;
           }
         } while (paginationKey);
         
-        // Only mark complete if we exhausted pagination naturally (no errors)
         if (!paginationKey && pageCount < MAX_PAGES) {
           stakeFetchComplete = true;
-          logProgress(`✅ Stake fetch complete: ${allStakeAccounts.length} accounts from ${pageCount} pages`);
+          logProgress(`✅ Stake fetch complete: ${totalAccountsFetched} accounts from ${pageCount} pages, ${stakeByVoter.size} voters`);
         } else if (!stakeFetchComplete) {
           logProgress(`⚠️  Stake fetch INCOMPLETE - will preserve existing stake data in database`);
         }
-        
-        logProgress(`Processing ${allStakeAccounts.length} stake accounts from ${pageCount} pages...`);
-        
-        // Group stake by voter pubkey and count accounts
-        for (const account of allStakeAccounts as any[]) {
-          const stakeData = account?.account?.data?.parsed?.info?.stake;
-          const meta = account?.account?.data?.parsed?.info?.meta;
-          if (stakeData?.delegation && meta?.authorized?.staker) {
-            const delegation = stakeData.delegation;
-            const voter = delegation.voter;
-            const staker = meta.authorized.staker;
-            const activationEpoch = Number(delegation.activationEpoch || 0);
-            const deactivationEpoch = Number(delegation.deactivationEpoch || Number.MAX_SAFE_INTEGER);
-            const stake = Number(delegation.stake || 0);
-            
-            // Count ALL stake accounts per validator (including inactive, activating, deactivating)
-            stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
-            
-            // Track stake distribution by staker (for pie chart)
-            // ONLY include ACTIVE stake (not activating, deactivating, or deactivated)
-            const isFullyActive = activationEpoch < epoch && deactivationEpoch > epoch;
-            if (isFullyActive) {
-              if (!stakeDistribution.has(voter)) {
-                stakeDistribution.set(voter, new Map());
-              }
-              const voterDist = stakeDistribution.get(voter)!;
-              voterDist.set(staker, (voterDist.get(staker) || 0) + stake);
-            }
-            
-            if (!stakeByVoter.has(voter)) {
-              stakeByVoter.set(voter, { 
-                activating: 0, 
-                deactivating: 0,
-                activatingAccounts: [],
-                deactivatingAccounts: []
-              });
-            }
-            
-            const data = stakeByVoter.get(voter)!;
-            
-            // Stake is activating if activation epoch is current or future (still warming up)
-            // Stake takes multiple epochs to fully activate
-            if (activationEpoch >= epoch) {
-              data.activating += stake;
-              data.activatingAccounts.push({
-                staker,
-                amount: stake,
-                label: getStakerLabel(staker, stakePoolNames),
-                epoch: activationEpoch
-              });
-            }
-            
-            // Stake is deactivating if deactivation epoch equals CURRENT epoch
-            // Once past the deactivation epoch, stake is fully deactivated (not "deactivating")
-            // This prevents counting historical deactivations that are already complete
-            if (deactivationEpoch === epoch) {
-              data.deactivating += stake;
-              data.deactivatingAccounts.push({
-                staker,
-                amount: stake,
-                label: getStakerLabel(staker, stakePoolNames),
-                epoch: deactivationEpoch
-              });
-            }
-          }
-        }
-        logProgress(`Processed stake for ${stakeByVoter.size} voters, ${stakeAccountCounts.size} validators with accounts`);
       } catch (e: any) {
         console.log(`🚨 Could not fetch stake accounts: ${e?.message || e}`);
         console.log(`🚨 Stake data will be PRESERVED in database (not overwritten with incomplete data)`);
-        // stakeFetchComplete stays false, so existing DB values will be preserved
       }
     } else {
       console.log(`⏭️ Stake tracking disabled (set ENABLE_STAKE_TRACKING=true to enable)`);
-      // stakeFetchComplete stays false when disabled
     }
     
     // Extract vote credits from the vote accounts we already fetched
