@@ -338,34 +338,10 @@ export async function POST(req: NextRequest) {
     const leaderScheduleData: Record<string, number[]> = leaderSchedule || {};
     logProgress(`Leader schedule fetched (${Object.keys(leaderScheduleData).length} validators)`);
     
-    // Debug: Log first few validators with leader slots
-    const sampleKeys = Object.keys(leaderScheduleData).slice(0, 5);
-    console.log(`\n🔍 LEADER SCHEDULE DEBUG (first 5):`);
-    for (const key of sampleKeys) {
-      const slots = leaderScheduleData[key];
-      console.log(`  Identity: ${key} → ${slots?.length || 0} leader slots`);
-    }
-    
-    // Create a mapping of nodePubkey to vote data for quick lookup
     const nodePubkeyToVote = new Map<string, any>();
     for (const v of allVotes) {
       nodePubkeyToVote.set(v.nodePubkey, v);
     }
-    
-    // Debug: Check how many validators from allVotes are in the leader schedule
-    let foundInSchedule = 0;
-    let notFoundInSchedule = 0;
-    for (const v of allVotes.slice(0, 10)) {
-      if (leaderScheduleData[v.nodePubkey]) {
-        foundInSchedule++;
-      } else {
-        notFoundInSchedule++;
-        if (notFoundInSchedule <= 3) {
-          console.log(`  ⚠️ NOT FOUND: vote=${v.votePubkey.substring(0, 8)}... identity=${v.nodePubkey.substring(0, 8)}... not in leader schedule`);
-        }
-      }
-    }
-    console.log(`📊 Leader schedule coverage (first 10 validators): ${foundInSchedule} found, ${notFoundInSchedule} not found\n`)
     
     // Fetch ALL stake accounts at once to avoid per-validator RPC calls
     // WARNING: This can be very expensive on mainnet (millions of accounts)

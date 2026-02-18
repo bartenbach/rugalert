@@ -184,7 +184,7 @@ export async function fetchStakePoolNames(
       deriveMetadataPDA(new PublicKey(p.poolMint)).toBase58()
     );
 
-    const response = await rpcCall(rpcUrl, "getMultipleAccountsInfo", [
+    const response = await rpcCall(rpcUrl, "getMultipleAccounts", [
       metadataPDAs,
       { encoding: "base64" },
     ]);
