@@ -3,6 +3,7 @@
 // Once verified, rename this to route.ts and delete the old Airtable version
 
 import { NextRequest, NextResponse } from "next/server";
+import { PublicKey } from "@solana/web3.js";
 import { sql } from "../../../lib/db-neon";
 import { generateCommissionChangeEmail, generateDelinquencyEmail } from "../../../lib/email-templates";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
@@ -356,17 +357,25 @@ export async function POST(req: NextRequest) {
     let stakeFetchComplete = false;
     
     if (enableStakeTracking) {
-      logProgress("Fetching all stake accounts with pagination (inline processing)...");
+      logProgress("Fetching all stake accounts with pagination (base64 + inline processing)...");
       try {
         let paginationKey: string | null = null;
         let pageCount = 0;
         let totalAccountsFetched = 0;
         const MAX_PAGES = 500;
         
+        // Stake account binary layout (200 bytes, StakeStateV2::Stake):
+        //   0-3:     state enum (u32 LE, must be 2 = Delegated)
+        //   12-43:   authorized.staker (Pubkey)
+        //   124-155: delegation.voter (Pubkey)
+        //   156-163: delegation.stake (u64 LE)
+        //   164-171: delegation.activation_epoch (u64 LE)
+        //   172-179: delegation.deactivation_epoch (u64 LE)
+        
         do {
           pageCount++;
           const params: any = {
-            encoding: "jsonParsed",
+            encoding: "base64",
             filters: [{ dataSize: 200 }],
             limit: 5000,
           };
@@ -384,18 +393,15 @@ export async function POST(req: NextRequest) {
             const accounts = response.accounts || [];
             paginationKey = response.paginationKey || null;
             
-            // Process this page inline — no accumulation
             for (const account of accounts) {
-              const stakeData = account?.account?.data?.parsed?.info?.stake;
-              const meta = account?.account?.data?.parsed?.info?.meta;
-              if (!stakeData?.delegation || !meta?.authorized?.staker) continue;
-
-              const delegation = stakeData.delegation;
-              const voter = delegation.voter;
-              const staker = meta.authorized.staker;
-              const activationEpoch = Number(delegation.activationEpoch || 0);
-              const deactivationEpoch = Number(delegation.deactivationEpoch || Number.MAX_SAFE_INTEGER);
-              const stake = Number(delegation.stake || 0);
+              const buf = Buffer.from(account.account.data[0], "base64");
+              if (buf.length < 200 || buf.readUInt32LE(0) !== 2) continue;
+              
+              const staker = new PublicKey(buf.subarray(12, 44)).toBase58();
+              const voter = new PublicKey(buf.subarray(124, 156)).toBase58();
+              const stake = Number(buf.readBigUInt64LE(156));
+              const activationEpoch = Number(buf.readBigUInt64LE(164));
+              const deactivationEpoch = Number(buf.readBigUInt64LE(172));
               
               stakeAccountCounts.set(voter, (stakeAccountCounts.get(voter) || 0) + 1);
               
