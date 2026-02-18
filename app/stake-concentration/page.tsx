@@ -108,11 +108,9 @@ function formatPercent(pct: number): string {
 function NakamotoCard({
   label,
   value,
-  icon,
 }: {
   label: string;
   value: number;
-  icon: string;
 }) {
   const getColor = (val: number) => {
     if (val >= 10) return "text-green-400";
@@ -122,7 +120,6 @@ function NakamotoCard({
 
   return (
     <div className="glass rounded-xl p-4 border border-white/10">
-      <div className="text-2xl mb-2">{icon}</div>
       <div className={`text-3xl font-bold ${getColor(value)}`}>{value}</div>
       <div className="text-xs text-gray-400 mt-1">{label}</div>
     </div>
@@ -396,22 +393,18 @@ export default function StakeConcentrationPage() {
           <NakamotoCard
             label="Countries"
             value={nakamotoCoefficients.byCountry}
-            icon="&#127758;"
           />
           <NakamotoCard
             label="Data Centers"
             value={nakamotoCoefficients.byDataCenter}
-            icon="&#127959;"
           />
           <NakamotoCard
             label="Cities"
             value={nakamotoCoefficients.byCity}
-            icon="&#127961;"
           />
           <NakamotoCard
             label="Networks (ASN)"
             value={nakamotoCoefficients.byASN}
-            icon="&#128752;"
           />
         </div>
       </div>
