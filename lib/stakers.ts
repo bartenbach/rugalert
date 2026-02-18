@@ -1,10 +1,10 @@
 /**
- * Known Staker Mapping
- * 
- * Maps staker public keys to human-readable names for common delegation programs
- * and foundations.
+ * Known Staker Mapping (manual overrides)
+ *
+ * Maps staker public keys to human-readable names for delegation programs
+ * and foundations that are NOT auto-resolved via SPL Stake Pool metadata.
+ * These take priority over auto-resolved names.
  */
-
 export const KNOWN_STAKERS: Record<string, string> = {
   "mpa4abUkjQoAvPzREkh5Mo75hZhPFQ2FSH6w7dWKuQ5": "Solana Foundation",
   "stWirqFCf2Uts1JBL1Jsd3r6VBWhgnpdPxCTe1MFjrq": "Marinade",
@@ -24,10 +24,20 @@ export const KNOWN_STAKERS: Record<string, string> = {
 };
 
 /**
- * Get a human-readable label for a staker pubkey
+ * Get a human-readable label for a staker pubkey.
+ *
+ * Priority:
+ *  1. Manual KNOWN_STAKERS overrides (above)
+ *  2. Dynamically fetched SPL Stake Pool names (passed via stakePoolNames)
+ *  3. null (caller falls back to truncated pubkey)
  */
-export function getStakerLabel(stakerPubkey: string): string | null {
-  return KNOWN_STAKERS[stakerPubkey] || null;
+export function getStakerLabel(
+  stakerPubkey: string,
+  stakePoolNames?: Record<string, string>
+): string | null {
+  if (KNOWN_STAKERS[stakerPubkey]) return KNOWN_STAKERS[stakerPubkey];
+  if (stakePoolNames?.[stakerPubkey]) return stakePoolNames[stakerPubkey];
+  return null;
 }
 
 /**

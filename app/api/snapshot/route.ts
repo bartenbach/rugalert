@@ -7,6 +7,7 @@ import { sql } from "../../../lib/db-neon";
 import { generateCommissionChangeEmail, generateDelinquencyEmail } from "../../../lib/email-templates";
 import { detectMevRug, fetchAllJitoValidators } from "../../../lib/jito";
 import { getStakerLabel, type StakeAccountBreakdown } from "../../../lib/stakers";
+import { fetchStakePoolNames } from "../../../lib/stake-pool-registry";
 import { formatTwitterMevRug, formatTwitterRug, postToTwitter } from "../../../lib/twitter";
 import { detectClientType } from "../../../lib/clientType";
 
@@ -380,6 +381,17 @@ export async function POST(req: NextRequest) {
     const enableStakeTracking = process.env.ENABLE_STAKE_TRACKING !== 'false';
     let stakeFetchComplete = false; // Track if we successfully fetched ALL stake accounts
     
+    // Fetch SPL stake pool names for automatic label resolution
+    let stakePoolNames: Record<string, string> = {};
+    if (enableStakeTracking) {
+      try {
+        stakePoolNames = await fetchStakePoolNames(process.env.RPC_URL!);
+        logProgress(`Loaded ${Object.keys(stakePoolNames).length} stake pool name mappings`);
+      } catch (e: any) {
+        console.log(`⚠️ Could not fetch stake pool names: ${e?.message || e}`);
+      }
+    }
+
     if (enableStakeTracking) {
       logProgress("Fetching all stake accounts with pagination...");
       try {
@@ -487,7 +499,7 @@ export async function POST(req: NextRequest) {
               data.activatingAccounts.push({
                 staker,
                 amount: stake,
-                label: getStakerLabel(staker),
+                label: getStakerLabel(staker, stakePoolNames),
                 epoch: activationEpoch
               });
             }
@@ -500,7 +512,7 @@ export async function POST(req: NextRequest) {
               data.deactivatingAccounts.push({
                 staker,
                 amount: stake,
-                label: getStakerLabel(staker),
+                label: getStakerLabel(staker, stakePoolNames),
                 epoch: deactivationEpoch
               });
             }
@@ -801,7 +813,7 @@ export async function POST(req: NextRequest) {
             distributionArray.push({
               staker,
               amount,
-              label: getStakerLabel(staker)
+              label: getStakerLabel(staker, stakePoolNames)
             });
           }
         }
