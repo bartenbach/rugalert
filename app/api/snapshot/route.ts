@@ -1037,7 +1037,7 @@ export async function POST(req: NextRequest) {
         
         if (type === "RUG") {
           commissionRugs.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
-          const msg = `🚨 RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}%\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+          const msg = `🚨 Rug Alert (Epoch ${epoch})\nValidator: ${validatorName}\nCommission: ${from}% → ${to}%\n<${validatorUrl}>`;
           await sendDiscord(msg);
           const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
           await postToTwitter(twitterMsg);
@@ -1049,7 +1049,7 @@ export async function POST(req: NextRequest) {
           await sendValidatorEmail(v.votePubkey, validatorName, emailData, "commission", validatorsWithSubscribers);
         } else if (type === "CAUTION") {
           commissionCautions.push({ validatorName, votePubkey: v.votePubkey, from, to, delta, validatorUrl, epoch });
-          const msg = `⚠️ CAUTION: Large Commission Increase Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nCommission: ${from}% → ${to}% (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+          const msg = `⚠️ Commission Caution (Epoch ${epoch})\nValidator: ${validatorName}\nCommission: ${from}% → ${to}% (+${delta}pp)\n<${validatorUrl}>`;
           await sendDiscord(msg);
           const twitterMsg = formatTwitterRug(validatorName, v.votePubkey, from, to, delta, validatorUrl);
           await postToTwitter(twitterMsg);
@@ -1152,7 +1152,7 @@ export async function POST(req: NextRequest) {
               mevRugs.push({ validatorName, votePubkey: v.votePubkey, from: fromVal, to: toVal, delta, validatorUrl, epoch });
               const fromStr = prevMevCommission === null ? 'MEV Disabled' : `${prevMevCommission}%`;
               const toStr = currentMevCommission === null ? 'MEV Disabled' : `${currentMevCommission}%`;
-              const msg = `🚨 MEV RUG DETECTED!\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr}\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+              const msg = `🚨 MEV Rug Alert (Epoch ${epoch})\nValidator: ${validatorName}\nMEV Commission: ${fromStr} → ${toStr}\n<${validatorUrl}>`;
               await sendDiscord(msg);
               if (prevMevCommission !== null && currentMevCommission !== null) {
                 const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
@@ -1186,7 +1186,7 @@ export async function POST(req: NextRequest) {
               } else {
                 console.log(`  ⏭️  Skipping duplicate MEV CAUTION email for ${v.votePubkey.substring(0, 8)}... (event already exists)`);
               }
-              const msg = `⚠️ CAUTION: MEV Commission Change Detected\n\nValidator: ${validatorName}\nVote Pubkey: ${v.votePubkey}\nMEV Commission: ${fromStr} → ${toStr} (+${delta}pp)\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+              const msg = `⚠️ MEV Commission Caution (Epoch ${epoch})\nValidator: ${validatorName}\nMEV Commission: ${fromStr} → ${toStr} (+${delta}pp)\n<${validatorUrl}>`;
               await sendDiscord(msg);
               if (prevMevCommission !== null && currentMevCommission !== null) {
                 const twitterMsg = formatTwitterMevRug(validatorName, v.votePubkey, prevMevCommission, currentMevCommission, delta, validatorUrl);
@@ -1448,7 +1448,7 @@ export async function POST(req: NextRequest) {
           // Also send Discord notification
           const baseUrl = process.env.BASE_URL || "https://rugalert.pumpkinspool.com";
           const validatorUrl = `${baseUrl}/validator/${validator.votePubkey}`;
-          const msg = `🚨 VALIDATOR DELINQUENT!\n\nValidator: ${validatorName}\nVote Pubkey: ${validator.votePubkey}\nStatus: DELINQUENT\nEpoch: ${epoch}\n\nView full details: <${validatorUrl}>`;
+          const msg = `⚠️ ${validatorName} is delinquent (Epoch ${epoch})\n<${validatorUrl}>`;
           await sendDiscord(msg);
         }
       }
